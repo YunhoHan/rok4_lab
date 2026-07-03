@@ -1,5 +1,7 @@
 # RoK4 Lab
 
+Current version: `0.1.0`
+
 RoK4 Lab contains lightweight Isaac Lab scripts and RoK4 asset configuration code used to validate the RoK4 whole-body robot model before building reinforcement-learning tasks.
 
 Large robot assets are distributed separately through Dropbox so this Git repository stays small and can be cloned without Git LFS.
