@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Large robot assets are distributed separately.
+/assets/rok4_wholebody/
+*.zip
+
+# Generated simulation and conversion outputs.
+*.log
+.asset_hash
+logs/
+runs/
+wandb/
+
+# Local editor and OS files.
+.vscode/
+.idea/
+.DS_Store
