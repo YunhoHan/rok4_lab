@@ -35,10 +35,13 @@ This project is currently tested with:
 - Isaac Sim 5.1.0
 - Conda environment: `env_isaaclab`
 
-The commands below assume Isaac Lab is checked out at:
+The commands below use the local paths from the original development machine as examples. Replace them with your own Isaac Lab and RoK4 Lab checkout paths.
+
+Example paths used in this README:
 
 ```text
-/home/rclab/IsaacLab
+ISAACLAB_DIR=/home/rclab/IsaacLab
+ROK4LAB_DIR=/home/rclab/rok4_lab
 ```
 
 ## Download Assets
@@ -46,7 +49,8 @@ The commands below assume Isaac Lab is checked out at:
 Download and extract the RoK4 whole-body asset bundle into this repository:
 
 ```bash
-cd /home/rclab/rok4_lab
+export ROK4LAB_DIR=/home/rclab/rok4_lab
+cd ${ROK4LAB_DIR}
 
 mkdir -p assets
 curl -L "https://www.dropbox.com/scl/fi/jkde1dl5qz8m0wso8c8ks/rok4_wholebody.zip?rlkey=v7n4jc9yfe21mi2je1qu0aty2&st=mpw9nl54&dl=1" \
@@ -67,14 +71,17 @@ ls assets/rok4_wholebody/urdf/rok4_test.usd
 Activate Isaac Lab first:
 
 ```bash
-cd /home/rclab/IsaacLab
+export ISAACLAB_DIR=/home/rclab/IsaacLab
+export ROK4LAB_DIR=/home/rclab/rok4_lab
+
+cd ${ISAACLAB_DIR}
 conda activate env_isaaclab
 ```
 
 Zero-command torque hold:
 
 ```bash
-./isaaclab.sh -p /home/rclab/rok4_lab/scripts/check_rok4_zero.py \
+./isaaclab.sh -p ${ROK4LAB_DIR}/scripts/check_rok4_zero.py \
   --asset test \
   --mode torque_hold \
   --fix_root \
@@ -84,7 +91,7 @@ Zero-command torque hold:
 Interactive GUI drag check. This forces CPU PhysX to avoid GPU Direct API errors when using Shift + left mouse drag:
 
 ```bash
-./isaaclab.sh -p /home/rclab/rok4_lab/scripts/check_rok4_zero.py \
+./isaaclab.sh -p ${ROK4LAB_DIR}/scripts/check_rok4_zero.py \
   --asset test \
   --mode torque_hold \
   --interactive_drag \
@@ -95,7 +102,7 @@ Interactive GUI drag check. This forces CPU PhysX to avoid GPU Direct API errors
 Joint limit sweep:
 
 ```bash
-./isaaclab.sh -p /home/rclab/rok4_lab/scripts/check_rok4_joint_monkey.py \
+./isaaclab.sh -p ${ROK4LAB_DIR}/scripts/check_rok4_joint_monkey.py \
   --asset test \
   --mode teleport \
   --motion limits \
@@ -107,7 +114,7 @@ Joint limit sweep:
 Small sinusoidal actuator check:
 
 ```bash
-./isaaclab.sh -p /home/rclab/rok4_lab/scripts/check_rok4_random.py \
+./isaaclab.sh -p ${ROK4LAB_DIR}/scripts/check_rok4_random.py \
   --asset test \
   --amplitude 0.05 \
   --frequency 0.5 \
