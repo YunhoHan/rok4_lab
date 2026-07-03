@@ -78,6 +78,45 @@ cd ${ISAACLAB_DIR}
 conda activate env_isaaclab
 ```
 
+### Script Summary
+
+| Script | Purpose | Main options |
+| --- | --- | --- |
+| `check_rok4_zero.py` | Hold the default pose or run passive zero-effort simulation. | `--asset {train,test}`, `--mode {torque_hold,passive}`, `--fix_root`, `--interactive_drag`, `--disable_gravity`, `--hold_root`, `--root_height`, `--reset_interval` |
+| `check_rok4_random.py` | Apply small sinusoidal position targets to all joints through the explicit torque-PD actuator. | `--asset {train,test}`, `--amplitude`, `--frequency`, `--fix_root`, `--disable_gravity`, `--hold_root`, `--root_height`, `--reset_interval` |
+| `check_rok4_joint_monkey.py` | Move one joint at a time to inspect joint axes, limits, visuals, and torque-PD tracking. | `--asset {train,test}`, `--joint`, `--mode {teleport,torque_pd}`, `--motion {limits,amplitude}`, `--center`, `--amplitude`, `--frequency`, `--joint_duration`, `--fix_root`, `--disable_gravity`, `--hold_root`, `--root_height`, `--reset_interval` |
+
+Common asset choices:
+
+| Option | Meaning |
+| --- | --- |
+| `--asset train` | Uses the training-oriented USD asset. |
+| `--asset test` | Uses the visual inspection USD asset with mesh visuals. |
+
+Common support options:
+
+| Option | Meaning |
+| --- | --- |
+| `--fix_root` | Fixes the root link when spawning the articulation. Useful for hanging visual checks. |
+| `--disable_gravity` | Disables gravity for all rigid bodies. Useful for inspection without falling. |
+| `--hold_root` | Rewrites the root pose and velocity every step. This is stronger than a spawn-time fixed root and is mostly for debugging. |
+| `--root_height` | Overrides the initial root height [m]. |
+| `--reset_interval` | Number of simulation steps between resets. Use `0` in `check_rok4_joint_monkey.py` to disable periodic resets. |
+
+Mode-specific options:
+
+| Script | Option | Meaning |
+| --- | --- | --- |
+| `check_rok4_zero.py` | `--mode torque_hold` | Holds `default_joint_pos` with explicit torque PD. |
+| `check_rok4_zero.py` | `--mode passive` | Sends zero joint effort commands and does not hold a target pose. |
+| `check_rok4_zero.py` | `--interactive_drag` | Forces CPU PhysX so Isaac Sim Shift + left mouse drag can apply link forces without GPU Direct API errors. |
+| `check_rok4_joint_monkey.py` | `--mode teleport` | Writes joint state directly. Use this for visual joint-axis and limit inspection. |
+| `check_rok4_joint_monkey.py` | `--mode torque_pd` | Sends changing position targets through `IdealPDActuatorCfg`; use this to inspect torque-PD tracking. |
+| `check_rok4_joint_monkey.py` | `--motion limits` | Sweeps each selected joint through its exact joint position limits. |
+| `check_rok4_joint_monkey.py` | `--motion amplitude` | Sweeps around `--center` or the default pose by `--amplitude`. |
+| `check_rok4_joint_monkey.py` | `--joint all` | Sweeps all RoK4 actuated joints in order. This is the default. |
+| `check_rok4_joint_monkey.py` | `--joint JOINT_NAME` | Sweeps only one exact joint name, for example `L_Knee_Pitch_Joint`. |
+
 Zero-command torque hold:
 
 ```bash
