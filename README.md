@@ -14,6 +14,15 @@ scripts/                   Standalone model and actuator check scripts
 assets/                    Local asset install location, ignored by git
 ```
 
+## Documentation
+
+Project notes are kept in `docs/` as editable RST/HTML files and generated PDFs:
+
+| Document | Purpose |
+| --- | --- |
+| `docs/_build/pdf/rok4_flat_task_structure_ko.pdf` | RoK4 flat task file structure, task registration flow, and config relationships. |
+| `docs/_build/pdf/rok4_reward_structure_ko.pdf` | RoK4 reward terms, inherited reward settings, and reward function meanings. |
+
 After downloading the assets, the expected local layout is:
 
 ```text
@@ -167,3 +176,95 @@ tau = Kp * (q_des - q) + Kd * (qd_des - qd) + tau_ff
 ```
 
 The resulting torque is clipped by the configured effort limits and sent to PhysX as joint actuation force.
+
+## Flat RL Task
+
+The first RoK4 learning task is a flat-ground, blind velocity-tracking task based on the Isaac Lab/G1-style
+manager-based locomotion structure.
+
+Registered task names:
+
+| Task | Purpose |
+| --- | --- |
+| `RoK4-Isaac-Velocity-Flat-v0` | Train RoK4 flat-ground velocity tracking with `rok4_train.usd`. |
+| `RoK4-Isaac-Velocity-Flat-Play-v0` | Play a trained RoK4 flat-ground policy with the visual `rok4_test.usd` asset. |
+
+The actor observation is proprioceptive and history-based. It does not use camera images, terrain height scans, or
+base linear velocity:
+
+```text
+5-step history of:
+  base_ang_vel
+  projected_gravity
+  velocity_commands
+  joint_pos
+  joint_vel
+  last_action
+```
+
+The action space has 13 dimensions:
+
+```text
+left leg  : hip yaw, hip roll, hip pitch, knee pitch, ankle pitch, ankle roll
+right leg : hip yaw, hip roll, hip pitch, knee pitch, ankle pitch, ankle roll
+torso     : torso yaw
+```
+
+RoK4 overrides the parent Isaac Lab locomotion timing without modifying Isaac Lab itself:
+
+| Setting | Value |
+| --- | --- |
+| `sim.dt` | `0.002 s` |
+| physics frequency | `500 Hz` |
+| `decimation` | `5` |
+| policy/action period | `0.010 s` |
+| policy/action frequency | `100 Hz` |
+
+The initial PPO baseline uses RoK4-oriented network and observation-normalization settings with G1-style PPO
+algorithm parameters. These values are starting points for flat walking, not final tuned parameters:
+
+| Setting | Value |
+| --- | --- |
+| steps per env | `24` |
+| max iterations | `5000` |
+| actor/critic hidden dims | `[512, 256, 128]` |
+| actor/critic obs normalization | `True` |
+| learning rate | `1.0e-3` |
+| entropy coef | `0.008` |
+| value loss coef | `1.0` |
+| desired KL | `0.01` |
+
+Train a short smoke test:
+
+```bash
+cd /path/to/your/rok4_lab
+ROK4LAB_DIR=$(pwd)
+
+cd /path/to/your/IsaacLab
+conda activate env_isaaclab
+
+./isaaclab.sh -p ${ROK4LAB_DIR}/scripts/rsl_rl/train.py \
+  --task RoK4-Isaac-Velocity-Flat-v0 \
+  --num_envs 2 \
+  --max_iterations 1 \
+  --headless
+```
+
+Train normally:
+
+```bash
+./isaaclab.sh -p ${ROK4LAB_DIR}/scripts/rsl_rl/train.py \
+  --task RoK4-Isaac-Velocity-Flat-v0 \
+  --num_envs 512 \
+  --max_iterations 5000 \
+  --headless
+```
+
+Play a checkpoint:
+
+```bash
+./isaaclab.sh -p ${ROK4LAB_DIR}/scripts/rsl_rl/play.py \
+  --task RoK4-Isaac-Velocity-Flat-Play-v0 \
+  --num_envs 16 \
+  --checkpoint /path/to/model.pt
+```

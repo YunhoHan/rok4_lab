@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>RoK4 Reward Structure</title>
+  <style>
+    body {
+      font-family: "Noto Sans CJK KR", "Noto Sans KR", "DejaVu Sans", Arial, sans-serif;
+      line-height: 1.55;
+      margin: 36px;
+      color: #202124;
+    }
+    h1, h2, h3 {
+      color: #111827;
+      margin-top: 1.5em;
+    }
+    h1 {
+      border-bottom: 3px solid #2f6fbb;
+      padding-bottom: 8px;
+    }
+    h2 {
+      border-bottom: 1px solid #cbd5e1;
+      padding-bottom: 4px;
+    }
+    code {
+      font-family: "DejaVu Sans Mono", "Noto Sans Mono CJK KR", monospace;
+      background: #f1f5f9;
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+    pre {
+      background: #f8fafc;
+      border: 1px solid #dbe3ef;
+      padding: 12px;
+      overflow-wrap: break-word;
+      white-space: pre-wrap;
+      border-radius: 4px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 14px 0 24px;
+      font-size: 0.92em;
+    }
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 7px 8px;
+      vertical-align: top;
+    }
+    th {
+      background: #eaf2ff;
+      font-weight: 700;
+    }
+    .note {
+      border-left: 4px solid #2f6fbb;
+      background: #eff6ff;
+      padding: 10px 12px;
+      margin: 16px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>RoK4 Reward Structure</h1>
+  <p><strong>작성일:</strong> 2026-07-07</p>
+  <p>
+    이 문서는 <code>RoK4-Isaac-Velocity-Flat-v0</code> task의 현재 reward 구조와 reward function 설정을 정리한다.
+    현재 reward는 Isaac Lab G1 velocity task 구조를 RoK4 링크/관절 이름에 맞게 이식한 flat walking 초기
+    baseline이다. 최종 튜닝값이 아니라 첫 보행 실험을 위한 시작점으로 봐야 한다.
+  </p>
+
+  <h2>관련 파일</h2>
+  <table>
+    <tr><th>역할</th><th>파일</th></tr>
+    <tr><td>RoK4 flat task 설정</td><td><code>/home/rclab/rok4_lab/source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/rok4/flat_env_cfg.py</code></td></tr>
+    <tr><td>공통 locomotion reward term 기본값</td><td><code>/home/rclab/IsaacLab/source/isaaclab_tasks/isaaclab_tasks/manager_based/locomotion/velocity/velocity_env_cfg.py</code></td></tr>
+    <tr><td>locomotion 전용 reward 함수</td><td><code>/home/rclab/IsaacLab/source/isaaclab_tasks/isaaclab_tasks/manager_based/locomotion/velocity/mdp/rewards.py</code></td></tr>
+    <tr><td>Isaac Lab 공통 reward 함수</td><td><code>/home/rclab/IsaacLab/source/isaaclab/isaaclab/envs/mdp/rewards.py</code></td></tr>
+    <tr><td>mdp namespace 연결</td><td><code>/home/rclab/IsaacLab/source/isaaclab_tasks/isaaclab_tasks/manager_based/locomotion/velocity/mdp/__init__.py</code></td></tr>
+  </table>
+
+  <h2>구조 요약</h2>
+  <pre>RoK4FlatEnvCfg
+  ├─ 상속: LocomotionVelocityRoughEnvCfg
+  └─ 포함: rewards = RoK4RewardsCfg()
+
+RoK4RewardsCfg
+  └─ 상속: RewardsCfg
+
+각 reward term
+  └─ RewardTermCfg(func=mdp.xxx, weight=..., params=...)
+
+mdp.xxx
+  ├─ locomotion 전용 함수: velocity/mdp/rewards.py
+  └─ Isaac Lab 공통 함수: isaaclab/envs/mdp/rewards.py</pre>
+
+  <div class="note">
+    <code>RoK4FlatEnvCfg -> RoK4RewardsCfg</code>는 상속이 아니라 포함/사용 관계이고,
+    <code>RoK4RewardsCfg -> RewardsCfg</code>는 상속 관계이다.
+    <code>mdp/rewards.py</code>는 부모 클래스가 아니라 실제 reward 계산 함수가 들어 있는 함수 모음이다.
+  </div>
+
+  <p>실제로는 다음처럼 이해하면 된다.</p>
+  <pre>RoK4RewardsCfg는 RewardsCfg를 상속받아서 기본 reward term들을 물려받는다.
+RoK4에 필요한 reward는 mdp.xxx 함수를 직접 지정해 새로 정의하거나 override한다.
+RewardTermCfg/RewTerm은 mdp.xxx 함수, weight, params를 하나의 reward term으로 묶는다.</pre>
+
+  <h2>Reward 계산 방식</h2>
+  <p>Isaac Lab의 <code>RewardManager</code>는 각 reward term의 raw value를 계산한 뒤 <code>weight</code>를 곱하고, 모든 term을 합산한다.</p>
+  <pre>total_reward =
+    sum(weight_i * reward_function_i(env, params_i))</pre>
+  <p>Positive weight는 행동을 유도하고, negative weight는 penalty로 작동한다.</p>
+
+  <h2>RoK4 전용 Reward Terms</h2>
+  <table>
+    <tr><th>term</th><th>function</th><th>weight</th><th>params</th><th>의미</th></tr>
+    <tr><td><code>termination_penalty</code></td><td><code>mdp.is_terminated</code></td><td><code>-200.0</code></td><td>없음</td><td>episode가 termination되면 큰 penalty를 준다.</td></tr>
+    <tr><td><code>track_lin_vel_xy_exp</code></td><td><code>mdp.track_lin_vel_xy_yaw_frame_exp</code></td><td><code>1.0</code></td><td><code>command_name="base_velocity"</code>, <code>std=0.5</code></td><td>yaw-aligned robot frame에서 x/y 선속도 command를 추종하게 한다.</td></tr>
+    <tr><td><code>track_ang_vel_z_exp</code></td><td><code>mdp.track_ang_vel_z_world_exp</code></td><td><code>1.0</code></td><td><code>command_name="base_velocity"</code>, <code>std=0.5</code></td><td>world frame yaw angular velocity command를 추종하게 한다.</td></tr>
+    <tr><td><code>feet_air_time</code></td><td><code>mdp.feet_air_time_positive_biped</code></td><td><code>0.75</code></td><td>feet: <code>L_Foot_Link</code>, <code>R_Foot_Link</code>; <code>threshold=0.4</code></td><td>양발 보행에서 한 발씩 공중에 있는 step pattern을 유도한다.</td></tr>
+    <tr><td><code>feet_slide</code></td><td><code>mdp.feet_slide</code></td><td><code>-0.2</code></td><td>feet: <code>L_Foot_Link</code>, <code>R_Foot_Link</code></td><td>지면 접촉 중인 발이 미끄러지는 것을 줄인다.</td></tr>
+    <tr><td><code>dof_pos_limits</code></td><td><code>mdp.joint_pos_limits</code></td><td><code>-1.0</code></td><td><code>.*_Ankle_Pitch_Joint</code>, <code>.*_Ankle_Roll_Joint</code></td><td>ankle joint가 soft joint limit을 넘는 것을 강하게 막는다.</td></tr>
+    <tr><td><code>joint_deviation_hip</code></td><td><code>mdp.joint_deviation_l1</code></td><td><code>-0.1</code></td><td><code>.*_Hip_Yaw_Joint</code>, <code>.*_Hip_Roll_Joint</code></td><td>hip yaw/roll이 default pose에서 과도하게 벗어나지 않게 한다.</td></tr>
+    <tr><td><code>joint_deviation_torso</code></td><td><code>mdp.joint_deviation_l1</code></td><td><code>-0.1</code></td><td><code>Torso_Yaw_Joint</code></td><td>torso yaw가 default pose에서 과도하게 벗어나지 않게 한다.</td></tr>
+  </table>
+
+  <h2>부모 RewardsCfg에서 상속받고 RoK4에서 수정한 Terms</h2>
+  <table>
+    <tr><th>term</th><th>function</th><th>current weight</th><th>RoK4 설정</th><th>의미</th></tr>
+    <tr><td><code>lin_vel_z_l2</code></td><td><code>mdp.lin_vel_z_l2</code></td><td><code>-0.2</code></td><td>기본 robot root</td><td>base가 z 방향으로 튀는 움직임을 줄인다.</td></tr>
+    <tr><td><code>ang_vel_xy_l2</code></td><td><code>mdp.ang_vel_xy_l2</code></td><td><code>-0.05</code></td><td>기본 robot root</td><td>roll/pitch angular velocity를 줄인다.</td></tr>
+    <tr><td><code>flat_orientation_l2</code></td><td><code>mdp.flat_orientation_l2</code></td><td><code>-1.0</code></td><td>기본 robot root</td><td>몸이 기울어지는 것을 줄이고 upright 자세를 유도한다.</td></tr>
+    <tr><td><code>action_rate_l2</code></td><td><code>mdp.action_rate_l2</code></td><td><code>-0.005</code></td><td>action 전체</td><td>action이 step마다 급격히 변하는 것을 줄인다.</td></tr>
+    <tr><td><code>dof_acc_l2</code></td><td><code>mdp.joint_acc_l2</code></td><td><code>-1.0e-7</code></td><td><code>.*_Hip_.*</code>, <code>.*_Knee_Pitch_Joint</code></td><td>hip/knee joint acceleration을 줄여 움직임을 부드럽게 한다.</td></tr>
+    <tr><td><code>dof_torques_l2</code></td><td><code>mdp.joint_torques_l2</code></td><td><code>-2.0e-6</code></td><td><code>.*_Hip_.*</code>, <code>.*_Knee_Pitch_Joint</code>, <code>.*_Ankle_.*</code></td><td>hip/knee/ankle torque 사용량을 줄인다.</td></tr>
+    <tr><td><code>undesired_contacts</code></td><td><code>mdp.undesired_contacts</code></td><td><code>-1.0</code></td><td><code>Base_Link</code>, <code>Upper_Body_Link</code>; <code>threshold=1.0</code></td><td>발이 아닌 base/upper body 접촉을 penalty로 처리한다.</td></tr>
+  </table>
+
+  <h2>Reward Function 요약</h2>
+  <table>
+    <tr><th>function</th><th>위치</th><th>계산 의미</th></tr>
+    <tr><td><code>is_terminated</code></td><td>Isaac Lab 공통</td><td>termination manager의 terminated flag를 reward term으로 반환한다.</td></tr>
+    <tr><td><code>track_lin_vel_xy_yaw_frame_exp</code></td><td>locomotion mdp</td><td>yaw frame x/y 선속도 command error에 <code>exp(-error / std^2)</code>를 적용한다.</td></tr>
+    <tr><td><code>track_ang_vel_z_world_exp</code></td><td>locomotion mdp</td><td>world z축 angular velocity command error에 <code>exp(-error / std^2)</code>를 적용한다.</td></tr>
+    <tr><td><code>feet_air_time_positive_biped</code></td><td>locomotion mdp</td><td>한 발 지지 상태의 air/contact time을 보상하며, command 크기가 작으면 0이 된다.</td></tr>
+    <tr><td><code>feet_slide</code></td><td>locomotion mdp</td><td>접촉 중인 foot의 horizontal linear velocity norm을 penalty로 계산한다.</td></tr>
+    <tr><td><code>lin_vel_z_l2</code></td><td>Isaac Lab 공통</td><td>base body-frame z velocity squared.</td></tr>
+    <tr><td><code>ang_vel_xy_l2</code></td><td>Isaac Lab 공통</td><td>base body-frame roll/pitch angular velocity squared sum.</td></tr>
+    <tr><td><code>flat_orientation_l2</code></td><td>Isaac Lab 공통</td><td>projected gravity의 x/y component squared sum으로 몸 기울기를 penalty화한다.</td></tr>
+    <tr><td><code>joint_torques_l2</code></td><td>Isaac Lab 공통</td><td>선택된 joint의 applied torque squared sum.</td></tr>
+    <tr><td><code>joint_acc_l2</code></td><td>Isaac Lab 공통</td><td>선택된 joint의 joint acceleration squared sum.</td></tr>
+    <tr><td><code>action_rate_l2</code></td><td>Isaac Lab 공통</td><td>현재 action과 이전 action 차이의 squared sum.</td></tr>
+    <tr><td><code>joint_deviation_l1</code></td><td>Isaac Lab 공통</td><td>현재 joint position과 default joint position 차이의 absolute sum.</td></tr>
+    <tr><td><code>joint_pos_limits</code></td><td>Isaac Lab 공통</td><td>soft joint position limit을 넘은 정도를 합산한다.</td></tr>
+    <tr><td><code>undesired_contacts</code></td><td>Isaac Lab 공통</td><td>지정 body의 contact force가 threshold를 넘은 contact 개수를 penalty로 반환한다.</td></tr>
+  </table>
+
+  <h2>Command와 Reward의 연결</h2>
+  <pre>lin_vel_x = (0.0, 0.8)
+lin_vel_y = (-0.3, 0.3)
+ang_vel_z = (-0.6, 0.6)</pre>
+  <p>
+    이 command는 <code>track_lin_vel_xy_exp</code>, <code>track_ang_vel_z_exp</code>,
+    <code>feet_air_time</code>에 직접 영향을 준다. 특히 <code>feet_air_time_positive_biped</code>는 x/y command
+    norm이 <code>0.1</code> 이하이면 reward를 0으로 만든다.
+  </p>
+
+  <h2>Termination과 Reward의 연결</h2>
+  <pre>self.terminations.base_contact.params["sensor_cfg"].body_names = ["Base_Link", "Upper_Body_Link"]</pre>
+  <p>
+    <code>Base_Link</code> 또는 <code>Upper_Body_Link</code>가 지면과 강하게 접촉하면 episode termination이
+    발생하고, <code>termination_penalty = -200.0</code>가 함께 작동한다.
+  </p>
+
+  <h2>현재 설계 의도</h2>
+  <pre>1. command velocity를 따라간다.
+2. upright 자세를 유지한다.
+3. 한 발씩 드는 biped stepping pattern을 만든다.
+4. 발 미끄러짐을 줄인다.
+5. torque, joint acceleration, action rate를 줄여 움직임을 부드럽게 한다.
+6. ankle limit, hip/torso deviation을 제한한다.
+7. base/upper body 접촉을 넘어짐으로 처리한다.</pre>
+
+  <h2>튜닝 시 우선 확인할 항목</h2>
+  <table>
+    <tr><th>현상</th><th>먼저 볼 항목</th></tr>
+    <tr><td>너무 자주 넘어진다</td><td><code>termination_penalty</code>, <code>base_contact</code>, <code>flat_orientation_l2</code>, 초기 자세</td></tr>
+    <tr><td>거의 걷지 않고 버틴다</td><td><code>track_lin_vel_xy_exp</code>, command range, <code>feet_air_time</code></td></tr>
+    <tr><td>발이 많이 미끄러진다</td><td><code>feet_slide</code>, foot collision, friction, contact sensor</td></tr>
+    <tr><td>관절이 떨린다</td><td><code>action_rate_l2</code>, <code>dof_acc_l2</code>, PD gain, action scale</td></tr>
+    <tr><td>토크가 과도하다</td><td><code>dof_torques_l2</code>, effort limit, action scale</td></tr>
+    <tr><td>발목이 limit 근처로 간다</td><td><code>dof_pos_limits</code>, ankle default pose, action scale</td></tr>
+  </table>
+</body>
+</html>
