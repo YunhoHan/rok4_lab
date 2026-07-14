@@ -33,50 +33,51 @@ def _make_joint_dict(values: list[float]) -> dict[str, float]:
     return dict(zip(ROK4_JOINT_ORDER, values, strict=True))
 
 
+# Matches the active Isaac Gym RoK4 defaultJointAngles and norminalJointAngles gait-ready pose.
 _ROK4_INIT_JOINT_POS = {
     "Torso_Yaw_Joint": 0.0,
     ".*_Hip_Yaw_Joint": 0.0,
     ".*_Hip_Roll_Joint": 0.0,
-    ".*_Hip_Pitch_Joint": -0.29670597283,
-    ".*_Knee_Pitch_Joint": 0.72954762733,
-    ".*_Ankle_Pitch_Joint": -0.43284165449,
+    ".*_Hip_Pitch_Joint": -0.0924,
+    ".*_Knee_Pitch_Joint": 0.345,
+    ".*_Ankle_Pitch_Joint": -0.253,
     ".*_Ankle_Roll_Joint": 0.0,
 }
 
 ROK4_KP = _make_joint_dict(
     [
-        240.0,
-        240.0,
         200.0,
         200.0,
-        120.0,
-        160.0,
-        240.0,
-        240.0,
         200.0,
         200.0,
-        120.0,
-        160.0,
-        120.0,
+        20.0,
+        20.0,
+        200.0,
+        200.0,
+        200.0,
+        200.0,
+        20.0,
+        20.0,
+        100.0,
     ]
 )
 """Joint position gains used by the explicit torque PD actuator."""
 
 ROK4_KD = _make_joint_dict(
     [
-        6.0,
-        6.0,
         5.0,
         5.0,
-        3.0,
-        4.0,
-        6.0,
-        6.0,
         5.0,
         5.0,
-        3.0,
-        4.0,
-        6.0,
+        2.0,
+        2.0,
+        5.0,
+        5.0,
+        5.0,
+        5.0,
+        2.0,
+        2.0,
+        5.0,
     ]
 )
 """Joint velocity gains used by the explicit torque PD actuator."""
@@ -156,21 +157,21 @@ ROK4_VISCOUS_FRICTION = _make_joint_dict(
 ROK4_ACTION_SCALE = _make_joint_dict(
     [
         0.4,
-        0.4,
-        1.25,
-        1.25,
-        1.0,
         0.5,
-        0.4,
-        0.4,
         1.25,
-        1.25,
-        1.0,
+        1.5,
+        0.75,
+        0.75,
+        0.4,
         0.5,
+        1.25,
+        1.5,
+        0.75,
+        0.75,
         0.4,
     ]
 )
-"""Joint action scale values for future RoK4 walking tasks."""
+"""Joint action scale values matching the Isaac Gym RoK4 actuator action ranges."""
 
 
 ROK4_TRAIN_CFG = ArticulationCfg(
@@ -189,7 +190,7 @@ ROK4_TRAIN_CFG = ArticulationCfg(
             enable_gyroscopic_forces=True,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=False,
+            enabled_self_collisions=True,
             solver_position_iteration_count=8,
             solver_velocity_iteration_count=4,
             sleep_threshold=0.005,
@@ -197,7 +198,10 @@ ROK4_TRAIN_CFG = ArticulationCfg(
         ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0442, 0.0, 0.95268),
+        # Isaac Gym references [m]: the straight-leg standing base height is z=0.919.
+        # Gait-ready CoM (0.0575 / 2, 0, 0.835) maps to the gait-ready base (0.0552, 0, 0.907).
+        # Spawn z=0.929 adds 0.010 m ground clearance above the straight-leg standing base height.
+        pos=(0.0552, 0.0, 0.929),
         joint_pos=_ROK4_INIT_JOINT_POS,
         joint_vel={".*": 0.0},
     ),
