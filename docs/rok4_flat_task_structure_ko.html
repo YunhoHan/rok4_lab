@@ -1,516 +1,282 @@
-<!DOCTYPE html>
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 <title>RoK4 Flat RSL-RL Task 구조 문서</title>
 <style type="text/css">
 
-/* Minimal style sheet for the HTML output of Docutils.                    */
-/*                                                                         */
-/* :Author: Günter Milde, based on html4css1.css by David Goodger          */
-/* :Id: $Id: minimal.css 8642 2021-03-26 13:51:14Z milde $               */
-/* :Copyright: © 2015 Günter Milde.                                        */
-/* :License: Released under the terms of the `2-Clause BSD license`_,      */
-/*    in short:                                                            */
-/*                                                                         */
-/*    Copying and distribution of this file, with or without modification, */
-/*    are permitted in any medium without royalty provided the copyright   */
-/*    notice and this notice are preserved.                                */
-/*                                                                         */
-/*    This file is offered as-is, without any warranty.                    */
-/*                                                                         */
-/* .. _2-Clause BSD license: http://www.spdx.org/licenses/BSD-2-Clause     */
+/*
+:Author: David Goodger (goodger@python.org)
+:Id: $Id: html4css1.css 7952 2016-07-26 18:15:59Z milde $
+:Copyright: This stylesheet has been placed in the public domain.
 
-/* This CSS2.1_ stylesheet defines rules for Docutils elements without    */
-/* HTML equivalent. It is required to make the document semantic visible. */
-/*                                                                        */
-/* .. _CSS2.1: http://www.w3.org/TR/CSS2                                  */
-/* .. _validates: http://jigsaw.w3.org/css-validator/validator$link       */
+Default cascading style sheet for the HTML output of Docutils.
 
-/* titles */
-p.topic-title,
-p.admonition-title,
-p.system-message-title {
-  font-weight: bold;
-}
-p.sidebar-title,
-p.rubric {
-  font-weight: bold;
-  font-size: larger;
-}
-p.rubric {
-  color: maroon;
-}
-p.subtitle,
-p.section-subtitle,
-p.sidebar-subtitle {
-  font-weight: bold;
-  margin-top: -0.5em;
-}
-h1 + p.subtitle {
-  font-size: 1.6em;
-}
-h2 + p.section-subtitle, a.toc-backref {
-  color: black;
-  text-decoration: none;
-}
+See http://docutils.sf.net/docs/howto/html-stylesheets.html for how to
+customize this style sheet.
+*/
 
-/* Warnings, Errors */
-.system-messages h2,
-.system-message-title,
-span.problematic {
-  color: red;
-}
+/* used to remove borders from tables and images */
+.borderless, table.borderless td, table.borderless th {
+  border: 0 }
 
-/* Inline Literals */
-.docutils.literal {
-  font-family: monospace;
-  white-space: pre-wrap;
-}
-/* do not wrap at hyphens and similar: */
-.literal > span.pre { white-space: nowrap; }
+table.borderless td, table.borderless th {
+  /* Override padding for "table.docutils td" with "! important".
+     The right padding separates the table cells. */
+  padding: 0 0.5em 0 0 ! important }
 
-/* Lists */
+.first {
+  /* Override more specific margin styles with "! important". */
+  margin-top: 0 ! important }
 
-/* compact and simple lists: no margin between items */
-.simple  li, .simple  ul, .simple  ol,
-.compact li, .compact ul, .compact ol,
-.simple  > li p, dl.simple  > dd,
-.compact > li p, dl.compact > dd {
-  margin-top: 0;
-  margin-bottom: 0;
-}
-/* Nested Paragraphs */
-p:first-child { margin-top: 0; }
-p:last-child { margin-bottom: 0; }
-td > p, th > p { margin-bottom: 0; }
+.last, .with-subtitle {
+  margin-bottom: 0 ! important }
 
-/* Table of Contents */
-.topic.contents { margin: 0.5em 0; }
-.topic.contents ul.auto-toc {
-  list-style-type: none;
-  padding-left: 1.5em;
-}
+.hidden {
+  display: none }
 
-/* Enumerated Lists */
-ol.arabic     { list-style: decimal }
-ol.loweralpha { list-style: lower-alpha }
-ol.upperalpha { list-style: upper-alpha }
-ol.lowerroman { list-style: lower-roman }
-ol.upperroman { list-style: upper-roman }
+.subscript {
+  vertical-align: sub;
+  font-size: smaller }
 
-/* Definition Lists and Derivatives */
-dt .classifier { font-style: italic }
-dt .classifier:before {
-  font-style: normal;
-  margin: 0.5em;
-  content: ":";
-}
-/* Field Lists and similar */
-/* bold field name, content starts on the same line */
-dl.field-list > dt,
-dl.option-list > dt,
-dl.docinfo > dt,
-dl.footnote > dt,
-dl.citation > dt {
-  font-weight: bold;
-  clear: left;
-  float: left;
-  margin: 0;
-  padding: 0;
-  padding-right: 0.5em;
-}
-/* Offset for field content (corresponds to the --field-name-limit option) */
-dl.field-list > dd,
-dl.option-list > dd,
-dl.docinfo > dd {
-  margin-left:  9em; /* ca. 14 chars in the test examples, fit all Docinfo fields */
-}
-/* start field-body on a new line after long field names */
-dl.field-list > dd > *:first-child,
-dl.option-list > dd > *:first-child
-{
-  display: inline-block;
-  width: 100%;
-  margin: 0;
-}
-/* field names followed by a colon */
-dl.field-list > dt:after,
-dl.docinfo > dt:after {
-  content: ":";
-}
-
-/* Bibliographic Fields (docinfo) */
-dl.docinfo pre.address {
-  font: inherit;
-  margin: 0.5em 0;
-}
-dl.docinfo > dd.authors > p { margin: 0; }
-
-/* Option Lists */
-dl.option-list > dt { font-weight: normal; }
-span.option { white-space: nowrap; }
-
-/* Footnotes and Citations  */
-dl.footnote.superscript > dd { margin-left: 1em; }
-dl.footnote.brackets > dd { margin-left: 2em; }
-dl.footnote > dt { font-weight: normal; }
-a.footnote-reference.brackets:before,
-dt.label > span.brackets:before { content: "["; }
-a.footnote-reference.brackets:after,
-dt.label > span.brackets:after { content: "]"; }
-a.footnote-reference.superscript,
-dl.footnote.superscript > dt.label {
+.superscript {
   vertical-align: super;
-  font-size: small;
-}
-dt.label > span.fn-backref {
-  margin-left: 0.2em;
-  font-weight: normal;
-}
-dt.label > span.fn-backref > a { font-style: italic; }
+  font-size: smaller }
 
-/* Alignment */
-.align-left   {
-  text-align: left;
-  margin-right: auto;
-}
-.align-center {
-  clear: both;
-  text-align: center;
-  margin-left: auto;
-  margin-right: auto;
-}
-.align-right  {
-  text-align: right;
-  margin-left: auto;
-}
-.align-top    { vertical-align: top; }
-.align-middle { vertical-align: middle; }
-.align-bottom { vertical-align: bottom; }
+a.toc-backref {
+  text-decoration: none ;
+  color: black }
 
-/* reset inner alignment in figures and tables */
-figure.align-left, figure.align-right,
-table.align-left, table.align-center, table.align-right {
-  text-align: inherit;
+blockquote.epigraph {
+  margin: 2em 5em ; }
+
+dl.docutils dd {
+  margin-bottom: 0.5em }
+
+object[type="image/svg+xml"], object[type="application/x-shockwave-flash"] {
+  overflow: hidden;
 }
 
-/* Text Blocks */
-blockquote,
-div.topic,
-aside.topic {
-  margin: 1em 2em;
-}
-.sidebar,
-.admonition,
-.system-message {
-  border: thin solid;
-  margin: 1em 2em;
-  padding: 0.5em 1em;
-}
-.sidebar {
-  width: 30%;
-  max-width: 26em;
-  float: right;
-  clear: right;
-}
-div.line-block { display: block; }
-div.line-block div.line-block, pre { margin-left: 2em; }
+/* Uncomment (and remove this text!) to get bold-faced definition list terms
+dl.docutils dt {
+  font-weight: bold }
+*/
 
-/* Code line numbers: dropped when copying text from the page */
-pre.code .ln { display: none; }
-pre.code code:before {
-  content: attr(data-lineno); /* …, none) fallback not supported by any browser */
-  color: gray;
-}
+div.abstract {
+  margin: 2em 5em }
 
-/* Tables */
-table {
-  border-collapse: collapse;
-}
-td, th {
-  border: thin solid silver;
-  padding: 0 1ex;
-}
-.borderless td, .borderless th {
-  border: 0;
-  padding: 0;
-  padding-right: 0.5em /* separate table cells */
-}
-
-table > caption {
-  text-align: left;
-  margin-top: 0.2em;
-  margin-bottom: 0.2em;
-}
-table.captionbelow {
-  caption-side: bottom;
-}
-
-/* Document Header and Footer */
-header { border-bottom: 1px solid black; }
-footer { border-top: 1px solid black; }
-
-/* Images are block-level by default in Docutils */
-/* New HTML5 block elements: set display for older browsers */
-img, header, section, footer, aside, nav, main, article, figure, video {
-  display: block;
-}
-/* inline images */
-p img, p video, figure img, figure video {
-  display: inline;
-}
-
-</style>
-<style type="text/css">
-
-/* CSS31_ style sheet for the output of Docutils HTML writers.             */
-/* Rules for easy reading and pre-defined style variants.                  */
-/*                                                                         */
-/* :Author: Günter Milde, based on html4css1.css by David Goodger          */
-/* :Id: $Id: plain.css 8636 2021-03-19 00:23:33Z milde $                                                               */
-/* :Copyright: © 2015 Günter Milde.                                        */
-/* :License: Released under the terms of the `2-Clause BSD license`_,      */
-/*    in short:                                                            */
-/*                                                                         */
-/*    Copying and distribution of this file, with or without modification, */
-/*    are permitted in any medium without royalty provided the copyright   */
-/*    notice and this notice are preserved.                                */
-/*                                                                         */
-/*    This file is offered as-is, without any warranty.                    */
-/*                                                                         */
-/* .. _2-Clause BSD license: http://www.spdx.org/licenses/BSD-2-Clause     */
-/* .. _CSS3: http://www.w3.org/TR/CSS3                                     */
-
-
-/* Document Structure */
-/* ****************** */
-
-/* "page layout" */
-body {
-  margin: 0;
-  background-color: #dbdbdb;
-}
-main, footer, header {
-  line-height:1.3;
-  /* avoid long lines --> better reading */
-  /* optimum is 45…75 characters/line <http://webtypography.net/2.1.2> */
-  /* OTOH: lines should not be too short because of missing hyphenation, */
-  max-width: 50rem;
-  padding: 1px 2%; /* 1px on top avoids grey bar above title (mozilla) */
-  margin: auto;
-}
-main {
-  counter-reset: table figure;
-  background-color: white;
-}
-footer, header {
-  font-size: smaller;
-  padding: 0.5em 2%;
-  border: none;
-}
-
-/* Transitions */
-hr.docutils {
-  width: 80%;
-  margin-top: 1em;
-  margin-bottom: 1em;
-  clear: both;
-}
-
-/* Paragraphs */
-
-/* vertical space (parskip) */
-p, ol, ul, dl, li, dd,
-div.line-block,
-div.topic,
-table {
-  margin-top: 0.5em;
-  margin-bottom: 0.5em;
-}
-p:first-child { margin-top: 0; }
-/* (:last-child is new in CSS 3) */
-p:last-child  { margin-bottom: 0; }
-
-h1, h2, h3, h4, h5, h6,
-dl > dd {
-  margin-bottom: 0.5em;
-}
-
-/* Lists */
-/* ===== */
-
-/* Separate list entries in compound lists */
-dl > dd, ol > li,
-
-/* Definition Lists */
-/* Indent lists nested in definition lists */
-/* (:only-child is new in CSS 3)           */
-dd > ul:only-child, dd > ol:only-child { padding-left: 1em; }
-
-/* Description Lists */
-/* styled like in most dictionaries, encyclopedias etc. */
-dl.description > dt {
-  font-weight: bold;
-  clear: left;
-  float: left;
-  margin: 0;
-  padding: 0;
-  padding-right: 0.5em;
-}
-
-/* Field Lists */
-
-/* example for custom field-name width */
-dl.field-list.narrow > dd {
-  margin-left: 5em;
-}
-/* run-in: start field-body on same line after long field names */
-dl.field-list.run-in > dd p {
-  display: block;
-}
-
-/* Bibliographic Fields */
-
-/* generally, bibliographic fields use special definition list dl.docinfo */
-/* but dedication and abstract are placed into "topic" divs */
 div.abstract p.topic-title {
-  text-align: center;
-}
+  font-weight: bold ;
+  text-align: center }
+
+div.admonition, div.attention, div.caution, div.danger, div.error,
+div.hint, div.important, div.note, div.tip, div.warning {
+  margin: 2em ;
+  border: medium outset ;
+  padding: 1em }
+
+div.admonition p.admonition-title, div.hint p.admonition-title,
+div.important p.admonition-title, div.note p.admonition-title,
+div.tip p.admonition-title {
+  font-weight: bold ;
+  font-family: sans-serif }
+
+div.attention p.admonition-title, div.caution p.admonition-title,
+div.danger p.admonition-title, div.error p.admonition-title,
+div.warning p.admonition-title, .code .error {
+  color: red ;
+  font-weight: bold ;
+  font-family: sans-serif }
+
+/* Uncomment (and remove this text!) to get reduced vertical space in
+   compound paragraphs.
+div.compound .compound-first, div.compound .compound-middle {
+  margin-bottom: 0.5em }
+
+div.compound .compound-last, div.compound .compound-middle {
+  margin-top: 0.5em }
+*/
+
 div.dedication {
-  margin: 2em 5em;
-  text-align: center;
-  font-style: italic;
-}
+  margin: 2em 5em ;
+  text-align: center ;
+  font-style: italic }
+
 div.dedication p.topic-title {
-  font-style: normal;
+  font-weight: bold ;
+  font-style: normal }
+
+div.figure {
+  margin-left: 2em ;
+  margin-right: 2em }
+
+div.footer, div.header {
+  clear: both;
+  font-size: smaller }
+
+div.line-block {
+  display: block ;
+  margin-top: 1em ;
+  margin-bottom: 1em }
+
+div.line-block div.line-block {
+  margin-top: 0 ;
+  margin-bottom: 0 ;
+  margin-left: 1.5em }
+
+div.sidebar {
+  margin: 0 0 0.5em 1em ;
+  border: medium outset ;
+  padding: 1em ;
+  background-color: #ffffee ;
+  width: 40% ;
+  float: right ;
+  clear: right }
+
+div.sidebar p.rubric {
+  font-family: sans-serif ;
+  font-size: medium }
+
+div.system-messages {
+  margin: 5em }
+
+div.system-messages h1 {
+  color: red }
+
+div.system-message {
+  border: medium outset ;
+  padding: 1em }
+
+div.system-message p.system-message-title {
+  color: red ;
+  font-weight: bold }
+
+div.topic {
+  margin: 2em }
+
+h1.section-subtitle, h2.section-subtitle, h3.section-subtitle,
+h4.section-subtitle, h5.section-subtitle, h6.section-subtitle {
+  margin-top: 0.4em }
+
+h1.title {
+  text-align: center }
+
+h2.subtitle {
+  text-align: center }
+
+hr.docutils {
+  width: 75% }
+
+img.align-left, .figure.align-left, object.align-left, table.align-left {
+  clear: left ;
+  float: left ;
+  margin-right: 1em }
+
+img.align-right, .figure.align-right, object.align-right, table.align-right {
+  clear: right ;
+  float: right ;
+  margin-left: 1em }
+
+img.align-center, .figure.align-center, object.align-center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
 }
 
-/* Text Blocks */
-/* =========== */
-
-/* Literal Blocks */
-pre.literal-block, pre.doctest-block,
-pre.math, pre.code {
-  font-family: monospace;
+table.align-center {
+  margin-left: auto;
+  margin-right: auto;
 }
 
-/* Block Quotes */
-blockquote > table,
-div.topic > table {
-  margin-top: 0;
-  margin-bottom: 0;
-}
-blockquote p.attribution,
-div.topic p.attribution {
-  text-align: right;
-  margin-left: 20%;
-}
+.align-left {
+  text-align: left }
 
-/* Tables */
-/* ====== */
+.align-center {
+  clear: both ;
+  text-align: center }
 
-/* th { vertical-align: bottom; } */
+.align-right {
+  text-align: right }
 
-table tr { text-align: left; }
+/* reset inner alignment in figures */
+div.align-right {
+  text-align: inherit }
 
-/* "booktabs" style (no vertical lines) */
-table.booktabs {
-  border: 0;
-  border-top: 2px solid;
-  border-bottom: 2px solid;
-  border-collapse: collapse;
-}
-table.booktabs * {
-  border: 0;
-}
-table.booktabs th {
-  border-bottom: thin solid;
-}
+/* div.align-center * { */
+/*   text-align: left } */
 
-/* numbered tables (counter defined in div.document) */
-table.numbered > caption:before {
-  counter-increment: table;
-  content: "Table " counter(table) ": ";
-  font-weight: bold;
-}
+.align-top    {
+  vertical-align: top }
 
-/* Explicit Markup Blocks */
-/* ====================== */
+.align-middle {
+  vertical-align: middle }
 
-/* Footnotes and Citations */
-/* ----------------------- */
+.align-bottom {
+  vertical-align: bottom }
 
-/* line on the left */
-dl.footnote {
-  padding-left: 1ex;
-  border-left: solid;
-  border-left-width: thin;
-}
+ol.simple, ul.simple {
+  margin-bottom: 1em }
 
-/* Directives */
-/* ---------- */
+ol.arabic {
+  list-style: decimal }
 
-/* Body Elements */
-/* ~~~~~~~~~~~~~ */
+ol.loweralpha {
+  list-style: lower-alpha }
 
-/* Images and Figures */
+ol.upperalpha {
+  list-style: upper-alpha }
 
-/* let content flow to the side of aligned images and figures */
-figure.align-left,
-img.align-left,
-video.align-left,
-object.align-left {
-  clear: left;
-  float: left;
-  margin-right: 1em;
-}
-figure.align-right,
-img.align-right,
-video.align-right,
-object.align-right {
-  clear: right;
-  float: right;
-  margin-left: 1em;
-}
-/* Stop floating sidebars, images and figures */
-h1, h2, h3, h4, footer, header { clear: both; }
+ol.lowerroman {
+  list-style: lower-roman }
 
-/* Numbered figures */
-figure.numbered > figcaption > p:before {
-  counter-increment: figure;
-  content: "Figure " counter(figure) ": ";
-  font-weight: bold;
-}
+ol.upperroman {
+  list-style: upper-roman }
 
-/* Admonitions and System Messages */
-.caution p.admonition-title,
-.attention p.admonition-title,
-.danger p.admonition-title,
-.error p.admonition-title,
-.warning p.admonition-title,
-div.error {
-  color: red;
-}
+p.attribution {
+  text-align: right ;
+  margin-left: 50% }
 
-/* Sidebar */
-/* Move right. In a layout with fixed margins, */
-/* it can be moved into the margin.            */
-aside.sidebar {
-  width: 30%;
-  max-width: 26em;
-  margin-left: 1em;
-  margin-right: -2%;
-  background-color: #ffffee;
-}
+p.caption {
+  font-style: italic }
 
-/* Code */
-pre.code { padding: 0.7ex }
+p.credits {
+  font-style: italic ;
+  font-size: smaller }
+
+p.label {
+  white-space: nowrap }
+
+p.rubric {
+  font-weight: bold ;
+  font-size: larger ;
+  color: maroon ;
+  text-align: center }
+
+p.sidebar-title {
+  font-family: sans-serif ;
+  font-weight: bold ;
+  font-size: larger }
+
+p.sidebar-subtitle {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+p.topic-title {
+  font-weight: bold }
+
+pre.address {
+  margin-bottom: 0 ;
+  margin-top: 0 ;
+  font: inherit }
+
+pre.literal-block, pre.doctest-block, pre.math, pre.code {
+  margin-left: 2em ;
+  margin-right: 2em }
+
+pre.code .ln { color: grey; } /* line numbers */
 pre.code, code { background-color: #eeeeee }
-/* basic highlighting: for a complete scheme, see */
-/* http://docutils.sourceforge.net/sandbox/stylesheets/ */
 pre.code .comment, code .comment { color: #5C6576 }
 pre.code .keyword, code .keyword { color: #3B0D06; font-weight: bold }
 pre.code .literal.string, code .literal.string { color: #0C5404 }
@@ -518,92 +284,132 @@ pre.code .name.builtin, code .name.builtin { color: #352B84 }
 pre.code .deleted, code .deleted { background-color: #DEB0A1}
 pre.code .inserted, code .inserted { background-color: #A3D289}
 
-/* Math */
-/* styled separately (see math.css for math-output=HTML) */
+span.classifier {
+  font-family: sans-serif ;
+  font-style: oblique }
 
-/* Epigraph           */
-/* Highlights         */
-/* Pull-Quote         */
-/* Compound Paragraph */
-/* Container          */
+span.classifier-delimiter {
+  font-family: sans-serif ;
+  font-weight: bold }
 
-/* Inline Markup */
-/* ============= */
+span.interpreted {
+  font-family: sans-serif }
 
-/* Inline Literals                                          */
-/* possible values: normal, nowrap, pre, pre-wrap, pre-line */
-/*   span.docutils.literal { white-space: pre-wrap; }       */
+span.option {
+  white-space: nowrap }
 
-/* Hyperlink References */
-a { text-decoration: none; }
+span.pre {
+  white-space: pre }
 
-/* External Targets       */
-/*   span.target.external */
-/* Internal Targets       */
-/*   span.target.internal */
-/* Footnote References    */
-/*   a.footnote-reference */
-/* Citation References    */
-/*   a.citation-reference */
+span.problematic {
+  color: red }
+
+span.section-subtitle {
+  /* font-size relative to parent (h1..h6 element) */
+  font-size: 80% }
+
+table.citation {
+  border-left: solid 1px gray;
+  margin-left: 1px }
+
+table.docinfo {
+  margin: 2em 4em }
+
+table.docutils {
+  margin-top: 0.5em ;
+  margin-bottom: 0.5em }
+
+table.footnote {
+  border-left: solid 1px black;
+  margin-left: 1px }
+
+table.docutils td, table.docutils th,
+table.docinfo td, table.docinfo th {
+  padding-left: 0.5em ;
+  padding-right: 0.5em ;
+  vertical-align: top }
+
+table.docutils th.field-name, table.docinfo th.docinfo-name {
+  font-weight: bold ;
+  text-align: left ;
+  white-space: nowrap ;
+  padding-left: 0 }
+
+/* "booktabs" style (no vertical lines) */
+table.docutils.booktabs {
+  border: 0px;
+  border-top: 2px solid;
+  border-bottom: 2px solid;
+  border-collapse: collapse;
+}
+table.docutils.booktabs * {
+  border: 0px;
+}
+table.docutils.booktabs th {
+  border-bottom: thin solid;
+  text-align: left;
+}
+
+h1 tt.docutils, h2 tt.docutils, h3 tt.docutils,
+h4 tt.docutils, h5 tt.docutils, h6 tt.docutils {
+  font-size: 100% }
+
+ul.auto-toc {
+  list-style-type: none }
 
 </style>
 </head>
 <body>
-<main id="rok4-flat-rsl-rl-task">
+<div class="document" id="rok4-flat-rsl-rl-task">
 <h1 class="title">RoK4 Flat RSL-RL Task 구조 문서</h1>
-<dl class="docinfo simple">
-<dt>작성일</dt>
-<dd><p>2026-07-09</p>
-</dd>
-<dt>대상 저장소</dt>
-<dd><p><span class="docutils literal">/home/rclab/rok4_lab</span></p>
-</dd>
-<dt>기준 환경</dt>
-<dd><p>Isaac Lab v2.3.2, Isaac Sim 5.1.0, <span class="docutils literal">env_isaaclab</span></p>
-</dd>
-</dl>
-<section id="id1">
-<h2>개요</h2>
+<table class="docinfo" frame="void" rules="none">
+<col class="docinfo-name" />
+<col class="docinfo-content" />
+<tbody valign="top">
+<tr class="field"><th class="docinfo-name">작성일:</th><td class="field-body">2026-07-14</td>
+</tr>
+<tr class="field"><th class="docinfo-name">대상 저장소:</th><td class="field-body"><tt class="docutils literal">/home/rclab/rok4_lab</tt></td>
+</tr>
+<tr class="field"><th class="docinfo-name">기준 환경:</th><td class="field-body">Isaac Lab v2.3.2, Isaac Sim 5.1.0, <tt class="docutils literal">env_isaaclab</tt></td>
+</tr>
+</tbody>
+</table>
+<div class="section" id="id1">
+<h1>개요</h1>
 <p>이번 작업의 목적은 RoK4를 위한 첫 강화학습 환경을 만드는 것이다. 바로 rough terrain으로 가지 않고,
 먼저 flat terrain에서 blind velocity walking을 학습할 수 있는 최소 구조를 만들었다.</p>
 <p>중요한 점은 G1을 그대로 복사한 것이 아니라는 점이다. G1은 잘 정리된 Isaac Lab humanoid locomotion
 task 구조를 참고한 템플릿이고, 실제 로봇 asset, 관절 순서, action dimension, reward body 이름은 모두
 RoK4 기준으로 다시 작성했다.</p>
-<p>현재 생성된 task는 다음 두 개다.</p>
-<table>
+<p>현재 생성된 task는 다음 세 개다.</p>
+<table border="1" class="docutils">
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col width="50%" />
+<col width="50%" />
 </colgroup>
-<thead>
-<tr><th class="head"><p>Task 이름</p></th>
-<th class="head"><p>목적</p></th>
+<thead valign="bottom">
+<tr><th class="head">Task 이름</th>
+<th class="head">목적</th>
 </tr>
 </thead>
-<tbody>
-<tr><td><p><span class="docutils literal"><span class="pre">RoK4-Isaac-Velocity-Flat-v0</span></span></p></td>
-<td><p><a href="#id2"><span class="problematic" id="id3">``</span></a>rok4_train.usd``를 사용하는 RoK4 flat-ground velocity tracking 학습용 task</p>
-<div class="system-message" id="id2">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 26); <em><a href="#id3">backlink</a></em></p>
-<p>Inline literal start-string without end-string.</p>
-</div>
-</td>
+<tbody valign="top">
+<tr><td><tt class="docutils literal"><span class="pre">RoK4-Isaac-Velocity-Flat-v0</span></tt></td>
+<td><tt class="docutils literal">rok4_train.usd</tt> 를 사용하는 RoK4 flat-ground velocity tracking 학습용 task</td>
 </tr>
-<tr><td><p><span class="docutils literal"><span class="pre">RoK4-Isaac-Velocity-Flat-Play-v0</span></span></p></td>
-<td><p>visual mesh가 있는 <a href="#id4"><span class="problematic" id="id5">``</span></a>rok4_test.usd``로 학습된 RoK4 flat policy를 재생하는 task</p>
-<div class="system-message" id="id4">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 28); <em><a href="#id5">backlink</a></em></p>
-<p>Inline literal start-string without end-string.</p>
-</div>
-</td>
+<tr><td><tt class="docutils literal"><span class="pre">RoK4-Isaac-Velocity-Flat-Play-v0</span></tt></td>
+<td>visual mesh가 있는 <tt class="docutils literal">rok4_test.usd</tt> 로 학습된 RoK4 flat policy를 재생하는 task</td>
+</tr>
+<tr><td><tt class="docutils literal"><span class="pre">RoK4-Isaac-Velocity-Flat-Teleop-v0</span></tt></td>
+<td><tt class="docutils literal">rok4_test.usd</tt> 와 Isaac Lab SE(2) gamepad/keyboard 입력으로 학습된 policy를 조종하는 task</td>
 </tr>
 </tbody>
 </table>
-</section>
-<section id="id6">
-<h2>전체 구조</h2>
+</div>
+<div class="section" id="id2">
+<h1>전체 구조</h1>
 <p>현재 RoK4 Lab 저장소의 핵심 구조는 다음과 같다.</p>
-<pre class="code text literal-block"><code>rok4_lab/
+<pre class="code text literal-block">
+rok4_lab/
   assets/
     rok4_wholebody/                  # URDF/USD/STL asset bundle, git ignore
   source/
@@ -620,6 +426,7 @@ RoK4 기준으로 다시 작성했다.</p>
                 rok4/
                   __init__.py        # Gym task 등록
                   flat_env_cfg.py    # RoK4 Flat env/reward/action/obs 정의
+                  domain_randomization_cfg.py # RoK4 DR 범위와 event mode 정의
                   agents/
                     rsl_rl_ppo_cfg.py # RSL-RL PPO 설정
   scripts/
@@ -628,26 +435,18 @@ RoK4 기준으로 다시 작성했다.</p>
     check_rok4_joint_monkey.py       # joint axis/limit 검사
     rsl_rl/
       _run_isaaclab_rsl.py           # Isaac Lab 원본 train/play wrapper
-      train.py                       # RoK4 task 등록 후 Isaac Lab train 실행
-      play.py                        # RoK4 task 등록 후 Isaac Lab play 실행</code></pre>
-</section>
-<section id="rok4">
-<h2>RoK4 구조 관계</h2>
-<p>현재 RoK4 flat task는 <a href="#id7"><span class="problematic" id="id8">``</span></a>flat_env_cfg.py``를 중심으로 움직인다. 다만 실행 entry point는
-<a href="#id9"><span class="problematic" id="id10">``</span></a>config/rok4/__init__.py``의 Gym task 등록이고, <a href="#id11"><span class="problematic" id="id12">``</span></a>flat_env_cfg.py``는 환경 설정의 main config 역할을 한다.</p>
-<div class="system-message" id="id7">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 68); <em><a href="#id8">backlink</a></em></p>
-<p>Inline literal start-string without end-string.</p>
+      rok4_ppo.py                     # KL logging을 추가한 RoK4 PPO/runner
+      train.py                       # RoK4 task/runner 등록 후 Isaac Lab train 실행
+      play.py                        # RoK4 task 등록 후 Isaac Lab play 실행
+      play_teleop.py                 # gamepad/keyboard command를 주입하는 teleop 실행
+</pre>
 </div>
-<div class="system-message" id="id9">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 68); <em><a href="#id10">backlink</a></em></p>
-<p>Inline literal start-string without end-string.</p>
-</div>
-<div class="system-message" id="id11">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 68); <em><a href="#id12">backlink</a></em></p>
-<p>Inline literal start-string without end-string.</p>
-</div>
-<pre class="code text literal-block"><code>[사용자 실행]
+<div class="section" id="rok4">
+<h1>RoK4 구조 관계</h1>
+<p>현재 RoK4 flat task는 <tt class="docutils literal">flat_env_cfg.py</tt> 를 중심으로 움직인다. 다만 실행 entry point는
+<tt class="docutils literal">config/rok4/__init__.py</tt> 의 Gym task 등록이고, <tt class="docutils literal">flat_env_cfg.py</tt> 는 환경 설정의 main config 역할을 한다.</p>
+<pre class="code text literal-block">
+[사용자 실행]
 ./isaaclab.sh -p /home/rclab/rok4_lab/scripts/rsl_rl/train.py
     |
     v
@@ -657,6 +456,7 @@ scripts/rsl_rl/train.py
 scripts/rsl_rl/_run_isaaclab_rsl.py
     |  RoK4 package path 추가
     |  Isaac Lab 원본 rsl_rl/train.py 실행 전 import rok4_tasks 삽입
+    |  train에서는 RoK4OnPolicyRunner 삽입
     v
 source/rok4_tasks/rok4_tasks/__init__.py
     |
@@ -669,221 +469,187 @@ manager_based/locomotion/velocity/config/rok4/__init__.py
     |      flat_env_cfg.py : RoK4FlatEnvCfg
     |
     +--&gt; rsl_rl_cfg_entry_point
-           agents/rsl_rl_ppo_cfg.py : RoK4FlatPPORunnerCfg</code></pre>
+           agents/rsl_rl_ppo_cfg.py : RoK4FlatPPORunnerCfg
+</pre>
 <p>환경 설정 관계는 다음과 같다.</p>
-<pre class="code text literal-block"><code>RoK4FlatEnvCfg
+<pre class="code text literal-block">
+RoK4FlatEnvCfg
   ├─ 상속: IsaacLab LocomotionVelocityRoughEnvCfg
   ├─ 포함: rewards = RoK4RewardsCfg()
+  ├─ 포함: terminations = RoK4TerminationsCfg()
   ├─ 학습 사용: ROK4_TRAIN_CFG
   ├─ 사용: ROK4_JOINT_ORDER
-  └─ 사용: ROK4_ACTION_SCALE
+  ├─ 사용: ROK4_ACTION_SCALE
+  └─ 호출: apply_rok4_domain_randomization(self)
 
 RoK4FlatEnvCfg_PLAY
   ├─ 상속: RoK4FlatEnvCfg
   └─ 재생 사용: ROK4_TEST_CFG
 
 RoK4RewardsCfg
-  └─ 상속: IsaacLab RewardsCfg
+  ├─ 상속: IsaacLab RewardsCfg
+  ├─ 부모 reward terms 상속
+  └─ RoK4 reward terms 정의/override
+
+RoK4TerminationsCfg
+  ├─ 상속: IsaacLab TerminationsCfg
+  ├─ time_out 상속 유지
+  ├─ base_contact 비활성화
+  └─ illegal_body_contact 추가
 
 RoK4FlatPPORunnerCfg
   └─ RSL-RL PPO runner/network/algorithm 설정
 
+RoK4OnPolicyRunner
+  └─ RoK4PPO 사용
+       ├─ upstream PPO update/learning-rate 동작 유지
+       ├─ iteration 평균 KL -&gt; Loss/kl
+       └─ iteration 최대 KL -&gt; Loss/kl_max
+
 RewardTermCfg(func=mdp.xxx)
-  └─ IsaacLab mdp reward 함수 호출</code></pre>
+  ├─ RoK4 로컬 mdp reward 함수 호출
+  ├─ Isaac Lab 공통 mdp reward 함수 호출
+  └─ locomotion velocity 전용 mdp reward 함수 호출
+</pre>
 <p>각 파일의 관계를 역할로 나누면 다음과 같다.</p>
-<table>
+<table border="1" class="docutils">
 <colgroup>
-<col style="width: 33%" />
-<col style="width: 33%" />
-<col style="width: 33%" />
+<col width="33%" />
+<col width="33%" />
+<col width="33%" />
 </colgroup>
-<thead>
-<tr><th class="head"><p>파일</p></th>
-<th class="head"><p>관계</p></th>
-<th class="head"><p>역할</p></th>
+<thead valign="bottom">
+<tr><th class="head">파일</th>
+<th class="head">관계</th>
+<th class="head">역할</th>
 </tr>
 </thead>
-<tbody>
-<tr><td><p><span class="docutils literal">config/rok4/__init__.py</span></p></td>
-<td><p>task 등록</p></td>
-<td><p><span class="docutils literal"><span class="pre">RoK4-Isaac-Velocity-Flat-v0</span></span> 이름을 <a href="#id13"><span class="problematic" id="id14">``</span></a>RoK4FlatEnvCfg``와 <a href="#id15"><span class="problematic" id="id16">``</span></a>RoK4FlatPPORunnerCfg``에 연결</p>
-<div class="system-message" id="id13">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 131); <em><a href="#id14">backlink</a></em></p>
-<p>Inline literal start-string without end-string.</p>
-</div>
-<div class="system-message" id="id15">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 131); <em><a href="#id16">backlink</a></em></p>
-<p>Inline literal start-string without end-string.</p>
-</div>
-</td>
+<tbody valign="top">
+<tr><td><tt class="docutils literal">config/rok4/__init__.py</tt></td>
+<td>task 등록</td>
+<td>Train, Play, Teleop task 이름을 각각의 RoK4 env cfg와 <tt class="docutils literal">RoK4FlatPPORunnerCfg</tt> 에 연결</td>
 </tr>
-<tr><td><p><span class="docutils literal">flat_env_cfg.py</span></p></td>
-<td><p>환경 main config</p></td>
-<td><p>RoK4 scene, terrain, action, observation, event, reward, command, termination 설정</p></td>
+<tr><td><tt class="docutils literal">flat_env_cfg.py</tt></td>
+<td>환경 main config</td>
+<td>RoK4 scene, terrain, action, observation, reward, command, termination 설정</td>
 </tr>
-<tr><td><p><span class="docutils literal">agents/rsl_rl_ppo_cfg.py</span></p></td>
-<td><p>학습 config</p></td>
-<td><p>RSL-RL PPO network와 algorithm hyperparameter 설정</p></td>
+<tr><td><tt class="docutils literal">domain_randomization_cfg.py</tt></td>
+<td>DR config</td>
+<td>RoK4 foot material, base mass, COM, external wrench, reset randomization 범위와 event mode 설정</td>
 </tr>
-<tr><td><p><span class="docutils literal">assets/robots/rok4.py</span></p></td>
-<td><p>robot asset config</p></td>
-<td><p>USD path, initial pose, actuator, joint order, action scale 제공</p></td>
+<tr><td><tt class="docutils literal">mdp/__init__.py</tt></td>
+<td>mdp re-export</td>
+<td>Isaac Lab locomotion mdp를 다시 export하고 RoK4 로컬 mdp 함수를 함께 노출</td>
 </tr>
-<tr><td><p>IsaacLab <span class="docutils literal">velocity_env_cfg.py</span></p></td>
-<td><p>부모 config</p></td>
-<td><p>manager-based velocity locomotion의 공통 scene/action/obs/reward/termination 틀 제공</p></td>
+<tr><td><tt class="docutils literal">mdp/rewards.py</tt></td>
+<td>RoK4 reward 계산식</td>
+<td>RoK4 전용 <tt class="docutils literal">action_pos_limits</tt> 및 weighted <tt class="docutils literal">joint_torques_l2</tt>, <tt class="docutils literal">joint_vel_l2</tt>, <tt class="docutils literal">joint_acc_l2</tt>, <tt class="docutils literal">action_rate_l2</tt>, <tt class="docutils literal">second_action_rate_l2</tt> 등의 reward raw value 계산 함수/클래스 정의</td>
 </tr>
-<tr><td><p>IsaacLab <span class="docutils literal">mdp/rewards.py</span></p></td>
-<td><p>reward 함수 모음</p></td>
-<td><p><a href="#id17"><span class="problematic" id="id18">``</span></a>RewardTermCfg(func=mdp.xxx)``가 호출하는 실제 reward 계산 함수 제공</p>
-<div class="system-message" id="id17">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 146); <em><a href="#id18">backlink</a></em></p>
-<p>Inline literal start-string without end-string.</p>
-</div>
-</td>
+<tr><td><tt class="docutils literal">agents/rsl_rl_ppo_cfg.py</tt></td>
+<td>학습 config</td>
+<td>RSL-RL PPO network와 algorithm hyperparameter 설정</td>
+</tr>
+<tr><td><tt class="docutils literal">scripts/rsl_rl/rok4_ppo.py</tt></td>
+<td>학습 algorithm 확장</td>
+<td>adaptive learning rate가 계산하는 mini-batch KL의 iteration 평균/최대값을 TensorBoard에 기록</td>
+</tr>
+<tr><td><tt class="docutils literal">assets/robots/rok4.py</tt></td>
+<td>robot asset config</td>
+<td>USD path, initial pose, actuator, joint order, action scale, self-collision 설정 제공</td>
+</tr>
+<tr><td>IsaacLab <tt class="docutils literal">velocity_env_cfg.py</tt></td>
+<td>부모 config</td>
+<td>manager-based velocity locomotion의 공통 scene/action/obs/reward/termination 틀 제공</td>
+</tr>
+<tr><td>IsaacLab <tt class="docutils literal">mdp/rewards.py</tt></td>
+<td>reward 함수 모음</td>
+<td>Isaac Lab 공통 reward 함수와 locomotion velocity 전용 reward 함수를 <tt class="docutils literal">mdp.xxx</tt> namespace로 제공</td>
 </tr>
 </tbody>
 </table>
-<p>한 줄로 요약하면, <a href="#id19"><span class="problematic" id="id20">``</span></a>flat_env_cfg.py``는 RoK4 환경의 중심 설정 파일이고, <a href="#id21"><span class="problematic" id="id22">``</span></a>__init__.py``는 task 이름을
-등록하는 입구, <a href="#id23"><span class="problematic" id="id24">``</span></a>rsl_rl_ppo_cfg.py``는 학습기 설정, <a href="#id25"><span class="problematic" id="id26">``</span></a>rok4.py``는 로봇 asset 설정이다.</p>
-<div class="system-message" id="id19">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 148); <em><a href="#id20">backlink</a></em></p>
-<p>Inline literal start-string without end-string.</p>
+<p>한 줄로 요약하면, <tt class="docutils literal">flat_env_cfg.py</tt> 는 RoK4 환경의 중심 설정 파일이고, <tt class="docutils literal">__init__.py</tt> 는 task 이름을
+등록하는 입구, <tt class="docutils literal">rsl_rl_ppo_cfg.py</tt> 는 학습기 설정, <tt class="docutils literal">rok4.py</tt> 는 로봇 asset 설정이다.</p>
 </div>
-<div class="system-message" id="id21">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 148); <em><a href="#id22">backlink</a></em></p>
-<p>Inline literal start-string without end-string.</p>
-</div>
-<div class="system-message" id="id23">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 148); <em><a href="#id24">backlink</a></em></p>
-<p>Inline literal start-string without end-string.</p>
-</div>
-<div class="system-message" id="id25">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 148); <em><a href="#id26">backlink</a></em></p>
-<p>Inline literal start-string without end-string.</p>
-</div>
-</section>
-<section id="id27">
-<h2>새로 생성된 파일</h2>
-<section id="source-rok4-tasks-rok4-tasks-manager-based-init-py">
-<h3><span class="docutils literal">source/rok4_tasks/rok4_tasks/manager_based/__init__.py</span></h3>
-<p>Manager-based task 패키지 시작점이다. Isaac Lab의 <span class="docutils literal">ManagerBasedRLEnv</span> 스타일 task를 RoK4 저장소 안에
+<div class="section" id="id3">
+<h1>새로 생성된 파일</h1>
+<div class="section" id="source-rok4-tasks-rok4-tasks-manager-based-init-py">
+<h2><tt class="docutils literal">source/rok4_tasks/rok4_tasks/manager_based/__init__.py</tt></h2>
+<p>Manager-based task 패키지 시작점이다. Isaac Lab의 <tt class="docutils literal">ManagerBasedRLEnv</tt> 스타일 task를 RoK4 저장소 안에
 넣기 위한 디렉터리 계층이다.</p>
-</section>
-<section id="source-rok4-tasks-rok4-tasks-manager-based-locomotion-init-py">
-<h3><span class="docutils literal">source/rok4_tasks/rok4_tasks/manager_based/locomotion/__init__.py</span></h3>
-<div class="system-message">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 161)</p>
-<p>Title underline too short.</p>
-<pre class="literal-block">``source/rok4_tasks/rok4_tasks/manager_based/locomotion/__init__.py``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~</pre>
 </div>
+<div class="section" id="source-rok4-tasks-rok4-tasks-manager-based-locomotion-init-py">
+<h2><tt class="docutils literal">source/rok4_tasks/rok4_tasks/manager_based/locomotion/__init__.py</tt></h2>
 <p>Locomotion task 그룹 시작점이다. 향후 velocity walking 외에 balancing, standing, whole-body tracking 같은
 locomotion 계열 task를 추가할 때 같은 계층 아래에 둘 수 있다.</p>
-</section>
-<section id="source-rok4-tasks-rok4-tasks-manager-based-locomotion-velocity-init-py">
-<h3><span class="docutils literal">source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/__init__.py</span></h3>
-<div class="system-message">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 167)</p>
-<p>Title underline too short.</p>
-<pre class="literal-block">``source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/__init__.py``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~</pre>
 </div>
+<div class="section" id="source-rok4-tasks-rok4-tasks-manager-based-locomotion-velocity-init-py">
+<h2><tt class="docutils literal">source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/__init__.py</tt></h2>
 <p>Velocity tracking task 그룹 시작점이다. 현재 RoK4의 첫 학습 목표가 command velocity를 따라 걷는 것이므로
 이 계층을 만들었다.</p>
-</section>
-<section id="source-rok4-tasks-rok4-tasks-manager-based-locomotion-velocity-config-init-py">
-<h3><span class="docutils literal">source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/__init__.py</span></h3>
-<div class="system-message">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 173)</p>
-<p>Title underline too short.</p>
-<pre class="literal-block">``source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/__init__.py``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~</pre>
 </div>
-<p>Velocity task 안에서 robot별 config를 묶기 위한 계층이다. 지금은 <a href="#id28"><span class="problematic" id="id29">``</span></a>rok4``만 있지만, 나중에 RoK4 variant가
+<div class="section" id="source-rok4-tasks-rok4-tasks-manager-based-locomotion-velocity-config-init-py">
+<h2><tt class="docutils literal">source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/__init__.py</tt></h2>
+<p>Velocity task 안에서 robot별 config를 묶기 위한 계층이다. 지금은 <tt class="docutils literal">rok4</tt> 만 있지만, 나중에 RoK4 variant가
 늘어나면 같은 구조 아래에 추가할 수 있다.</p>
-<div class="system-message" id="id28">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 175); <em><a href="#id29">backlink</a></em></p>
-<p>Inline literal start-string without end-string.</p>
 </div>
-</section>
-<section id="source-rok4-tasks-rok4-tasks-manager-based-locomotion-velocity-config-rok4-init-py">
-<h3><span class="docutils literal">source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/rok4/__init__.py</span></h3>
-<div class="system-message">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 179)</p>
-<p>Title underline too short.</p>
-<pre class="literal-block">``source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/rok4/__init__.py``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~</pre>
-</div>
+<div class="section" id="source-rok4-tasks-rok4-tasks-manager-based-locomotion-velocity-config-rok4-init-py">
+<h2><tt class="docutils literal">source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/rok4/__init__.py</tt></h2>
 <p>Gymnasium task를 등록하는 파일이다. 여기에서 다음 task 이름이 Isaac Lab registry에 올라간다.</p>
-<pre class="code text literal-block"><code>RoK4-Isaac-Velocity-Flat-v0
-RoK4-Isaac-Velocity-Flat-Play-v0</code></pre>
-<p>각 task는 <a href="#id30"><span class="problematic" id="id31">``</span></a>isaaclab.envs:ManagerBasedRLEnv``를 entry point로 사용한다. 환경 설정은
-<a href="#id32"><span class="problematic" id="id33">``</span></a>flat_env_cfg.py``에서, RSL-RL PPO 설정은 <a href="#id34"><span class="problematic" id="id35">``</span></a>agents/rsl_rl_ppo_cfg.py``에서 불러온다.</p>
-<div class="system-message" id="id30">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 188); <em><a href="#id31">backlink</a></em></p>
-<p>Inline literal start-string without end-string.</p>
+<pre class="code text literal-block">
+RoK4-Isaac-Velocity-Flat-v0
+RoK4-Isaac-Velocity-Flat-Play-v0
+RoK4-Isaac-Velocity-Flat-Teleop-v0
+</pre>
+<p>각 task는 <tt class="docutils literal">isaaclab.envs:ManagerBasedRLEnv</tt> 를 entry point로 사용한다. 환경 설정은
+<tt class="docutils literal">flat_env_cfg.py</tt> 에서, RSL-RL PPO 설정은 <tt class="docutils literal">agents/rsl_rl_ppo_cfg.py</tt> 에서 불러온다.</p>
 </div>
-<div class="system-message" id="id32">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 188); <em><a href="#id33">backlink</a></em></p>
-<p>Inline literal start-string without end-string.</p>
-</div>
-<div class="system-message" id="id34">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 188); <em><a href="#id35">backlink</a></em></p>
-<p>Inline literal start-string without end-string.</p>
-</div>
-</section>
-<section id="source-rok4-tasks-rok4-tasks-manager-based-locomotion-velocity-config-rok4-flat-env-cfg-py">
-<h3><span class="docutils literal">source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/rok4/flat_env_cfg.py</span></h3>
-<div class="system-message">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 192)</p>
-<p>Title underline too short.</p>
-<pre class="literal-block">``source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/rok4/flat_env_cfg.py``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~</pre>
-</div>
+<div class="section" id="source-rok4-tasks-rok4-tasks-manager-based-locomotion-velocity-config-rok4-flat-env-cfg-py">
+<h2><tt class="docutils literal">source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/rok4/flat_env_cfg.py</tt></h2>
 <p>이번 작업의 핵심 파일이다. RoK4 flat walking 환경을 정의한다.</p>
 <p>주요 역할은 다음과 같다.</p>
-<table>
+<table border="1" class="docutils">
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col width="50%" />
+<col width="50%" />
 </colgroup>
-<thead>
-<tr><th class="head"><p>항목</p></th>
-<th class="head"><p>내용</p></th>
+<thead valign="bottom">
+<tr><th class="head">항목</th>
+<th class="head">내용</th>
 </tr>
 </thead>
-<tbody>
-<tr><td><p>Scene</p></td>
-<td><p>학습 task는 <span class="docutils literal"><span class="pre">ROK4_TRAIN_CFG``를</span> <span class="pre">``{ENV_REGEX_NS}/Robot</span></span> 위치에 spawn</p></td>
+<tbody valign="top">
+<tr><td>Scene</td>
+<td>학습 task는 <tt class="docutils literal">ROK4_TRAIN_CFG</tt> 를 <tt class="docutils literal"><span class="pre">{ENV_REGEX_NS}/Robot</span></tt> 위치에 spawn</td>
 </tr>
-<tr><td><p>Terrain</p></td>
-<td><p>plane terrain 사용, rough terrain generator와 height scanner 제거</p></td>
+<tr><td>Terrain</td>
+<td>plane terrain 사용, rough terrain generator와 height scanner 제거</td>
 </tr>
-<tr><td><p>Action</p></td>
-<td><p><span class="docutils literal">ROK4_JOINT_ORDER</span> 기준 13차원 joint position target</p></td>
+<tr><td>Action</td>
+<td><tt class="docutils literal">ROK4_JOINT_ORDER</tt> 기준 13차원 joint position target</td>
 </tr>
-<tr><td><p>Observation</p></td>
-<td><p>blind proprioceptive history observation</p></td>
+<tr><td>Observation</td>
+<td>blind proprioceptive history observation</td>
 </tr>
-<tr><td><p>Reward</p></td>
-<td><p>velocity tracking, upright, action smoothness, torque/acc penalty, foot contact 관련 reward</p></td>
+<tr><td>Domain randomization</td>
+<td><tt class="docutils literal">domain_randomization_cfg.py</tt> 의 <tt class="docutils literal">apply_rok4_domain_randomization(self)</tt> 호출</td>
 </tr>
-<tr><td><p>Termination</p></td>
-<td><p>timeout, base/upper-body illegal contact</p></td>
+<tr><td>Reward</td>
+<td>velocity tracking, upright, action smoothness, 전체 13관절의 실제/목표 soft position limit, torque/acc penalty, foot contact 관련 reward</td>
 </tr>
-<tr><td><p>Play cfg</p></td>
-<td><p><a href="#id36"><span class="problematic" id="id37">``</span></a>ROK4_TEST_CFG``로 교체, 적은 env 수, corruption off, push/random external force off</p>
-<div class="system-message" id="id36">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 216); <em><a href="#id37">backlink</a></em></p>
-<p>Inline literal start-string without end-string.</p>
-</div>
-</td>
+<tr><td>Termination</td>
+<td>부모 timeout 유지, Foot를 제외한 모든 body의 illegal contact</td>
+</tr>
+<tr><td>Play cfg</td>
+<td><tt class="docutils literal">ROK4_TEST_CFG</tt> 로 교체, 적은 env 수, corruption off, push/random external force off</td>
+</tr>
+<tr><td>Teleop cfg</td>
+<td>Play cfg를 상속하고 1개 env, 600초 timeout, heading off, 자동 command resampling off 설정</td>
 </tr>
 </tbody>
 </table>
 <p>RoK4 action space는 다음 13축이다.</p>
-<pre class="code text literal-block"><code>Left leg:
+<pre class="code text literal-block">
+Left leg:
   L_Hip_Yaw_Joint
   L_Hip_Roll_Joint
   L_Hip_Pitch_Joint
@@ -900,211 +666,443 @@ Right leg:
   R_Ankle_Roll_Joint
 
 Torso:
-  Torso_Yaw_Joint</code></pre>
-<p>관절 순서는 반드시 <a href="#id38"><span class="problematic" id="id39">``</span></a>rok4.py``의 <a href="#id40"><span class="problematic" id="id41">``</span></a>ROK4_JOINT_ORDER``를 따른다. G1의 관절 순서를 그대로 쓰지 않는다.</p>
-<div class="system-message" id="id38">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 241); <em><a href="#id39">backlink</a></em></p>
-<p>Inline literal start-string without end-string.</p>
+  Torso_Yaw_Joint
+</pre>
+<p>관절 순서는 반드시 <tt class="docutils literal">rok4.py</tt> 의 <tt class="docutils literal">ROK4_JOINT_ORDER</tt> 를 따른다. G1의 관절 순서를 그대로 쓰지 않는다.</p>
 </div>
-<div class="system-message" id="id40">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 241); <em><a href="#id41">backlink</a></em></p>
-<p>Inline literal start-string without end-string.</p>
+<div class="section" id="action-pipeline-clip">
+<h2>Action pipeline과 clip</h2>
+<p>RoK4 policy가 출력하는 action은 먼저 RSL-RL wrapper에서 <tt class="docutils literal">clip_actions = 1.0</tt> 설정을 통해 <tt class="docutils literal"><span class="pre">[-1,</span> 1]</tt> 로
+잘린다. 그 다음 RoK4 action scale과 default pose offset이 적용되어 실제 joint position target이 된다.</p>
+<pre class="code text literal-block">
+actor network output
+  -&gt; RslRlVecEnvWrapper clip_actions = 1.0
+  -&gt; clipped_raw_action in [-1, 1]
+  -&gt; q_target = default_joint_pos + clipped_raw_action * ROK4_ACTION_SCALE
+  -&gt; IdealPDActuatorCfg explicit torque-PD
+</pre>
+<p>중요한 점은 <tt class="docutils literal">last_action</tt> observation이 <tt class="docutils literal">q_target</tt> 이나 <tt class="docutils literal">clipped_raw_action * ROK4_ACTION_SCALE</tt> 이 아니라
+clipped raw policy action이라는 점이다. 즉 observation 안의 action 항목은 &quot;이전 step에서 policy가 낸 action&quot;을
+의미하고, motor target은 별도로 action scale과 default pose를 거쳐 만들어진다.</p>
+<p>반면 <tt class="docutils literal">action_rate_l2</tt> 와 <tt class="docutils literal">second_action_rate_l2</tt> reward는 raw action 차이를 그대로 쓰지 않고,
+<tt class="docutils literal">clipped_raw_action * ROK4_ACTION_SCALE</tt> 차이를 사용한다. 즉 observation은 raw action 의미를 유지하고,
+smoothness reward는 실제 joint target offset 변화량에 더 가까운 값으로 계산한다.</p>
+<p><tt class="docutils literal">ROK4_ACTION_SCALE</tt> 은 기존 Isaac Gym RoK4의 actuator action scale과 동일하다. 좌측 다리, 우측 다리,
+torso 순서의 값은 다음과 같다.</p>
+<pre class="code text literal-block">
+[0.4, 0.5, 1.25, 1.5, 0.75, 0.75,
+ 0.4, 0.5, 1.25, 1.5, 0.75, 0.75,
+ 0.4]
+</pre>
+<p>이 하나의 scale 배열을 joint target 계산과 두 action smoothness reward가 공통으로 사용한다.</p>
 </div>
+<div class="section" id="command">
+<h2>학습 command 범위</h2>
+<p>Flat 학습은 <tt class="docutils literal"><span class="pre">lin_vel_x=(-0.1,</span> 0.85) m/s</tt>, <tt class="docutils literal"><span class="pre">lin_vel_y=(-0.3,</span> 0.3) m/s</tt>,
+<tt class="docutils literal"><span class="pre">ang_vel_z=(-0.6,</span> 0.6) rad/s</tt> 를 사용한다. x command의 제한된 음수 영역은 후진 보행 curriculum의 중간
+단계이며, 이후 기존 Isaac Gym RoK4 범위인 <tt class="docutils literal"><span class="pre">(-0.3,</span> 0.85) m/s</tt> 까지 확장할 수 있다.</p>
+<p><tt class="docutils literal">feet_air_time_positive_biped</tt> 는 <tt class="docutils literal">threshold=0.55 s</tt>, <tt class="docutils literal">weight=0.75</tt> 를 사용한다. threshold는 정확한 gait
+period 목표가 아니라 보상되는 single-stance 시간의 상한이다. weight를 유지한 채 threshold를 높였으므로 최대
+pre-<tt class="docutils literal">dt</tt> 항목 크기는 <tt class="docutils literal">0.30</tt> 에서 <tt class="docutils literal">0.4125</tt> 로 증가한다.</p>
+<p>Play 환경은 <tt class="docutils literal">lin_vel_x=0.85 m/s</tt> 의 고정 전진 명령을 사용하고 <tt class="docutils literal">lin_vel_y=0.0 m/s</tt>,
+<tt class="docutils literal">ang_vel_z=0.0 rad/s</tt> 로 고정한다. Teleop 환경은 자동 표본화를 끄고 사용자가 입력한 base-frame
+<tt class="docutils literal">[lin_vel_x, lin_vel_y, ang_vel_z]</tt> 를 command buffer에 직접 기록한다.</p>
+</div>
+<div class="section" id="root">
+<h2>초기 root 위치</h2>
+<p>기존 Gym 메모에서 gait-ready CoM 기준 <tt class="docutils literal">(0.0575 / 2, 0, 0.835) m</tt> 는 gait-ready base 기준
+<tt class="docutils literal">(0.0552, 0, 0.907) m</tt> 에 대응한다. 다리를 펴고 선 자세의 base 높이는 <tt class="docutils literal">z=0.919 m</tt> 이다.
+<tt class="docutils literal">ROK4_TRAIN_CFG</tt> 의 실제 articulation root 초기 위치는 <tt class="docutils literal">(0.0552, 0.0, 0.929) m</tt> 이며,
+이는 다리를 편 직립 base 높이보다 <tt class="docutils literal">0.010 m</tt> 위에 로봇을 살짝 띄워 배치한 값이다.</p>
+<p>이 <tt class="docutils literal">pos</tt> 는 root의 world/environment 위치이고, 초기 관절 자세는 <tt class="docutils literal">_ROK4_INIT_JOINT_POS</tt> 가 별도로
+정의한다. 현재 <tt class="docutils literal">_ROK4_INIT_JOINT_POS</tt> 도 Gym의 활성 <tt class="docutils literal">defaultJointAngles</tt> 및
+<tt class="docutils literal">norminalJointAngles</tt> gait-ready 자세와 동일하게 맞춰져 있다.</p>
+<table border="1" class="docutils">
+<caption>Gym과 동일한 초기 관절 자세</caption>
+<colgroup>
+<col width="50%" />
+<col width="50%" />
+</colgroup>
+<thead valign="bottom">
+<tr><th class="head">관절 그룹</th>
+<th class="head">초기 각도 [rad]</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>Hip Yaw / Hip Roll</td>
+<td><tt class="docutils literal">0.0</tt></td>
+</tr>
+<tr><td>Hip Pitch</td>
+<td><tt class="docutils literal"><span class="pre">-0.0924</span></tt></td>
+</tr>
+<tr><td>Knee Pitch</td>
+<td><tt class="docutils literal">0.345</tt></td>
+</tr>
+<tr><td>Ankle Pitch</td>
+<td><tt class="docutils literal"><span class="pre">-0.253</span></tt></td>
+</tr>
+<tr><td>Ankle Roll / Torso Yaw</td>
+<td><tt class="docutils literal">0.0</tt></td>
+</tr>
+</tbody>
+</table>
+<p><tt class="docutils literal">use_default_offset=True</tt> 이므로 이 초기 관절 자세는 policy action에 더해지는 joint position target의
+기준 자세로도 사용된다.</p>
+<p>Isaac Lab의 <tt class="docutils literal">train.py</tt> 와 <tt class="docutils literal">play.py</tt> 를 사용할 때는 <tt class="docutils literal">RslRlVecEnvWrapper</tt> 가 자동으로 clipping을 수행한다.
+반면 ONNX/TorchScript policy를 직접 호출하는 sim2sim 또는 sim2real 코드에서는 같은 동작을 외부 코드에서
+직접 수행해야 한다.</p>
+<pre class="code python literal-block">
+<span class="name">policy_output</span> <span class="operator">=</span> <span class="name">policy</span><span class="punctuation">(</span><span class="name">obs</span><span class="punctuation">)</span>
+<span class="name">clipped_raw_action</span> <span class="operator">=</span> <span class="name">torch</span><span class="operator">.</span><span class="name">clamp</span><span class="punctuation">(</span><span class="name">policy_output</span><span class="punctuation">,</span> <span class="operator">-</span><span class="literal number float">1.0</span><span class="punctuation">,</span> <span class="literal number float">1.0</span><span class="punctuation">)</span>
+<span class="name">q_target</span> <span class="operator">=</span> <span class="name">default_joint_pos</span> <span class="operator">+</span> <span class="name">clipped_raw_action</span> <span class="operator">*</span> <span class="name">ROK4_ACTION_SCALE</span>
+<span class="name">last_action</span> <span class="operator">=</span> <span class="name">clipped_raw_action</span>
+</pre>
 <p>Actor observation은 5-step history를 사용한다.</p>
-<pre class="code text literal-block"><code>base_ang_vel
+<pre class="code text literal-block">
+base_ang_vel
 projected_gravity
 velocity_commands
 joint_pos
 joint_vel
-last_action</code></pre>
+last_action
+</pre>
 <p>Actor에는 다음 정보를 넣지 않는다.</p>
-<pre class="code text literal-block"><code>camera image
+<pre class="code text literal-block">
+camera image
 terrain height scan
-base linear velocity</code></pre>
+base linear velocity
+</pre>
 <p>따라서 현재 구조는 estimator가 없는 history MLP 방식의 blind walking baseline이다.</p>
-</section>
-<section id="rok4-control-timing">
-<h3>RoK4 control timing</h3>
-<p>RoK4는 Isaac Lab 본체의 <span class="docutils literal"><span class="pre">LocomotionVelocityRoughEnvCfg``를</span> 수정하지 않고, ``RoK4FlatEnvCfg</span> 안에서
-simulation/control timing만 override한다.</p>
-<table>
+</div>
+<div class="section" id="source-rok4-tasks-rok4-tasks-manager-based-locomotion-velocity-config-rok4-domain-randomization-cfg-py">
+<h2><tt class="docutils literal">source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/rok4/domain_randomization_cfg.py</tt></h2>
+<p>RoK4 flat task의 domain randomization 값을 따로 관리하는 파일이다. <tt class="docutils literal">flat_env_cfg.py</tt> 안에 긴 DR block을
+직접 두지 않고, 다음 한 줄로 적용한다.</p>
+<pre class="code python literal-block">
+<span class="name">apply_rok4_domain_randomization</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="punctuation">)</span>
+</pre>
+<p>이 분리의 목적은 reward, observation, action 설정과 DR 튜닝값을 섞지 않는 것이다. 앞으로 friction, restitution,
+mass, COM, reset perturbation을 조정할 때 이 파일을 먼저 보면 된다.</p>
+<p>현재 DR 구조는 다음과 같다.</p>
+<table border="1" class="docutils">
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col width="33%" />
+<col width="33%" />
+<col width="33%" />
 </colgroup>
-<thead>
-<tr><th class="head"><p>설정</p></th>
-<th class="head"><p>값</p></th>
+<thead valign="bottom">
+<tr><th class="head">그룹</th>
+<th class="head">mode</th>
+<th class="head">현재 설정</th>
 </tr>
 </thead>
-<tbody>
-<tr><td><p><span class="docutils literal">sim.dt</span></p></td>
-<td><p><span class="docutils literal">0.002 s</span></p></td>
+<tbody valign="top">
+<tr><td>Foot physics material</td>
+<td><tt class="docutils literal">startup</tt></td>
+<td><tt class="docutils literal">L_Foot_Link</tt>, <tt class="docutils literal">R_Foot_Link</tt> 의 static friction <tt class="docutils literal">0.8</tt>, dynamic friction <tt class="docutils literal">0.6</tt>, restitution <tt class="docutils literal">0.1~0.3</tt></td>
 </tr>
-<tr><td><p>physics frequency</p></td>
-<td><p><span class="docutils literal">500 Hz</span></p></td>
+<tr><td>Body mass</td>
+<td><tt class="docutils literal">startup</tt></td>
+<td>base, upper, lower body group을 각각 <tt class="docutils literal">0.9~1.25</tt> 배로 scale</td>
 </tr>
-<tr><td><p><span class="docutils literal">decimation</span></p></td>
-<td><p><span class="docutils literal">5</span></p></td>
+<tr><td>Body COM</td>
+<td><tt class="docutils literal">startup</tt></td>
+<td>base, upper, lower body group의 COM offset을 그룹별 범위로 randomize</td>
 </tr>
-<tr><td><p>policy/action period</p></td>
-<td><p><span class="docutils literal">0.010 s</span></p></td>
+<tr><td>External base wrench</td>
+<td><tt class="docutils literal">reset</tt></td>
+<td>현재 force/torque range는 0으로 두어 외력은 꺼진 상태</td>
 </tr>
-<tr><td><p>policy/action frequency</p></td>
-<td><p><span class="docutils literal">100 Hz</span></p></td>
+<tr><td>Reset joint pose</td>
+<td><tt class="docutils literal">reset</tt></td>
+<td>default joint position을 <tt class="docutils literal">0.9~1.1</tt> scale</td>
+</tr>
+<tr><td>Reset base pose/velocity</td>
+<td><tt class="docutils literal">reset</tt></td>
+<td>episode reset마다 base x/y/yaw pose와 base velocity를 약하게 randomize</td>
 </tr>
 </tbody>
 </table>
-</section>
-<section id="source-rok4-tasks-rok4-tasks-manager-based-locomotion-velocity-config-rok4-agents-rsl-rl-ppo-cfg-py">
-<h3><span class="docutils literal">source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/rok4/agents/rsl_rl_ppo_cfg.py</span></h3>
-<div class="system-message">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 287)</p>
-<p>Title underline too short.</p>
-<pre class="literal-block">``source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/rok4/agents/rsl_rl_ppo_cfg.py``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~</pre>
+<p><tt class="docutils literal">startup</tt> DR은 scene 생성 시 각 environment에 대해 샘플링된다. <tt class="docutils literal">reset</tt> DR은 episode reset마다 다시
+샘플링된다. 4096개 environment 학습에서 CPU-heavy DR을 매 reset 수행하지 않기 위해 material, mass, COM은
+현재 <tt class="docutils literal">startup</tt> 으로 둔다.</p>
+<p>Mass와 COM DR은 다음 세 body group으로 나누어 관리한다.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="25%" />
+<col width="25%" />
+<col width="25%" />
+<col width="25%" />
+</colgroup>
+<thead valign="bottom">
+<tr><th class="head">그룹</th>
+<th class="head">링크</th>
+<th class="head">mass scale</th>
+<th class="head">COM range</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>base</td>
+<td><tt class="docutils literal">Base_Link</tt></td>
+<td><tt class="docutils literal">0.9~1.1</tt></td>
+<td>x/y/z <tt class="docutils literal"><span class="pre">+-0.01</span> m</tt></td>
+</tr>
+<tr><td>upper</td>
+<td><tt class="docutils literal">Upper_Body_Link</tt></td>
+<td><tt class="docutils literal">0.9~1.25</tt></td>
+<td>x/y/z <tt class="docutils literal"><span class="pre">+-0.03</span> m</tt></td>
+</tr>
+<tr><td>lower</td>
+<td>left/right leg 전체 link와 foot link</td>
+<td><tt class="docutils literal">0.9~1.25</tt></td>
+<td>x/y/z <tt class="docutils literal"><span class="pre">+-0.005</span> m</tt></td>
+</tr>
+</tbody>
+</table>
 </div>
+<div class="section" id="rok4-control-timing">
+<h2>RoK4 control timing</h2>
+<p>RoK4는 Isaac Lab 본체의 <tt class="docutils literal">LocomotionVelocityRoughEnvCfg</tt> 를 수정하지 않고, <tt class="docutils literal">RoK4FlatEnvCfg</tt> 안에서
+simulation/control timing만 override한다.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="50%" />
+<col width="50%" />
+</colgroup>
+<thead valign="bottom">
+<tr><th class="head">설정</th>
+<th class="head">값</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td><tt class="docutils literal">sim.dt</tt></td>
+<td><tt class="docutils literal">0.002 s</tt></td>
+</tr>
+<tr><td>physics frequency</td>
+<td><tt class="docutils literal">500 Hz</tt></td>
+</tr>
+<tr><td><tt class="docutils literal">decimation</tt></td>
+<td><tt class="docutils literal">5</tt></td>
+</tr>
+<tr><td>policy/action period</td>
+<td><tt class="docutils literal">0.010 s</tt></td>
+</tr>
+<tr><td>policy/action frequency</td>
+<td><tt class="docutils literal">100 Hz</tt></td>
+</tr>
+<tr><td>contact sensor update period</td>
+<td><tt class="docutils literal">0.002 s</tt></td>
+</tr>
+<tr><td>contact-force history length</td>
+<td><tt class="docutils literal">5</tt> physics samples</td>
+</tr>
+</tbody>
+</table>
+<p>Contact sensor의 <tt class="docutils literal">history_length</tt> 는 Digit locomotion 설정과 같은 방식으로 <tt class="docutils literal">self.decimation</tt> 에 맞춘다.
+따라서 현재는 10 ms policy interval 동안 실행되는 5개의 2 ms physics step마다 contact-force sample 하나를
+보존한다. 이 이력은 contact 기반 reward와 termination에서 짧은 접촉을 확인하기 위한 sensor buffer이며,
+actor 입력을 5 frame 쌓는 <tt class="docutils literal">self.observations.policy.history_length</tt> 와는 서로 다른 설정이다.</p>
+</div>
+<div class="section" id="source-rok4-tasks-rok4-tasks-manager-based-locomotion-velocity-config-rok4-agents-rsl-rl-ppo-cfg-py">
+<h2><tt class="docutils literal">source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/rok4/agents/rsl_rl_ppo_cfg.py</tt></h2>
 <p>RSL-RL PPO runner 설정 파일이다.</p>
 <p>현재 설정은 RoK4용 network/observation normalization 설정에 G1-style PPO algorithm 값을 섞은 flat walking
 초기 baseline이다. 이 값들은 최종 튜닝값이 아니라 첫 RoK4 flat 보행 실험을 위한 시작점이다.</p>
-<table>
+<table border="1" class="docutils">
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col width="50%" />
+<col width="50%" />
 </colgroup>
-<thead>
-<tr><th class="head"><p>설정</p></th>
-<th class="head"><p>값</p></th>
+<thead valign="bottom">
+<tr><th class="head">설정</th>
+<th class="head">값</th>
 </tr>
 </thead>
-<tbody>
-<tr><td><p>experiment name</p></td>
-<td><p><span class="docutils literal">rok4_flat</span></p></td>
+<tbody valign="top">
+<tr><td>experiment name</td>
+<td><tt class="docutils literal">rok4_flat</tt></td>
 </tr>
-<tr><td><p>max iterations</p></td>
-<td><p><span class="docutils literal">5000</span></p></td>
+<tr><td>max iterations</td>
+<td><tt class="docutils literal">5000</tt></td>
 </tr>
-<tr><td><p>steps per env</p></td>
-<td><p><span class="docutils literal">24</span></p></td>
+<tr><td>steps per env</td>
+<td><tt class="docutils literal">24</tt></td>
 </tr>
-<tr><td><p>actor hidden dims</p></td>
-<td><p><span class="docutils literal">[512, 256, 128]</span></p></td>
+<tr><td>actor hidden dims</td>
+<td><tt class="docutils literal">[512, 256, 128]</tt></td>
 </tr>
-<tr><td><p>critic hidden dims</p></td>
-<td><p><span class="docutils literal">[512, 256, 128]</span></p></td>
+<tr><td>critic hidden dims</td>
+<td><tt class="docutils literal">[512, 256, 128]</tt></td>
 </tr>
-<tr><td><p>actor/critic obs normalization</p></td>
-<td><p><span class="docutils literal">True</span></p></td>
+<tr><td>actor/critic obs normalization</td>
+<td><tt class="docutils literal">True</tt></td>
 </tr>
-<tr><td><p>activation</p></td>
-<td><p><span class="docutils literal">elu</span></p></td>
+<tr><td>action clipping</td>
+<td><tt class="docutils literal">clip_actions = 1.0</tt></td>
 </tr>
-<tr><td><p>learning rate</p></td>
-<td><p><span class="docutils literal"><span class="pre">1.0e-3</span></span></p></td>
+<tr><td>activation</td>
+<td><tt class="docutils literal">elu</tt></td>
 </tr>
-<tr><td><p>entropy coef</p></td>
-<td><p><span class="docutils literal">0.008</span></p></td>
+<tr><td>learning rate</td>
+<td><tt class="docutils literal"><span class="pre">1.0e-3</span></tt></td>
 </tr>
-<tr><td><p>value loss coef</p></td>
-<td><p><span class="docutils literal">1.0</span></p></td>
+<tr><td>entropy coef</td>
+<td><tt class="docutils literal">0.002</tt></td>
 </tr>
-<tr><td><p>desired KL</p></td>
-<td><p><span class="docutils literal">0.01</span></p></td>
+<tr><td>value loss coef</td>
+<td><tt class="docutils literal">1.0</tt></td>
 </tr>
-<tr><td><p>obs groups</p></td>
-<td><p>actor와 critic 모두 <span class="docutils literal">policy</span> observation 사용</p></td>
+<tr><td>desired KL</td>
+<td><tt class="docutils literal">0.01</tt></td>
+</tr>
+<tr><td>obs groups</td>
+<td>actor와 critic 모두 <tt class="docutils literal">policy</tt> observation 사용</td>
 </tr>
 </tbody>
 </table>
 <p>첫 버전에서는 asymmetric critic이나 estimator를 넣지 않았다. Flat walking이 먼저 돌아가는지 확인한 뒤,
 rough terrain이나 estimator를 단계적으로 추가하기 위함이다.</p>
-</section>
-<section id="scripts-rsl-rl-run-isaaclab-rsl-py">
-<h3><span class="docutils literal">scripts/rsl_rl/_run_isaaclab_rsl.py</span></h3>
-<div class="system-message">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 328)</p>
-<p>Title underline too short.</p>
-<pre class="literal-block">``scripts/rsl_rl/_run_isaaclab_rsl.py``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~</pre>
+<p><tt class="docutils literal">entropy_coef</tt> 는 exploration standard deviation을 키우는 방향의 entropy 항에 곱해지는 계수다. 현재
+<tt class="docutils literal">0.002</tt> 는 최초 <tt class="docutils literal">0.008</tt> 과 저-noise 실험값 <tt class="docutils literal">0.001</tt> 사이의 중간 설정이다. 최초 설정보다 특정 관절의
+noise standard deviation이 과도하게 커지는 현상을 줄이면서, <tt class="docutils literal">0.001</tt> 에서 관찰된 강한 exploration 감소를
+완화하기 위한 값이다.</p>
+<p><tt class="docutils literal">desired_kl=0.01</tt> 은 old policy와 update 중인 new policy의 Gaussian action distribution 차이를 관리하는
+adaptive learning-rate 기준이다. 현재 RSL-RL은 각 mini-batch KL이 <tt class="docutils literal">0.02</tt> 보다 크면 learning rate를
+<tt class="docutils literal">1.5</tt> 로 나누고, <tt class="docutils literal">0 &lt; KL &lt; 0.005</tt> 이면 <tt class="docutils literal">1.5</tt> 배하며, 그 사이에서는 유지한다.</p>
 </div>
-<p>Isaac Lab 원본 <a href="#id42"><span class="problematic" id="id43">``</span></a>scripts/reinforcement_learning/rsl_rl/train.py``와 <a href="#id44"><span class="problematic" id="id45">``</span></a>play.py``를 수정하지 않고 RoK4 task를
-등록하기 위한 wrapper이다.</p>
-<div class="system-message" id="id42">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 330); <em><a href="#id43">backlink</a></em></p>
-<p>Inline literal start-string without end-string.</p>
+<div class="section" id="scripts-rsl-rl-rok4-ppo-py">
+<h2><tt class="docutils literal">scripts/rsl_rl/rok4_ppo.py</tt></h2>
+<p>Isaac Lab 또는 설치된 <tt class="docutils literal">rsl_rl</tt> 파일을 수정하지 않고 KL을 TensorBoard에 기록하기 위한 RoK4 로컬
+PPO/runner 확장이다. <tt class="docutils literal">RoK4PPO</tt> 는 upstream PPO의 adaptive KL 계산값을 누적하고,
+<tt class="docutils literal">RoK4OnPolicyRunner</tt> 는 학습 시 이 PPO를 생성한다.</p>
+<p>현재 <tt class="docutils literal">num_learning_epochs=5</tt>, <tt class="docutils literal">num_mini_batches=4</tt> 이므로 한 PPO iteration에는 20개의 mini-batch KL이
+계산된다.</p>
+<table border="1" class="docutils">
+<caption>KL TensorBoard tags</caption>
+<colgroup>
+<col width="50%" />
+<col width="50%" />
+</colgroup>
+<thead valign="bottom">
+<tr><th class="head">tag</th>
+<th class="head">의미</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td><tt class="docutils literal">Loss/kl</tt></td>
+<td>한 iteration의 20개 mini-batch KL 평균</td>
+</tr>
+<tr><td><tt class="docutils literal">Loss/kl_max</tt></td>
+<td>같은 iteration에서 관측된 최대 mini-batch KL</td>
+</tr>
+<tr><td><tt class="docutils literal">Loss/learning_rate</tt></td>
+<td>adaptive KL schedule 적용 후 learning rate</td>
+</tr>
+</tbody>
+</table>
+<p><tt class="docutils literal">Loss/kl</tt> 은 PPO의 <tt class="docutils literal">Loss/surrogate</tt> 와 다른 값이다. Surrogate는 actor 최적화 목적함수이고, KL은 old/new
+policy가 얼마나 달라졌는지를 측정한다. 기존 TensorBoard event 파일에는 새 tag가 소급 추가되지 않으며,
+수정 후 RoK4 <tt class="docutils literal">train.py</tt> 로 시작한 run부터 기록된다.</p>
 </div>
-<div class="system-message" id="id44">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 330); <em><a href="#id45">backlink</a></em></p>
-<p>Inline literal start-string without end-string.</p>
-</div>
+<div class="section" id="scripts-rsl-rl-run-isaaclab-rsl-py">
+<h2><tt class="docutils literal">scripts/rsl_rl/_run_isaaclab_rsl.py</tt></h2>
+<p>Isaac Lab 원본 <tt class="docutils literal">scripts/reinforcement_learning/rsl_rl/train.py</tt> 와 <tt class="docutils literal">play.py</tt> 를 수정하지 않고 RoK4 task와
+선택적인 teleop 입력을 삽입하기 위한 wrapper이다.</p>
 <p>동작 흐름은 다음과 같다.</p>
-<pre class="code text literal-block"><code>1. rok4_lab/source/rok4_tasks 를 sys.path에 추가
+<pre class="code text literal-block">
+1. rok4_lab/source/rok4_tasks 를 sys.path에 추가
 2. 현재 작업 디렉터리의 Isaac Lab RSL-RL script 경로 찾기
 3. Isaac Lab 원본 train.py/play.py source를 읽기
 4. 원본의 import isaaclab_tasks 바로 뒤에 import rok4_tasks 삽입
-5. 원본 script를 실행</code></pre>
+5. train.py에는 RoK4OnPolicyRunner import/생성을 삽입
+6. teleop이면 device CLI, SE(2) 입력 생성, command update를 play.py에 삽입
+7. 원본 script를 실행
+</pre>
 <p>이 방식의 장점은 Isaac Lab 본체를 수정하지 않는다는 점이다.</p>
-</section>
-<section id="scripts-rsl-rl-train-py">
-<h3><span class="docutils literal">scripts/rsl_rl/train.py</span></h3>
-<div class="system-message">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 346)</p>
-<p>Title underline too short.</p>
-<pre class="literal-block">``scripts/rsl_rl/train.py``
-~~~~~~~~~~~~~~~~~~~~~~~~~~</pre>
 </div>
-<p>RoK4 task를 등록한 뒤 Isaac Lab 원본 RSL-RL training script를 실행한다.</p>
+<div class="section" id="scripts-rsl-rl-train-py">
+<h2><tt class="docutils literal">scripts/rsl_rl/train.py</tt></h2>
+<p>RoK4 task와 <tt class="docutils literal">RoK4OnPolicyRunner</tt> 를 등록한 뒤 Isaac Lab 원본 RSL-RL training script를 실행한다.</p>
 <p>사용자는 Isaac Lab root에서 다음처럼 실행한다.</p>
-<pre class="code bash literal-block"><code>./isaaclab.sh -p /home/rclab/rok4_lab/scripts/rsl_rl/train.py <span class="literal string escape">\
+<pre class="code bash literal-block">
+./isaaclab.sh -p /home/rclab/rok4_lab/scripts/rsl_rl/train.py <span class="literal string escape">\
 </span>  --task RoK4-Isaac-Velocity-Flat-v0 <span class="literal string escape">\
 </span>  --num_envs <span class="literal number">512</span> <span class="literal string escape">\
 </span>  --max_iterations <span class="literal number">5000</span> <span class="literal string escape">\
-</span>  --headless</code></pre>
-</section>
-<section id="scripts-rsl-rl-play-py">
-<h3><span class="docutils literal">scripts/rsl_rl/play.py</span></h3>
-<div class="system-message">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 361)</p>
-<p>Title underline too short.</p>
-<pre class="literal-block">``scripts/rsl_rl/play.py``
-~~~~~~~~~~~~~~~~~~~~~~~~~</pre>
+</span>  --headless
+</pre>
 </div>
+<div class="section" id="scripts-rsl-rl-play-py">
+<h2><tt class="docutils literal">scripts/rsl_rl/play.py</tt></h2>
 <p>RoK4 task를 등록한 뒤 Isaac Lab 원본 RSL-RL playback script를 실행한다.</p>
 <p>사용자는 Isaac Lab root에서 다음처럼 실행한다.</p>
-<pre class="code bash literal-block"><code>./isaaclab.sh -p /home/rclab/rok4_lab/scripts/rsl_rl/play.py <span class="literal string escape">\
+<pre class="code bash literal-block">
+./isaaclab.sh -p /home/rclab/rok4_lab/scripts/rsl_rl/play.py <span class="literal string escape">\
 </span>  --task RoK4-Isaac-Velocity-Flat-Play-v0 <span class="literal string escape">\
 </span>  --num_envs <span class="literal number">16</span> <span class="literal string escape">\
-</span>  --checkpoint /path/to/model.pt</code></pre>
-</section>
-</section>
-<section id="id46">
-<h2>수정된 기존 파일</h2>
-<section id="source-rok4-tasks-rok4-tasks-init-py">
-<h3><span class="docutils literal">source/rok4_tasks/rok4_tasks/__init__.py</span></h3>
-<div class="system-message">
-<p class="system-message-title">System Message: WARNING/2 (<span class="docutils literal">/home/rclab/rok4_lab/docs/rok4_flat_task_structure_ko.rst</span>, line 378)</p>
-<p>Title underline too short.</p>
-<pre class="literal-block">``source/rok4_tasks/rok4_tasks/__init__.py``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~</pre>
+</span>  --checkpoint /path/to/model.pt
+</pre>
 </div>
+<div class="section" id="scripts-rsl-rl-play-teleop-py">
+<h2><tt class="docutils literal">scripts/rsl_rl/play_teleop.py</tt></h2>
+<p>기존 Play task는 변경하지 않고, Teleop task에서만 학습된 policy의 velocity command를 수동 입력으로 교체한다.
+<tt class="docutils literal">Se2Gamepad</tt> 는 Omniverse gamepad interface를 직접 사용하므로 ROS 2 <tt class="docutils literal">joy_node</tt>, Isaac Sim ROS 2 Bridge,
+<tt class="docutils literal">/joy</tt> subscriber 또는 별도 IPC가 필요하지 않다.</p>
+<p>Gamepad 실행:</p>
+<pre class="code bash literal-block">
+./isaaclab.sh -p /home/rclab/rok4_lab/scripts/rsl_rl/play_teleop.py <span class="literal string escape">\
+</span>  --task RoK4-Isaac-Velocity-Flat-Teleop-v0 <span class="literal string escape">\
+</span>  --teleop_device gamepad <span class="literal string escape">\
+</span>  --teleop_dead_zone <span class="literal number">0</span>.05 <span class="literal string escape">\
+</span>  --checkpoint /path/to/model.pt <span class="literal string escape">\
+</span>  --real-time
+</pre>
+<p>Gamepad의 left stick 위/아래는 x 선속도를 명령한다. Left stick 오른쪽은 음의 y 선속도, 왼쪽은 양의 y
+선속도이며, right stick 오른쪽은 음의 yaw, 왼쪽은 양의 yaw를 명령하므로 스틱 방향과 로봇의 이동/회전
+방향이 일치한다. 정규화된 입력은 <tt class="docutils literal"><span class="pre">[-1,</span> 1]</tt> 로 clip한 뒤 학습 범위
+<tt class="docutils literal"><span class="pre">vx=(-0.1,</span> 0.85) m/s</tt>, <tt class="docutils literal"><span class="pre">vy=(-0.3,</span> 0.3) m/s</tt>, <tt class="docutils literal"><span class="pre">wz=(-0.6,</span> 0.6) rad/s</tt> 로 scale한다.</p>
+<p>Keyboard 실행:</p>
+<pre class="code bash literal-block">
+./isaaclab.sh -p /home/rclab/rok4_lab/scripts/rsl_rl/play_teleop.py <span class="literal string escape">\
+</span>  --task RoK4-Isaac-Velocity-Flat-Teleop-v0 <span class="literal string escape">\
+</span>  --teleop_device keyboard <span class="literal string escape">\
+</span>  --checkpoint /path/to/model.pt <span class="literal string escape">\
+</span>  --real-time
+</pre>
+<p>Keyboard는 Up/Down으로 전진/후진, Left/Right로 횡이동, <tt class="docutils literal">Z</tt>/<tt class="docutils literal">X</tt> 로 양/음 yaw, <tt class="docutils literal">L</tt> 로 누적 command를
+초기화한다. 향후 keyboard mapping을 바꾸더라도 <tt class="docutils literal"><span class="pre">--teleop_device</span> keyboard</tt> entry point는 유지한다.</p>
+<p>Teleop command는 100 Hz play loop 시작 시 command buffer에 기록된다. 다만 그 시점의 policy observation은
+직전 environment step에서 이미 생성되어 있으므로 현재 action에는 직전 command observation이 사용된다. 새
+command는 이어지는 step 후 observation을 통해 다음 policy loop에서 보이며, 수동 입력부터 policy 반영까지 최대
+한 policy period인 약 <tt class="docutils literal">10 ms</tt> 가 걸린다.</p>
+</div>
+</div>
+<div class="section" id="id4">
+<h1>수정된 기존 파일</h1>
+<div class="section" id="source-rok4-tasks-rok4-tasks-init-py">
+<h2><tt class="docutils literal">source/rok4_tasks/rok4_tasks/__init__.py</tt></h2>
 <p>기존에는 패키지 docstring만 있었다. 이제 RoK4 task registry가 import되도록 다음 역할을 한다.</p>
-<pre class="code python literal-block"><code><span class="keyword namespace">from</span> <span class="name namespace">.manager_based.locomotion.velocity.config</span> <span class="keyword namespace">import</span> <span class="name">rok4</span></code></pre>
-<p>이 import가 실행되어야 <span class="docutils literal"><span class="pre">RoK4-Isaac-Velocity-Flat-v0</span></span> task가 gym registry에 등록된다.</p>
-</section>
-<section id="readme-md">
-<h3><span class="docutils literal">README.md</span></h3>
+<pre class="code python literal-block">
+<span class="keyword namespace">from</span> <span class="name namespace">.manager_based.locomotion.velocity.config</span> <span class="keyword namespace">import</span> <span class="name">rok4</span>
+</pre>
+<p>이 import가 실행되어야 <tt class="docutils literal"><span class="pre">RoK4-Isaac-Velocity-Flat-v0</span></tt> task가 gym registry에 등록된다.</p>
+</div>
+<div class="section" id="readme-md">
+<h2><tt class="docutils literal">README.md</tt></h2>
 <p>새 Flat RL Task 섹션을 추가했다. task 이름, observation/action 구조, smoke test, normal training,
-play 명령어를 문서화했다.</p>
-</section>
-<section id="changelog-md">
-<h3><span class="docutils literal">CHANGELOG.md</span></h3>
-<p><span class="docutils literal">Unreleased</span> 항목에 RoK4 flat RSL-RL task 추가 내용을 기록했다.</p>
-</section>
-</section>
-<section id="id47">
-<h2>학습 실행 흐름</h2>
+play 명령어, DR 관리 파일, self-collision 설정을 문서화했다.
+Teleop task, gamepad/keyboard 입력, command scale과 한 policy-step 입력 지연도 함께 문서화했다.</p>
+</div>
+<div class="section" id="changelog-md">
+<h2><tt class="docutils literal">CHANGELOG.md</tt></h2>
+<p><tt class="docutils literal">Unreleased</tt> 항목에 RoK4 flat RSL-RL task 추가 내용을 기록했다.</p>
+</div>
+</div>
+<div class="section" id="id5">
+<h1>학습 실행 흐름</h1>
 <p>학습 명령을 실행하면 전체 흐름은 다음과 같다.</p>
-<pre class="code text literal-block"><code>./isaaclab.sh
+<pre class="code text literal-block">
+./isaaclab.sh
   -&gt; /home/rclab/rok4_lab/scripts/rsl_rl/train.py
     -&gt; _run_isaaclab_rsl.py
       -&gt; sys.path에 rok4_tasks 추가
@@ -1116,76 +1114,85 @@ play 명령어를 문서화했다.</p>
         -&gt; gym.make(&quot;RoK4-Isaac-Velocity-Flat-v0&quot;)
         -&gt; ManagerBasedRLEnv 생성
         -&gt; RslRlVecEnvWrapper
-        -&gt; OnPolicyRunner
-        -&gt; PPO 학습</code></pre>
-</section>
-<section id="id48">
-<h2>스모크 테스트 결과</h2>
+        -&gt; RoK4OnPolicyRunner
+        -&gt; RoK4PPO 학습
+          -&gt; Loss/kl, Loss/kl_max 기록
+</pre>
+</div>
+<div class="section" id="id6">
+<h1>스모크 테스트 결과</h1>
 <p>다음 smoke test를 수행했다.</p>
-<pre class="code bash literal-block"><code>./isaaclab.sh -p /home/rclab/rok4_lab/scripts/rsl_rl/train.py <span class="literal string escape">\
+<pre class="code bash literal-block">
+./isaaclab.sh -p /home/rclab/rok4_lab/scripts/rsl_rl/train.py <span class="literal string escape">\
 </span>  --task RoK4-Isaac-Velocity-Flat-v0 <span class="literal string escape">\
 </span>  --num_envs <span class="literal number">2</span> <span class="literal string escape">\
 </span>  --max_iterations <span class="literal number">1</span> <span class="literal string escape">\
-</span>  --headless</code></pre>
+</span>  --headless
+</pre>
 <p>확인된 결과는 다음과 같다.</p>
-<table>
+<table border="1" class="docutils">
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col width="50%" />
+<col width="50%" />
 </colgroup>
-<thead>
-<tr><th class="head"><p>항목</p></th>
-<th class="head"><p>결과</p></th>
+<thead valign="bottom">
+<tr><th class="head">항목</th>
+<th class="head">결과</th>
 </tr>
 </thead>
-<tbody>
-<tr><td><p>환경 생성</p></td>
-<td><p>성공</p></td>
+<tbody valign="top">
+<tr><td>환경 생성</td>
+<td>성공</td>
 </tr>
-<tr><td><p>action shape</p></td>
-<td><p><span class="docutils literal">13</span></p></td>
+<tr><td>action shape</td>
+<td><tt class="docutils literal">13</tt></td>
 </tr>
-<tr><td><p>observation shape</p></td>
-<td><p><span class="docutils literal">240</span></p></td>
+<tr><td>observation shape</td>
+<td><tt class="docutils literal">240</tt></td>
 </tr>
-<tr><td><p>actor input</p></td>
-<td><p>5-step history 기반 240차원</p></td>
+<tr><td>actor input</td>
+<td>5-step history 기반 240차원</td>
 </tr>
-<tr><td><p>actor output</p></td>
-<td><p>13차원 joint position target</p></td>
+<tr><td>actor output</td>
+<td>13차원 joint position target</td>
 </tr>
-<tr><td><p>PPO 1 iteration</p></td>
-<td><p>성공</p></td>
+<tr><td>PPO 1 iteration</td>
+<td>성공</td>
 </tr>
-<tr><td><p>생성 checkpoint</p></td>
-<td><p><span class="docutils literal"><span class="pre">/home/rclab/IsaacLab/logs/rsl_rl/rok4_flat/2026-07-07_13-44-26/model_0.pt</span></span></p></td>
+<tr><td>생성 checkpoint</td>
+<td><tt class="docutils literal"><span class="pre">/home/rclab/IsaacLab/logs/rsl_rl/rok4_flat/2026-07-07_13-44-26/model_0.pt</span></tt></td>
 </tr>
 </tbody>
 </table>
-</section>
-<section id="id49">
-<h2>현재 설계 의도</h2>
+</div>
+<div class="section" id="id7">
+<h1>현재 설계 의도</h1>
 <p>현재 task는 최종 rough terrain 정책이 아니다. 첫 번째 목표는 원인 분리가 쉬운 flat walking baseline이다.</p>
 <p>현재 단계에서 의도적으로 넣지 않은 항목은 다음과 같다.</p>
-<pre class="code text literal-block"><code>rough terrain
+<pre class="code text literal-block">
+rough terrain
 terrain curriculum
 height scanner
 camera observation
 explicit estimator / MLP encoder
 teacher-student distillation
-asymmetric privileged critic</code></pre>
+asymmetric privileged critic
+</pre>
 <p>추후 권장 순서는 다음과 같다.</p>
-<pre class="code text literal-block"><code>1. Flat smoke test 확인
+<pre class="code text literal-block">
+1. Flat smoke test 확인
 2. Flat 학습으로 서기/걷기 안정화
 3. reward, action scale, termination 조정
 4. RoK4 Rough task 추가
 5. weak rough terrain curriculum
-6. estimator 또는 teacher-student 구조 추가</code></pre>
-</section>
-<section id="id50">
-<h2>주요 실행 명령어</h2>
+6. estimator 또는 teacher-student 구조 추가
+</pre>
+</div>
+<div class="section" id="id8">
+<h1>주요 실행 명령어</h1>
 <p>Smoke test:</p>
-<pre class="code bash literal-block"><code><span class="name builtin">cd</span> /home/rclab/rok4_lab
+<pre class="code bash literal-block">
+<span class="name builtin">cd</span> /home/rclab/rok4_lab
 <span class="name variable">ROK4LAB_DIR</span><span class="operator">=</span><span class="keyword">$(</span><span class="name builtin">pwd</span><span class="keyword">)</span>
 
 <span class="name builtin">cd</span> /home/rclab/IsaacLab
@@ -1195,19 +1202,41 @@ conda activate env_isaaclab
 </span>  --task RoK4-Isaac-Velocity-Flat-v0 <span class="literal string escape">\
 </span>  --num_envs <span class="literal number">2</span> <span class="literal string escape">\
 </span>  --max_iterations <span class="literal number">1</span> <span class="literal string escape">\
-</span>  --headless</code></pre>
+</span>  --headless
+</pre>
 <p>Normal training:</p>
-<pre class="code bash literal-block"><code>./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4LAB_DIR</span><span class="literal string interpol">}</span>/scripts/rsl_rl/train.py <span class="literal string escape">\
+<pre class="code bash literal-block">
+./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4LAB_DIR</span><span class="literal string interpol">}</span>/scripts/rsl_rl/train.py <span class="literal string escape">\
 </span>  --task RoK4-Isaac-Velocity-Flat-v0 <span class="literal string escape">\
 </span>  --num_envs <span class="literal number">512</span> <span class="literal string escape">\
 </span>  --max_iterations <span class="literal number">5000</span> <span class="literal string escape">\
-</span>  --headless</code></pre>
+</span>  --headless
+</pre>
 <p>Play:</p>
-<pre class="code bash literal-block"><code>./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4LAB_DIR</span><span class="literal string interpol">}</span>/scripts/rsl_rl/play.py <span class="literal string escape">\
+<pre class="code bash literal-block">
+./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4LAB_DIR</span><span class="literal string interpol">}</span>/scripts/rsl_rl/play.py <span class="literal string escape">\
 </span>  --task RoK4-Isaac-Velocity-Flat-Play-v0 <span class="literal string escape">\
 </span>  --num_envs <span class="literal number">16</span> <span class="literal string escape">\
-</span>  --checkpoint /path/to/model.pt</code></pre>
-</section>
-</main>
+</span>  --checkpoint /path/to/model.pt
+</pre>
+<p>Teleop with gamepad:</p>
+<pre class="code bash literal-block">
+./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4LAB_DIR</span><span class="literal string interpol">}</span>/scripts/rsl_rl/play_teleop.py <span class="literal string escape">\
+</span>  --task RoK4-Isaac-Velocity-Flat-Teleop-v0 <span class="literal string escape">\
+</span>  --teleop_device gamepad <span class="literal string escape">\
+</span>  --teleop_dead_zone <span class="literal number">0</span>.05 <span class="literal string escape">\
+</span>  --checkpoint /path/to/model.pt <span class="literal string escape">\
+</span>  --real-time
+</pre>
+<p>Teleop with keyboard:</p>
+<pre class="code bash literal-block">
+./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4LAB_DIR</span><span class="literal string interpol">}</span>/scripts/rsl_rl/play_teleop.py <span class="literal string escape">\
+</span>  --task RoK4-Isaac-Velocity-Flat-Teleop-v0 <span class="literal string escape">\
+</span>  --teleop_device keyboard <span class="literal string escape">\
+</span>  --checkpoint /path/to/model.pt <span class="literal string escape">\
+</span>  --real-time
+</pre>
+</div>
+</div>
 </body>
 </html>

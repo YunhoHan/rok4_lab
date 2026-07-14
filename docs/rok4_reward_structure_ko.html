@@ -1,194 +1,961 @@
-<!doctype html>
-<html lang="ko">
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="ko" lang="ko">
 <head>
-  <meta charset="utf-8">
-  <title>RoK4 Reward Structure</title>
-  <style>
-    body {
-      font-family: "Noto Sans CJK KR", "Noto Sans KR", "DejaVu Sans", Arial, sans-serif;
-      line-height: 1.55;
-      margin: 36px;
-      color: #202124;
-    }
-    h1, h2, h3 {
-      color: #111827;
-      margin-top: 1.5em;
-    }
-    h1 {
-      border-bottom: 3px solid #2f6fbb;
-      padding-bottom: 8px;
-    }
-    h2 {
-      border-bottom: 1px solid #cbd5e1;
-      padding-bottom: 4px;
-    }
-    code {
-      font-family: "DejaVu Sans Mono", "Noto Sans Mono CJK KR", monospace;
-      background: #f1f5f9;
-      padding: 1px 4px;
-      border-radius: 3px;
-    }
-    pre {
-      background: #f8fafc;
-      border: 1px solid #dbe3ef;
-      padding: 12px;
-      overflow-wrap: break-word;
-      white-space: pre-wrap;
-      border-radius: 4px;
-    }
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      margin: 14px 0 24px;
-      font-size: 0.92em;
-    }
-    th, td {
-      border: 1px solid #cbd5e1;
-      padding: 7px 8px;
-      vertical-align: top;
-    }
-    th {
-      background: #eaf2ff;
-      font-weight: 700;
-    }
-    .note {
-      border-left: 4px solid #2f6fbb;
-      background: #eff6ff;
-      padding: 10px 12px;
-      margin: 16px 0;
-    }
-  </style>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+<title>RoK4 Reward Structure</title>
+<style type="text/css">
+
+/*
+:Author: David Goodger (goodger@python.org)
+:Id: $Id: html4css1.css 7952 2016-07-26 18:15:59Z milde $
+:Copyright: This stylesheet has been placed in the public domain.
+
+Default cascading style sheet for the HTML output of Docutils.
+
+See http://docutils.sf.net/docs/howto/html-stylesheets.html for how to
+customize this style sheet.
+*/
+
+/* used to remove borders from tables and images */
+.borderless, table.borderless td, table.borderless th {
+  border: 0 }
+
+table.borderless td, table.borderless th {
+  /* Override padding for "table.docutils td" with "! important".
+     The right padding separates the table cells. */
+  padding: 0 0.5em 0 0 ! important }
+
+.first {
+  /* Override more specific margin styles with "! important". */
+  margin-top: 0 ! important }
+
+.last, .with-subtitle {
+  margin-bottom: 0 ! important }
+
+.hidden {
+  display: none }
+
+.subscript {
+  vertical-align: sub;
+  font-size: smaller }
+
+.superscript {
+  vertical-align: super;
+  font-size: smaller }
+
+a.toc-backref {
+  text-decoration: none ;
+  color: black }
+
+blockquote.epigraph {
+  margin: 2em 5em ; }
+
+dl.docutils dd {
+  margin-bottom: 0.5em }
+
+object[type="image/svg+xml"], object[type="application/x-shockwave-flash"] {
+  overflow: hidden;
+}
+
+/* Uncomment (and remove this text!) to get bold-faced definition list terms
+dl.docutils dt {
+  font-weight: bold }
+*/
+
+div.abstract {
+  margin: 2em 5em }
+
+div.abstract p.topic-title {
+  font-weight: bold ;
+  text-align: center }
+
+div.admonition, div.attention, div.caution, div.danger, div.error,
+div.hint, div.important, div.note, div.tip, div.warning {
+  margin: 2em ;
+  border: medium outset ;
+  padding: 1em }
+
+div.admonition p.admonition-title, div.hint p.admonition-title,
+div.important p.admonition-title, div.note p.admonition-title,
+div.tip p.admonition-title {
+  font-weight: bold ;
+  font-family: sans-serif }
+
+div.attention p.admonition-title, div.caution p.admonition-title,
+div.danger p.admonition-title, div.error p.admonition-title,
+div.warning p.admonition-title, .code .error {
+  color: red ;
+  font-weight: bold ;
+  font-family: sans-serif }
+
+/* Uncomment (and remove this text!) to get reduced vertical space in
+   compound paragraphs.
+div.compound .compound-first, div.compound .compound-middle {
+  margin-bottom: 0.5em }
+
+div.compound .compound-last, div.compound .compound-middle {
+  margin-top: 0.5em }
+*/
+
+div.dedication {
+  margin: 2em 5em ;
+  text-align: center ;
+  font-style: italic }
+
+div.dedication p.topic-title {
+  font-weight: bold ;
+  font-style: normal }
+
+div.figure {
+  margin-left: 2em ;
+  margin-right: 2em }
+
+div.footer, div.header {
+  clear: both;
+  font-size: smaller }
+
+div.line-block {
+  display: block ;
+  margin-top: 1em ;
+  margin-bottom: 1em }
+
+div.line-block div.line-block {
+  margin-top: 0 ;
+  margin-bottom: 0 ;
+  margin-left: 1.5em }
+
+div.sidebar {
+  margin: 0 0 0.5em 1em ;
+  border: medium outset ;
+  padding: 1em ;
+  background-color: #ffffee ;
+  width: 40% ;
+  float: right ;
+  clear: right }
+
+div.sidebar p.rubric {
+  font-family: sans-serif ;
+  font-size: medium }
+
+div.system-messages {
+  margin: 5em }
+
+div.system-messages h1 {
+  color: red }
+
+div.system-message {
+  border: medium outset ;
+  padding: 1em }
+
+div.system-message p.system-message-title {
+  color: red ;
+  font-weight: bold }
+
+div.topic {
+  margin: 2em }
+
+h1.section-subtitle, h2.section-subtitle, h3.section-subtitle,
+h4.section-subtitle, h5.section-subtitle, h6.section-subtitle {
+  margin-top: 0.4em }
+
+h1.title {
+  text-align: center }
+
+h2.subtitle {
+  text-align: center }
+
+hr.docutils {
+  width: 75% }
+
+img.align-left, .figure.align-left, object.align-left, table.align-left {
+  clear: left ;
+  float: left ;
+  margin-right: 1em }
+
+img.align-right, .figure.align-right, object.align-right, table.align-right {
+  clear: right ;
+  float: right ;
+  margin-left: 1em }
+
+img.align-center, .figure.align-center, object.align-center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+table.align-center {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.align-left {
+  text-align: left }
+
+.align-center {
+  clear: both ;
+  text-align: center }
+
+.align-right {
+  text-align: right }
+
+/* reset inner alignment in figures */
+div.align-right {
+  text-align: inherit }
+
+/* div.align-center * { */
+/*   text-align: left } */
+
+.align-top    {
+  vertical-align: top }
+
+.align-middle {
+  vertical-align: middle }
+
+.align-bottom {
+  vertical-align: bottom }
+
+ol.simple, ul.simple {
+  margin-bottom: 1em }
+
+ol.arabic {
+  list-style: decimal }
+
+ol.loweralpha {
+  list-style: lower-alpha }
+
+ol.upperalpha {
+  list-style: upper-alpha }
+
+ol.lowerroman {
+  list-style: lower-roman }
+
+ol.upperroman {
+  list-style: upper-roman }
+
+p.attribution {
+  text-align: right ;
+  margin-left: 50% }
+
+p.caption {
+  font-style: italic }
+
+p.credits {
+  font-style: italic ;
+  font-size: smaller }
+
+p.label {
+  white-space: nowrap }
+
+p.rubric {
+  font-weight: bold ;
+  font-size: larger ;
+  color: maroon ;
+  text-align: center }
+
+p.sidebar-title {
+  font-family: sans-serif ;
+  font-weight: bold ;
+  font-size: larger }
+
+p.sidebar-subtitle {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+p.topic-title {
+  font-weight: bold }
+
+pre.address {
+  margin-bottom: 0 ;
+  margin-top: 0 ;
+  font: inherit }
+
+pre.literal-block, pre.doctest-block, pre.math, pre.code {
+  margin-left: 2em ;
+  margin-right: 2em }
+
+pre.code .ln { color: grey; } /* line numbers */
+pre.code, code { background-color: #eeeeee }
+pre.code .comment, code .comment { color: #5C6576 }
+pre.code .keyword, code .keyword { color: #3B0D06; font-weight: bold }
+pre.code .literal.string, code .literal.string { color: #0C5404 }
+pre.code .name.builtin, code .name.builtin { color: #352B84 }
+pre.code .deleted, code .deleted { background-color: #DEB0A1}
+pre.code .inserted, code .inserted { background-color: #A3D289}
+
+span.classifier {
+  font-family: sans-serif ;
+  font-style: oblique }
+
+span.classifier-delimiter {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+span.interpreted {
+  font-family: sans-serif }
+
+span.option {
+  white-space: nowrap }
+
+span.pre {
+  white-space: pre }
+
+span.problematic {
+  color: red }
+
+span.section-subtitle {
+  /* font-size relative to parent (h1..h6 element) */
+  font-size: 80% }
+
+table.citation {
+  border-left: solid 1px gray;
+  margin-left: 1px }
+
+table.docinfo {
+  margin: 2em 4em }
+
+table.docutils {
+  margin-top: 0.5em ;
+  margin-bottom: 0.5em }
+
+table.footnote {
+  border-left: solid 1px black;
+  margin-left: 1px }
+
+table.docutils td, table.docutils th,
+table.docinfo td, table.docinfo th {
+  padding-left: 0.5em ;
+  padding-right: 0.5em ;
+  vertical-align: top }
+
+table.docutils th.field-name, table.docinfo th.docinfo-name {
+  font-weight: bold ;
+  text-align: left ;
+  white-space: nowrap ;
+  padding-left: 0 }
+
+/* "booktabs" style (no vertical lines) */
+table.docutils.booktabs {
+  border: 0px;
+  border-top: 2px solid;
+  border-bottom: 2px solid;
+  border-collapse: collapse;
+}
+table.docutils.booktabs * {
+  border: 0px;
+}
+table.docutils.booktabs th {
+  border-bottom: thin solid;
+  text-align: left;
+}
+
+h1 tt.docutils, h2 tt.docutils, h3 tt.docutils,
+h4 tt.docutils, h5 tt.docutils, h6 tt.docutils {
+  font-size: 100% }
+
+ul.auto-toc {
+  list-style-type: none }
+
+</style>
 </head>
 <body>
-  <h1>RoK4 Reward Structure</h1>
-  <p><strong>작성일:</strong> 2026-07-07</p>
-  <p>
-    이 문서는 <code>RoK4-Isaac-Velocity-Flat-v0</code> task의 현재 reward 구조와 reward function 설정을 정리한다.
-    현재 reward는 Isaac Lab G1 velocity task 구조를 RoK4 링크/관절 이름에 맞게 이식한 flat walking 초기
-    baseline이다. 최종 튜닝값이 아니라 첫 보행 실험을 위한 시작점으로 봐야 한다.
-  </p>
+<div class="document" id="rok4-reward-structure">
+<h1 class="title">RoK4 Reward Structure</h1>
 
-  <h2>관련 파일</h2>
-  <table>
-    <tr><th>역할</th><th>파일</th></tr>
-    <tr><td>RoK4 flat task 설정</td><td><code>/home/rclab/rok4_lab/source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/rok4/flat_env_cfg.py</code></td></tr>
-    <tr><td>공통 locomotion reward term 기본값</td><td><code>/home/rclab/IsaacLab/source/isaaclab_tasks/isaaclab_tasks/manager_based/locomotion/velocity/velocity_env_cfg.py</code></td></tr>
-    <tr><td>locomotion 전용 reward 함수</td><td><code>/home/rclab/IsaacLab/source/isaaclab_tasks/isaaclab_tasks/manager_based/locomotion/velocity/mdp/rewards.py</code></td></tr>
-    <tr><td>Isaac Lab 공통 reward 함수</td><td><code>/home/rclab/IsaacLab/source/isaaclab/isaaclab/envs/mdp/rewards.py</code></td></tr>
-    <tr><td>mdp namespace 연결</td><td><code>/home/rclab/IsaacLab/source/isaaclab_tasks/isaaclab_tasks/manager_based/locomotion/velocity/mdp/__init__.py</code></td></tr>
-  </table>
-
-  <h2>구조 요약</h2>
-  <pre>RoK4FlatEnvCfg
+<p>작성일: 2026-07-14</p>
+<p>이 문서는 <tt class="docutils literal"><span class="pre">RoK4-Isaac-Velocity-Flat-v0</span></tt> task의 현재 reward 구조와 reward function 설정을 정리한다.
+현재 reward는 Isaac Lab G1 velocity task 구조를 RoK4 링크/관절 이름에 맞게 이식한 flat walking 초기
+baseline이다. 최종 튜닝값이 아니라 첫 보행 실험을 위한 시작점으로 봐야 한다.</p>
+<div class="section" id="id1">
+<h1>관련 파일</h1>
+<table border="1" class="docutils">
+<colgroup>
+<col width="50%" />
+<col width="50%" />
+</colgroup>
+<thead valign="bottom">
+<tr><th class="head">역할</th>
+<th class="head">파일</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>RoK4 flat task 설정</td>
+<td><tt class="docutils literal">/home/rclab/rok4_lab/source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/rok4/flat_env_cfg.py</tt></td>
+</tr>
+<tr><td>RoK4 domain randomization 설정</td>
+<td><tt class="docutils literal">/home/rclab/rok4_lab/source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/rok4/domain_randomization_cfg.py</tt></td>
+</tr>
+<tr><td>공통 locomotion reward term 기본값</td>
+<td><tt class="docutils literal">/home/rclab/IsaacLab/source/isaaclab_tasks/isaaclab_tasks/manager_based/locomotion/velocity/velocity_env_cfg.py</tt></td>
+</tr>
+<tr><td>locomotion 전용 reward 함수</td>
+<td><tt class="docutils literal">/home/rclab/IsaacLab/source/isaaclab_tasks/isaaclab_tasks/manager_based/locomotion/velocity/mdp/rewards.py</tt></td>
+</tr>
+<tr><td>Isaac Lab 공통 reward 함수</td>
+<td><tt class="docutils literal">/home/rclab/IsaacLab/source/isaaclab/isaaclab/envs/mdp/rewards.py</tt></td>
+</tr>
+<tr><td>mdp namespace 연결</td>
+<td><tt class="docutils literal">/home/rclab/IsaacLab/source/isaaclab_tasks/isaaclab_tasks/manager_based/locomotion/velocity/mdp/__init__.py</tt></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="id2">
+<h1>구조 요약</h1>
+<p><tt class="docutils literal">RoK4FlatEnvCfg</tt> 는 환경 설정이고, <tt class="docutils literal">RoK4RewardsCfg</tt> 는 reward term 묶음이다. Reward 구조는 두 가지
+관계로 나누어 보면 덜 헷갈린다.</p>
+<p>첫 번째는 config class의 상속/포함 관계이다.</p>
+<pre class="code text literal-block">
+RoK4FlatEnvCfg
   ├─ 상속: LocomotionVelocityRoughEnvCfg
-  └─ 포함: rewards = RoK4RewardsCfg()
-
-RoK4RewardsCfg
-  └─ 상속: RewardsCfg
-
-각 reward term
-  └─ RewardTermCfg(func=mdp.xxx, weight=..., params=...)
-
-mdp.xxx
-  ├─ locomotion 전용 함수: velocity/mdp/rewards.py
-  └─ Isaac Lab 공통 함수: isaaclab/envs/mdp/rewards.py</pre>
-
-  <div class="note">
-    <code>RoK4FlatEnvCfg -> RoK4RewardsCfg</code>는 상속이 아니라 포함/사용 관계이고,
-    <code>RoK4RewardsCfg -> RewardsCfg</code>는 상속 관계이다.
-    <code>mdp/rewards.py</code>는 부모 클래스가 아니라 실제 reward 계산 함수가 들어 있는 함수 모음이다.
-  </div>
-
-  <p>실제로는 다음처럼 이해하면 된다.</p>
-  <pre>RoK4RewardsCfg는 RewardsCfg를 상속받아서 기본 reward term들을 물려받는다.
+  │          └─ 위치:
+  │             IsaacLab/.../locomotion/velocity/velocity_env_cfg.py
+  │
+  └─ rewards: RoK4RewardsCfg()
+             │
+             └─ RoK4RewardsCfg
+                  ├─ 상속: RewardsCfg
+                  │          └─ 위치:
+                  │             IsaacLab/.../locomotion/velocity/velocity_env_cfg.py
+                  │
+                  ├─ 부모 RewardsCfg에서 물려받은 reward terms
+                  │    ├─ lin_vel_z_l2
+                  │    ├─ ang_vel_xy_l2
+                  │    ├─ flat_orientation_l2
+                  │    └─ undesired_contacts
+                  │
+                  └─ RoK4RewardsCfg에서 새로 정의/override한 reward terms
+                       ├─ termination_penalty
+                       ├─ track_lin_vel_xy_exp
+                       ├─ track_ang_vel_z_exp
+                       ├─ feet_air_time
+                       ├─ feet_slide
+                       ├─ dof_pos_limits
+                       ├─ action_pos_limits
+                       ├─ joint_deviation_hip
+                       ├─ joint_deviation_torso
+                       ├─ dof_acc_l2
+                       ├─ dof_torques_l2
+                       ├─ joint_vel_l2
+                       ├─ action_rate_l2
+                       └─ second_action_rate_l2
+</pre>
+<p>두 번째는 각 reward term이 실제 계산 함수를 참조하는 관계이다.</p>
+<pre class="code text literal-block">
+RoK4FlatEnvCfg
+  └─ rewards = RoK4RewardsCfg()
+       └─ RoK4RewardsCfg extends RewardsCfg
+            └─ 각 reward term은 RewardTermCfg/RewTerm
+                 └─ func=mdp.xxx
+                      ├─ RoK4 로컬 mdp 함수
+                      │    source/rok4_tasks/.../velocity/mdp/rewards.py
+                      │
+                      ├─ Isaac Lab 공통 mdp 함수
+                      │    IsaacLab/source/isaaclab/isaaclab/envs/mdp/rewards.py
+                      │
+                      └─ locomotion velocity 전용 mdp 함수
+                           IsaacLab/source/isaaclab_tasks/.../velocity/mdp/rewards.py
+</pre>
+<p>즉 <tt class="docutils literal">RoK4FlatEnvCfg <span class="pre">-&gt;</span> RoK4RewardsCfg</tt> 는 상속이 아니라 포함/사용 관계이고,
+<tt class="docutils literal">RoK4RewardsCfg <span class="pre">-&gt;</span> RewardsCfg</tt> 는 상속 관계이다. <tt class="docutils literal">mdp/rewards.py</tt> 는 부모 클래스가 아니라 실제 reward
+계산 함수가 들어 있는 함수 모음이다. RoK4는 로컬 <tt class="docutils literal"><span class="pre">rok4_tasks...velocity.mdp</span></tt> 를 import하며, 이 로컬 mdp는
+Isaac Lab의 기존 locomotion mdp를 다시 export하고 RoK4 전용 reward 함수만 추가한다.</p>
+<p>실제로는 다음처럼 이해하면 된다.</p>
+<pre class="code text literal-block">
+RoK4RewardsCfg는 RewardsCfg를 상속받아서 기본 reward term들을 물려받는다.
 RoK4에 필요한 reward는 mdp.xxx 함수를 직접 지정해 새로 정의하거나 override한다.
-RewardTermCfg/RewTerm은 mdp.xxx 함수, weight, params를 하나의 reward term으로 묶는다.</pre>
+RewardTermCfg/RewTerm은 mdp.xxx 함수, weight, params를 하나의 reward term으로 묶는다.
+</pre>
+<p>파일 배치 기준은 다음과 같다.</p>
+<pre class="code text literal-block">
+flat_env_cfg.py
+  └─ 어떤 reward term을 쓸지, weight를 얼마로 둘지, 어떤 body/joint에 적용할지 결정
 
-  <h2>Reward 계산 방식</h2>
-  <p>Isaac Lab의 <code>RewardManager</code>는 각 reward term의 raw value를 계산한 뒤 <code>weight</code>를 곱하고, 모든 term을 합산한다.</p>
-  <pre>total_reward =
-    sum(weight_i * reward_function_i(env, params_i))</pre>
-  <p>Positive weight는 행동을 유도하고, negative weight는 penalty로 작동한다.</p>
-
-  <h2>RoK4 전용 Reward Terms</h2>
-  <table>
-    <tr><th>term</th><th>function</th><th>weight</th><th>params</th><th>의미</th></tr>
-    <tr><td><code>termination_penalty</code></td><td><code>mdp.is_terminated</code></td><td><code>-200.0</code></td><td>없음</td><td>episode가 termination되면 큰 penalty를 준다.</td></tr>
-    <tr><td><code>track_lin_vel_xy_exp</code></td><td><code>mdp.track_lin_vel_xy_yaw_frame_exp</code></td><td><code>1.0</code></td><td><code>command_name="base_velocity"</code>, <code>std=0.5</code></td><td>yaw-aligned robot frame에서 x/y 선속도 command를 추종하게 한다.</td></tr>
-    <tr><td><code>track_ang_vel_z_exp</code></td><td><code>mdp.track_ang_vel_z_world_exp</code></td><td><code>1.0</code></td><td><code>command_name="base_velocity"</code>, <code>std=0.5</code></td><td>world frame yaw angular velocity command를 추종하게 한다.</td></tr>
-    <tr><td><code>feet_air_time</code></td><td><code>mdp.feet_air_time_positive_biped</code></td><td><code>0.75</code></td><td>feet: <code>L_Foot_Link</code>, <code>R_Foot_Link</code>; <code>threshold=0.4</code></td><td>양발 보행에서 한 발씩 공중에 있는 step pattern을 유도한다.</td></tr>
-    <tr><td><code>feet_slide</code></td><td><code>mdp.feet_slide</code></td><td><code>-0.2</code></td><td>feet: <code>L_Foot_Link</code>, <code>R_Foot_Link</code></td><td>지면 접촉 중인 발이 미끄러지는 것을 줄인다.</td></tr>
-    <tr><td><code>dof_pos_limits</code></td><td><code>mdp.joint_pos_limits</code></td><td><code>-1.0</code></td><td><code>.*_Ankle_Pitch_Joint</code>, <code>.*_Ankle_Roll_Joint</code></td><td>ankle joint가 soft joint limit을 넘는 것을 강하게 막는다.</td></tr>
-    <tr><td><code>joint_deviation_hip</code></td><td><code>mdp.joint_deviation_l1</code></td><td><code>-0.1</code></td><td><code>.*_Hip_Yaw_Joint</code>, <code>.*_Hip_Roll_Joint</code></td><td>hip yaw/roll이 default pose에서 과도하게 벗어나지 않게 한다.</td></tr>
-    <tr><td><code>joint_deviation_torso</code></td><td><code>mdp.joint_deviation_l1</code></td><td><code>-0.1</code></td><td><code>Torso_Yaw_Joint</code></td><td>torso yaw가 default pose에서 과도하게 벗어나지 않게 한다.</td></tr>
-  </table>
-
-  <h2>부모 RewardsCfg에서 상속받고 RoK4에서 수정한 Terms</h2>
-  <table>
-    <tr><th>term</th><th>function</th><th>current weight</th><th>RoK4 설정</th><th>의미</th></tr>
-    <tr><td><code>lin_vel_z_l2</code></td><td><code>mdp.lin_vel_z_l2</code></td><td><code>-0.2</code></td><td>기본 robot root</td><td>base가 z 방향으로 튀는 움직임을 줄인다.</td></tr>
-    <tr><td><code>ang_vel_xy_l2</code></td><td><code>mdp.ang_vel_xy_l2</code></td><td><code>-0.05</code></td><td>기본 robot root</td><td>roll/pitch angular velocity를 줄인다.</td></tr>
-    <tr><td><code>flat_orientation_l2</code></td><td><code>mdp.flat_orientation_l2</code></td><td><code>-1.0</code></td><td>기본 robot root</td><td>몸이 기울어지는 것을 줄이고 upright 자세를 유도한다.</td></tr>
-    <tr><td><code>action_rate_l2</code></td><td><code>mdp.action_rate_l2</code></td><td><code>-0.005</code></td><td>action 전체</td><td>action이 step마다 급격히 변하는 것을 줄인다.</td></tr>
-    <tr><td><code>dof_acc_l2</code></td><td><code>mdp.joint_acc_l2</code></td><td><code>-1.0e-7</code></td><td><code>.*_Hip_.*</code>, <code>.*_Knee_Pitch_Joint</code></td><td>hip/knee joint acceleration을 줄여 움직임을 부드럽게 한다.</td></tr>
-    <tr><td><code>dof_torques_l2</code></td><td><code>mdp.joint_torques_l2</code></td><td><code>-2.0e-6</code></td><td><code>.*_Hip_.*</code>, <code>.*_Knee_Pitch_Joint</code>, <code>.*_Ankle_.*</code></td><td>hip/knee/ankle torque 사용량을 줄인다.</td></tr>
-    <tr><td><code>undesired_contacts</code></td><td><code>mdp.undesired_contacts</code></td><td><code>-1.0</code></td><td><code>Base_Link</code>, <code>Upper_Body_Link</code>; <code>threshold=1.0</code></td><td>발이 아닌 base/upper body 접촉을 penalty로 처리한다.</td></tr>
-  </table>
-
-  <h2>Reward Function 요약</h2>
-  <table>
-    <tr><th>function</th><th>위치</th><th>계산 의미</th></tr>
-    <tr><td><code>is_terminated</code></td><td>Isaac Lab 공통</td><td>termination manager의 terminated flag를 reward term으로 반환한다.</td></tr>
-    <tr><td><code>track_lin_vel_xy_yaw_frame_exp</code></td><td>locomotion mdp</td><td>yaw frame x/y 선속도 command error에 <code>exp(-error / std^2)</code>를 적용한다.</td></tr>
-    <tr><td><code>track_ang_vel_z_world_exp</code></td><td>locomotion mdp</td><td>world z축 angular velocity command error에 <code>exp(-error / std^2)</code>를 적용한다.</td></tr>
-    <tr><td><code>feet_air_time_positive_biped</code></td><td>locomotion mdp</td><td>한 발 지지 상태의 air/contact time을 보상하며, command 크기가 작으면 0이 된다.</td></tr>
-    <tr><td><code>feet_slide</code></td><td>locomotion mdp</td><td>접촉 중인 foot의 horizontal linear velocity norm을 penalty로 계산한다.</td></tr>
-    <tr><td><code>lin_vel_z_l2</code></td><td>Isaac Lab 공통</td><td>base body-frame z velocity squared.</td></tr>
-    <tr><td><code>ang_vel_xy_l2</code></td><td>Isaac Lab 공통</td><td>base body-frame roll/pitch angular velocity squared sum.</td></tr>
-    <tr><td><code>flat_orientation_l2</code></td><td>Isaac Lab 공통</td><td>projected gravity의 x/y component squared sum으로 몸 기울기를 penalty화한다.</td></tr>
-    <tr><td><code>joint_torques_l2</code></td><td>Isaac Lab 공통</td><td>선택된 joint의 applied torque squared sum.</td></tr>
-    <tr><td><code>joint_acc_l2</code></td><td>Isaac Lab 공통</td><td>선택된 joint의 joint acceleration squared sum.</td></tr>
-    <tr><td><code>action_rate_l2</code></td><td>Isaac Lab 공통</td><td>현재 action과 이전 action 차이의 squared sum.</td></tr>
-    <tr><td><code>joint_deviation_l1</code></td><td>Isaac Lab 공통</td><td>현재 joint position과 default joint position 차이의 absolute sum.</td></tr>
-    <tr><td><code>joint_pos_limits</code></td><td>Isaac Lab 공통</td><td>soft joint position limit을 넘은 정도를 합산한다.</td></tr>
-    <tr><td><code>undesired_contacts</code></td><td>Isaac Lab 공통</td><td>지정 body의 contact force가 threshold를 넘은 contact 개수를 penalty로 반환한다.</td></tr>
-  </table>
-
-  <h2>Command와 Reward의 연결</h2>
-  <pre>lin_vel_x = (0.0, 0.8)
-lin_vel_y = (-0.3, 0.3)
-ang_vel_z = (-0.6, 0.6)</pre>
-  <p>
-    이 command는 <code>track_lin_vel_xy_exp</code>, <code>track_ang_vel_z_exp</code>,
-    <code>feet_air_time</code>에 직접 영향을 준다. 특히 <code>feet_air_time_positive_biped</code>는 x/y command
-    norm이 <code>0.1</code> 이하이면 reward를 0으로 만든다.
-  </p>
-
-  <h2>Termination과 Reward의 연결</h2>
-  <pre>self.terminations.base_contact.params["sensor_cfg"].body_names = ["Base_Link", "Upper_Body_Link"]</pre>
-  <p>
-    <code>Base_Link</code> 또는 <code>Upper_Body_Link</code>가 지면과 강하게 접촉하면 episode termination이
-    발생하고, <code>termination_penalty = -200.0</code>가 함께 작동한다.
-  </p>
-
-  <h2>현재 설계 의도</h2>
-  <pre>1. command velocity를 따라간다.
+velocity/mdp/rewards.py
+  └─ reward raw value를 어떻게 계산할지 정의
+</pre>
+<p>따라서 <tt class="docutils literal">action_pos_limits</tt>, <tt class="docutils literal">dof_torques_l2</tt>, <tt class="docutils literal">joint_vel_l2</tt>, <tt class="docutils literal">dof_acc_l2</tt>, <tt class="docutils literal">action_rate_l2</tt>,
+<tt class="docutils literal">second_action_rate_l2</tt> 처럼
+RoK4 전용 weighting을 쓰는 계산식은 <tt class="docutils literal">velocity/mdp/rewards.py</tt> 에 두고, weight를 얼마로 사용할지는
+<tt class="docutils literal">RoK4RewardsCfg</tt> 에 둔다.
+이 term은 이전 action 두 개가 필요하므로 reset 직후 첫 두 policy step에서는 penalty를 0으로 둔다.</p>
+<div class="section" id="action-rate-reward-action">
+<h2>Action-rate reward의 action 기준</h2>
+<p>현재 RoK4Lab의 <tt class="docutils literal">action_rate_l2</tt> 와 <tt class="docutils literal">second_action_rate_l2</tt> 는 <tt class="docutils literal">env.action_manager.action</tt> 을 기준으로
+현재 action과 history의 차분을 만든다. 이 action buffer 자체는 scale 적용 전 raw policy action이지만,
+reward 함수는 차분에 <tt class="docutils literal">ROK4_ACTION_SCALE</tt> 을 곱한 뒤 제곱합을 계산한다.</p>
+<p>다만 <tt class="docutils literal">RoK4FlatPPORunnerCfg</tt> 에서 <tt class="docutils literal">clip_actions = 1.0</tt> 을 명시하므로 Isaac Lab <tt class="docutils literal">train.py</tt> 와 <tt class="docutils literal">play.py</tt> 를
+통해 실행할 때는 <tt class="docutils literal">RslRlVecEnvWrapper</tt> 가 action을 먼저 <tt class="docutils literal"><span class="pre">[-1,</span> 1]</tt> 로 clamp한다. 따라서 reward가 보는 action은
+wrapper에서 <tt class="docutils literal"><span class="pre">[-1,</span> 1]</tt> 로 잘린 raw action이며, penalty가 측정하는 값은 scaled joint-target offset 차분이다.</p>
+<pre class="code text literal-block">
+actor output
+  -&gt; clip_actions = 1.0
+  -&gt; clipped_raw_action
+  ├─ last_action observation = clipped_raw_action
+  └─ scaled_action = clipped_raw_action * ROK4_ACTION_SCALE
+       ├─ action_rate_l2 / second_action_rate_l2
+       └─ q_target = default_joint_pos + scaled_action
+            └─ action_pos_limits compares q_target with soft_joint_pos_limits
+</pre>
+<p>기존 IsaacGym RoK4 코드에서는 <tt class="docutils literal">actuator_actions_raw * action_scale</tt> 으로 만든 <tt class="docutils literal">actuator_actions</tt> 를
+<tt class="docutils literal">penalty_action_rate</tt> 와 <tt class="docutils literal">penalty_action_2nd_rate</tt> 에 넘겼다. 즉 Gym 버전은 scaled actuator action 기준이고,
+현재 RoK4Lab도 동일하게 scaled action 차분을 기준으로 한다. 또한 <tt class="docutils literal">ROK4_ACTION_SCALE</tt> 값도 Gym의
+<tt class="docutils literal">[0.4, 0.5, 1.25, 1.5, 0.75, 0.75]</tt> 좌우 다리 scale과 torso <tt class="docutils literal">0.4</tt> 에 맞췄다. 다만 observation의
+<tt class="docutils literal">last_action</tt> 은 Isaac Lab convention에 따라 clipped raw action으로 유지한다.</p>
+<p>Action target의 <tt class="docutils literal">default_joint_pos</tt> 도 Gym의 활성 gait-ready pose와 동일하다. Hip pitch는
+<tt class="docutils literal"><span class="pre">-0.0924</span> rad</tt>, knee pitch는 <tt class="docutils literal">0.345 rad</tt>, ankle pitch는 <tt class="docutils literal"><span class="pre">-0.253</span> rad</tt> 이며 나머지 관절은
+<tt class="docutils literal">0.0 rad</tt> 이다. 따라서 <tt class="docutils literal">joint_deviation_*</tt> reward의 기준 자세와 <tt class="docutils literal">use_default_offset=True</tt> 가 사용하는
+action 중심도 같은 Gym gait-ready 자세를 따른다.</p>
+</div>
+</div>
+<div class="section" id="reward-domain-randomization">
+<h1>Reward와 Domain Randomization의 구분</h1>
+<p><tt class="docutils literal">RoK4RewardsCfg</tt> 와 부모 <tt class="docutils literal">RewardsCfg</tt> 는 reward term을 정의한다. 반면 foot friction, restitution,
+base/upper/lower body mass, base/upper/lower COM, reset pose 같은 domain randomization 값은
+<tt class="docutils literal">domain_randomization_cfg.py</tt> 에서 관리한다.</p>
+<p>두 설정은 학습 결과에 모두 영향을 주지만 역할은 다르다.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="33%" />
+<col width="33%" />
+<col width="33%" />
+</colgroup>
+<thead valign="bottom">
+<tr><th class="head">구분</th>
+<th class="head">파일</th>
+<th class="head">역할</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>Reward</td>
+<td><tt class="docutils literal">flat_env_cfg.py</tt> 의 <tt class="docutils literal">RoK4RewardsCfg</tt> 및 <tt class="docutils literal">self.rewards.xxx</tt></td>
+<td>policy가 어떤 행동을 더 좋게 볼지 점수 함수를 정의</td>
+</tr>
+<tr><td>DR</td>
+<td><tt class="docutils literal">domain_randomization_cfg.py</tt></td>
+<td>물성, 질량, COM, 초기상태 perturbation을 바꿔 다양한 상황에서 버티게 함</td>
+</tr>
+</tbody>
+</table>
+<p>예를 들어 발 미끄러짐은 <tt class="docutils literal">feet_slide</tt> reward가 penalty로 줄이고, foot-ground 마찰 계수는
+<tt class="docutils literal">domain_randomization_cfg.py</tt> 의 <tt class="docutils literal">ROK4_STATIC_FRICTION_RANGE</tt> 와 <tt class="docutils literal">ROK4_DYNAMIC_FRICTION_RANGE</tt> 가 정한다.
+따라서 미끄러짐 문제를 볼 때는 reward와 DR을 함께 확인해야 하지만, 코드상 관리 위치는 분리되어 있다.</p>
+</div>
+<div class="section" id="reward-ppo-entropy-kl">
+<h1>Reward와 PPO entropy/KL의 구분</h1>
+<p>Reward term은 환경의 <tt class="docutils literal">RewardManager</tt> 가 행동의 점수를 계산하는 항목이다. 반면 PPO의 entropy와 KL은
+<tt class="docutils literal">rsl_rl</tt> optimizer가 policy distribution을 업데이트할 때 사용하는 학습 지표다. 따라서
+<tt class="docutils literal">entropy_coef</tt> 나 <tt class="docutils literal">desired_kl</tt> 은 <tt class="docutils literal">RoK4RewardsCfg</tt> 의 reward weight가 아니다.</p>
+<table border="1" class="docutils">
+<caption>Reward와 PPO 지표 비교</caption>
+<colgroup>
+<col width="33%" />
+<col width="33%" />
+<col width="33%" />
+</colgroup>
+<thead valign="bottom">
+<tr><th class="head">항목</th>
+<th class="head">현재 값/위치</th>
+<th class="head">역할</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>reward weight</td>
+<td><tt class="docutils literal">flat_env_cfg.py</tt> 의 <tt class="docutils literal"><span class="pre">RewTerm(weight=...)</span></tt></td>
+<td>환경 행동의 positive reward 또는 penalty 크기를 결정</td>
+</tr>
+<tr><td><tt class="docutils literal">entropy_coef</tt></td>
+<td><tt class="docutils literal">rsl_rl_ppo_cfg.py</tt> 의 <tt class="docutils literal">0.002</tt></td>
+<td>Gaussian policy의 exploration entropy를 유지하려는 optimizer 압력을 결정</td>
+</tr>
+<tr><td><tt class="docutils literal">desired_kl</tt></td>
+<td><tt class="docutils literal">rsl_rl_ppo_cfg.py</tt> 의 <tt class="docutils literal">0.01</tt></td>
+<td>old/new policy 차이를 기준으로 adaptive learning rate를 조절</td>
+</tr>
+</tbody>
+</table>
+<p>RoK4 로컬 <tt class="docutils literal">scripts/rsl_rl/rok4_ppo.py</tt> 는 adaptive schedule에서 이미 계산되는 mini-batch KL을 모아
+TensorBoard의 <tt class="docutils literal"><span class="pre">Loss/kl``(iteration</span> 평균)과 <span class="pre">``Loss/kl_max``(iteration</span> 최대)로 기록한다. 현재 5 learning
+epochs와 4 <span class="pre">mini-batches를</span> 사용하므로 iteration당 20개 KL 값을 집계한다. 이 로깅을 위해 Isaac Lab 또는
+설치된 ``rsl_rl</tt> 파일을 수정하지 않는다.</p>
+</div>
+<div class="section" id="reward">
+<h1>Reward 계산 방식</h1>
+<p>Isaac Lab의 <tt class="docutils literal">RewardManager</tt> 는 각 reward term의 raw value를 계산한 뒤 <tt class="docutils literal">weight</tt> 를 곱하고, 모든 term을
+합산한다.</p>
+<pre class="code text literal-block">
+total_reward =
+    sum(weight_i * reward_function_i(env, params_i))
+</pre>
+<p>따라서 positive weight는 행동을 유도하고, negative weight는 penalty로 작동한다.</p>
+</div>
+<div class="section" id="rok4-reward-terms">
+<h1>RoK4 전용 Reward Terms</h1>
+<p>아래 term들은 <tt class="docutils literal">RoK4RewardsCfg</tt> 에서 직접 정의하거나 부모 <tt class="docutils literal">RewardsCfg</tt> 의 term을 RoK4용으로 override한
+항목이다.</p>
+<table border="1" class="colwidths-given docutils">
+<colgroup>
+<col width="18%" />
+<col width="15%" />
+<col width="10%" />
+<col width="27%" />
+<col width="30%" />
+</colgroup>
+<thead valign="bottom">
+<tr><th class="head">term</th>
+<th class="head">function</th>
+<th class="head">weight</th>
+<th class="head">params</th>
+<th class="head">의미</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td><tt class="docutils literal">termination_penalty</tt></td>
+<td><tt class="docutils literal">mdp.is_terminated</tt></td>
+<td><tt class="docutils literal"><span class="pre">-200.0</span></tt></td>
+<td>없음</td>
+<td>episode가 termination되면 큰 penalty를 준다.</td>
+</tr>
+<tr><td><tt class="docutils literal">track_lin_vel_xy_exp</tt></td>
+<td><tt class="docutils literal">mdp.track_lin_vel_xy_yaw_frame_exp</tt></td>
+<td><tt class="docutils literal">1.0</tt></td>
+<td><tt class="docutils literal"><span class="pre">command_name=&quot;base_velocity&quot;</span></tt>, <tt class="docutils literal">std=0.5</tt></td>
+<td>yaw-aligned robot frame에서 x/y 선속도 command를 추종하게 한다.</td>
+</tr>
+<tr><td><tt class="docutils literal">track_ang_vel_z_exp</tt></td>
+<td><tt class="docutils literal">mdp.track_ang_vel_z_world_exp</tt></td>
+<td><tt class="docutils literal">1.0</tt></td>
+<td><tt class="docutils literal"><span class="pre">command_name=&quot;base_velocity&quot;</span></tt>, <tt class="docutils literal">std=0.5</tt></td>
+<td>world frame yaw angular velocity command를 추종하게 한다.</td>
+</tr>
+<tr><td><tt class="docutils literal">feet_air_time</tt></td>
+<td><tt class="docutils literal">mdp.feet_air_time_positive_biped</tt></td>
+<td><tt class="docutils literal">0.75</tt></td>
+<td>feet: <tt class="docutils literal">L_Foot_Link</tt>, <tt class="docutils literal">R_Foot_Link</tt>; <tt class="docutils literal">threshold=0.55</tt></td>
+<td>양발 보행에서 한 발씩 공중에 있는 step pattern을 유도한다. Threshold는 정확한 주기 목표가 아니라 single-stance reward의 시간 상한이다.</td>
+</tr>
+<tr><td><tt class="docutils literal">feet_slide</tt></td>
+<td><tt class="docutils literal">mdp.feet_slide</tt></td>
+<td><tt class="docutils literal"><span class="pre">-0.2</span></tt></td>
+<td>feet: <tt class="docutils literal">L_Foot_Link</tt>, <tt class="docutils literal">R_Foot_Link</tt></td>
+<td>지면 접촉 중인 발이 미끄러지는 것을 줄인다.</td>
+</tr>
+<tr><td><tt class="docutils literal">dof_pos_limits</tt></td>
+<td><tt class="docutils literal">mdp.joint_pos_limits</tt></td>
+<td><tt class="docutils literal"><span class="pre">-1.0</span></tt></td>
+<td><tt class="docutils literal">ROK4_JOINT_ORDER</tt> 에 포함된 전체 13관절, <tt class="docutils literal">preserve_order=True</tt></td>
+<td>각 관절이 USD hard limit의 95%로 계산된 soft joint limit을 넘은 양을 합산해 억제한다.</td>
+</tr>
+<tr><td><tt class="docutils literal">action_pos_limits</tt></td>
+<td><tt class="docutils literal">mdp.action_pos_limits</tt></td>
+<td><tt class="docutils literal"><span class="pre">-0.001</span></tt></td>
+<td><tt class="docutils literal">joint_pos</tt> action target과 <tt class="docutils literal">ROK4_JOINT_ORDER</tt> 의 전체 13관절</td>
+<td>Gym의 <tt class="docutils literal">penalty_action_limits</tt> 에 대응한다. <tt class="docutils literal">processed_actions</tt> 로 계산된 목표 관절 위치가 95% soft limit을 넘은 양을 합산한다.</td>
+</tr>
+<tr><td><tt class="docutils literal">joint_deviation_hip</tt></td>
+<td><tt class="docutils literal">mdp.joint_deviation_l1</tt></td>
+<td><tt class="docutils literal"><span class="pre">-0.1</span></tt></td>
+<td><tt class="docutils literal">.*_Hip_Yaw_Joint</tt>, <tt class="docutils literal">.*_Hip_Roll_Joint</tt></td>
+<td>hip yaw/roll이 default pose에서 과도하게 벗어나지 않게 한다.</td>
+</tr>
+<tr><td><tt class="docutils literal">joint_deviation_torso</tt></td>
+<td><tt class="docutils literal">mdp.joint_deviation_l1</tt></td>
+<td><tt class="docutils literal"><span class="pre">-0.1</span></tt></td>
+<td><tt class="docutils literal">Torso_Yaw_Joint</tt></td>
+<td>torso yaw가 default pose에서 과도하게 벗어나지 않게 한다.</td>
+</tr>
+<tr><td><tt class="docutils literal">dof_acc_l2</tt></td>
+<td><tt class="docutils literal">mdp.joint_acc_l2</tt></td>
+<td><tt class="docutils literal"><span class="pre">-1.0e-8</span></tt></td>
+<td>전체 RoK4 joint; index <tt class="docutils literal">2,3,8,9</tt> weight <tt class="docutils literal">0.5</tt></td>
+<td>Isaac Lab의 <tt class="docutils literal">asset.data.joint_acc</tt> 를 그대로 쓰되, Gym의 <tt class="docutils literal"><span class="pre">jointAcc=-0.0001</span></tt> 을 acceleration 기준으로 환산해 약하게 적용한다.</td>
+</tr>
+<tr><td><tt class="docutils literal">dof_torques_l2</tt></td>
+<td><tt class="docutils literal">mdp.joint_torques_l2</tt></td>
+<td><tt class="docutils literal"><span class="pre">-1.0e-5</span></tt></td>
+<td>전체 RoK4 joint; index <tt class="docutils literal">2,3,8,9</tt> weight <tt class="docutils literal">0.5</tt></td>
+<td>explicit actuator가 PhysX에 전달한 <tt class="docutils literal">asset.data.applied_torque</tt> 를 사용하여 Gym <tt class="docutils literal">penalty_torque</tt> 와 같은 weighted squared sum을 계산한다.</td>
+</tr>
+<tr><td><tt class="docutils literal">joint_vel_l2</tt></td>
+<td><tt class="docutils literal">mdp.joint_vel_l2</tt></td>
+<td><tt class="docutils literal"><span class="pre">-1.0e-4</span></tt></td>
+<td>전체 RoK4 joint; index <tt class="docutils literal">2,3,8,9</tt> weight <tt class="docutils literal">0.5</tt></td>
+<td><tt class="docutils literal">asset.data.joint_vel</tt> 의 weighted squared sum으로 Gym <tt class="docutils literal">penalty_joint_vel</tt> 에 대응한다.</td>
+</tr>
+<tr><td><tt class="docutils literal">action_rate_l2</tt></td>
+<td><tt class="docutils literal">mdp.action_rate_l2</tt></td>
+<td><tt class="docutils literal"><span class="pre">-0.1</span></tt></td>
+<td>action 전체; index <tt class="docutils literal">2,3,8,9</tt> weight <tt class="docutils literal">0.5</tt></td>
+<td><tt class="docutils literal">clipped_raw_action * ROK4_ACTION_SCALE</tt> 의 1차 차분을 줄이되 hip pitch/knee action penalty는 완화한다.</td>
+</tr>
+<tr><td><tt class="docutils literal">second_action_rate_l2</tt></td>
+<td><tt class="docutils literal">mdp.second_action_rate_l2</tt></td>
+<td><tt class="docutils literal"><span class="pre">-0.05</span></tt></td>
+<td>action 전체; index <tt class="docutils literal">2,3,8,9</tt> weight <tt class="docutils literal">0.5</tt></td>
+<td>scaled action의 2차 차분, 즉 <tt class="docutils literal">s(a_t - 2 <span class="pre">a_{t-1}</span> + <span class="pre">a_{t-2})</span></tt> 를 줄여 action jerk를 완화한다.
+reset 직후 첫 두 policy step은 history가 부족하므로 0으로 처리한다.</td>
+</tr>
+</tbody>
+</table>
+<div class="section" id="gym-lab-action-limit">
+<h2>Gym과 Lab의 action-limit 신호 차이</h2>
+<p>Gym 구현은 actuator action을 ADAPT 변환한 <tt class="docutils literal">joint_actions</tt> 기준의 target을 검사했다. 현재 Lab action term은
+articulation joint 13개를 직접 명령하므로 <tt class="docutils literal">action_pos_limits</tt> 는 실제 Lab PD에 전달되는 joint target을 검사한다.
+따라서 limit penalty의 의미와 weight는 Gym에 맞지만, 과거 actuator-to-joint transmission 좌표계를 수치적으로
+복제하는 항목은 아니다.</p>
+</div>
+<div class="section" id="gym-lab-torque-velocity">
+<h2>Gym과 Lab의 torque/velocity 신호 차이</h2>
+<p>기존 Gym 코드는 ADAPT transmission 변환 전의 <tt class="docutils literal">actuator_torques</tt> 와 <tt class="docutils literal">actuator_vel</tt> 을 penalty에 사용했다.
+현재 Lab 모델은 별도의 actuator-space state를 노출하지 않으므로 explicit actuator가 PhysX joint에 실제로 전달한
+<tt class="docutils literal">asset.data.applied_torque</tt> 와 articulation의 <tt class="docutils literal">asset.data.joint_vel</tt> 을 사용한다. 따라서 관절별 <tt class="docutils literal">0.5</tt> weighting과
+reward weight는 Gym과 같지만, transmission 좌표계가 다르므로 raw penalty 값이 수치적으로 완전히 같지는 않다.</p>
+</div>
+</div>
+<div class="section" id="rewardscfg-rok4-terms">
+<h1>부모 RewardsCfg에서 상속받고 RoK4에서 수정한 Terms</h1>
+<p>아래 term들은 <tt class="docutils literal">RewardsCfg</tt> 에서 기본으로 제공되며, <tt class="docutils literal">RoK4FlatEnvCfg.__post_init__()</tt> 에서 weight나 body/joint
+대상이 RoK4에 맞게 수정된다.</p>
+<table border="1" class="colwidths-given docutils">
+<colgroup>
+<col width="18%" />
+<col width="15%" />
+<col width="12%" />
+<col width="24%" />
+<col width="31%" />
+</colgroup>
+<thead valign="bottom">
+<tr><th class="head">term</th>
+<th class="head">function</th>
+<th class="head">current weight</th>
+<th class="head">RoK4 설정</th>
+<th class="head">의미</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td><tt class="docutils literal">lin_vel_z_l2</tt></td>
+<td><tt class="docutils literal">mdp.lin_vel_z_l2</tt></td>
+<td><tt class="docutils literal"><span class="pre">-0.2</span></tt></td>
+<td>기본 robot root</td>
+<td>base가 z 방향으로 튀는 움직임을 줄인다.</td>
+</tr>
+<tr><td><tt class="docutils literal">ang_vel_xy_l2</tt></td>
+<td><tt class="docutils literal">mdp.ang_vel_xy_l2</tt></td>
+<td><tt class="docutils literal"><span class="pre">-0.05</span></tt></td>
+<td>기본 robot root</td>
+<td>roll/pitch angular velocity를 줄인다.</td>
+</tr>
+<tr><td><tt class="docutils literal">flat_orientation_l2</tt></td>
+<td><tt class="docutils literal">mdp.flat_orientation_l2</tt></td>
+<td><tt class="docutils literal"><span class="pre">-1.0</span></tt></td>
+<td>기본 robot root</td>
+<td>몸이 기울어지는 것을 줄이고 upright 자세를 유도한다.</td>
+</tr>
+<tr><td><tt class="docutils literal">undesired_contacts</tt></td>
+<td><tt class="docutils literal">mdp.undesired_contacts</tt></td>
+<td><tt class="docutils literal"><span class="pre">-1.0</span></tt></td>
+<td><tt class="docutils literal">Base_Link</tt>, <tt class="docutils literal">Upper_Body_Link</tt>; <tt class="docutils literal">threshold=1.0</tt></td>
+<td>발이 아닌 base/upper body 접촉을 penalty로 처리한다.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="reward-function">
+<h1>Reward Function 요약</h1>
+<table border="1" class="colwidths-given docutils">
+<colgroup>
+<col width="22%" />
+<col width="20%" />
+<col width="58%" />
+</colgroup>
+<thead valign="bottom">
+<tr><th class="head">function</th>
+<th class="head">위치</th>
+<th class="head">계산 의미</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td><tt class="docutils literal">is_terminated</tt></td>
+<td>Isaac Lab 공통</td>
+<td>termination manager의 terminated flag를 reward term으로 반환한다.</td>
+</tr>
+<tr><td><tt class="docutils literal">track_lin_vel_xy_yaw_frame_exp</tt></td>
+<td>locomotion mdp</td>
+<td>yaw frame x/y 선속도 command error에 <tt class="docutils literal"><span class="pre">exp(-error</span> / std^2)</tt> 를 적용한다.</td>
+</tr>
+<tr><td><tt class="docutils literal">track_ang_vel_z_world_exp</tt></td>
+<td>locomotion mdp</td>
+<td>world z축 angular velocity command error에 <tt class="docutils literal"><span class="pre">exp(-error</span> / std^2)</tt> 를 적용한다.</td>
+</tr>
+<tr><td><tt class="docutils literal">feet_air_time_positive_biped</tt></td>
+<td>locomotion mdp</td>
+<td>한 발 지지 상태의 air/contact time을 보상하며, command 크기가 작으면 0이 된다.</td>
+</tr>
+<tr><td><tt class="docutils literal">feet_slide</tt></td>
+<td>locomotion mdp</td>
+<td>접촉 중인 foot의 horizontal linear velocity norm을 penalty로 계산한다.</td>
+</tr>
+<tr><td><tt class="docutils literal">lin_vel_z_l2</tt></td>
+<td>Isaac Lab 공통</td>
+<td>base body-frame z velocity squared.</td>
+</tr>
+<tr><td><tt class="docutils literal">ang_vel_xy_l2</tt></td>
+<td>Isaac Lab 공통</td>
+<td>base body-frame roll/pitch angular velocity squared sum.</td>
+</tr>
+<tr><td><tt class="docutils literal">flat_orientation_l2</tt></td>
+<td>Isaac Lab 공통</td>
+<td>projected gravity의 x/y component squared sum으로 몸 기울기를 penalty화한다.</td>
+</tr>
+<tr><td><tt class="docutils literal">joint_torques_l2</tt></td>
+<td>RoK4 로컬 mdp</td>
+<td>전체 joint의 applied torque weighted squared sum. Index <tt class="docutils literal">2,3,8,9</tt> 는 weight <tt class="docutils literal">0.5</tt>.</td>
+</tr>
+<tr><td><tt class="docutils literal">joint_vel_l2</tt></td>
+<td>RoK4 로컬 mdp</td>
+<td>전체 joint velocity의 weighted squared sum. Index <tt class="docutils literal">2,3,8,9</tt> 는 weight <tt class="docutils literal">0.5</tt>.</td>
+</tr>
+<tr><td><tt class="docutils literal">joint_acc_l2</tt></td>
+<td>RoK4 로컬 mdp</td>
+<td><tt class="docutils literal">asset.data.joint_acc</tt> 의 weighted squared sum. Index <tt class="docutils literal">2,3,8,9</tt> 는 weight <tt class="docutils literal">0.5</tt>.</td>
+</tr>
+<tr><td><tt class="docutils literal">action_rate_l2</tt></td>
+<td>RoK4 로컬 mdp</td>
+<td>현재 action과 이전 action 차이의 weighted squared sum. Index <tt class="docutils literal">2,3,8,9</tt> 는 weight <tt class="docutils literal">0.5</tt>.</td>
+</tr>
+<tr><td><tt class="docutils literal">second_action_rate_l2</tt></td>
+<td>RoK4 로컬 mdp</td>
+<td>현재 action, 이전 action, 이전-이전 action의 2차 차분 weighted squared sum. Index <tt class="docutils literal">2,3,8,9</tt> 는 weight <tt class="docutils literal">0.5</tt>.</td>
+</tr>
+<tr><td><tt class="docutils literal">joint_deviation_l1</tt></td>
+<td>Isaac Lab 공통</td>
+<td>현재 joint position과 default joint position 차이의 absolute sum.</td>
+</tr>
+<tr><td><tt class="docutils literal">joint_pos_limits</tt></td>
+<td>Isaac Lab 공통</td>
+<td>soft joint position limit을 넘은 정도를 합산한다.</td>
+</tr>
+<tr><td><tt class="docutils literal">action_pos_limits</tt></td>
+<td>RoK4 로컬 mdp</td>
+<td><tt class="docutils literal">joint_pos</tt> action의 processed target이 soft joint position limit을 넘은 정도를 합산한다.</td>
+</tr>
+<tr><td><tt class="docutils literal">undesired_contacts</tt></td>
+<td>Isaac Lab 공통</td>
+<td>지정 body의 contact force가 threshold를 넘은 contact 개수를 penalty로 반환한다.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="command-reward">
+<h1>Command와 Reward의 연결</h1>
+<p>현재 RoK4 flat command range는 다음과 같다.</p>
+<pre class="code python literal-block">
+<span class="name">lin_vel_x</span> <span class="operator">=</span> <span class="punctuation">(</span><span class="operator">-</span><span class="literal number float">0.1</span><span class="punctuation">,</span> <span class="literal number float">0.85</span><span class="punctuation">)</span>
+<span class="name">lin_vel_y</span> <span class="operator">=</span> <span class="punctuation">(</span><span class="operator">-</span><span class="literal number float">0.3</span><span class="punctuation">,</span> <span class="literal number float">0.3</span><span class="punctuation">)</span>
+<span class="name">ang_vel_z</span> <span class="operator">=</span> <span class="punctuation">(</span><span class="operator">-</span><span class="literal number float">0.6</span><span class="punctuation">,</span> <span class="literal number float">0.6</span><span class="punctuation">)</span>
+</pre>
+<p>이 command는 <tt class="docutils literal">track_lin_vel_xy_exp</tt>, <tt class="docutils literal">track_ang_vel_z_exp</tt>, <tt class="docutils literal">feet_air_time</tt> 에 직접 영향을 준다. 특히
+<tt class="docutils literal">feet_air_time_positive_biped</tt> 는 x/y command norm이 <tt class="docutils literal">0.1</tt> 이하이면 reward를 0으로 만든다. 즉 거의 정지
+명령에서는 stepping reward가 강하게 작동하지 않는다.</p>
+<p><tt class="docutils literal">UniformVelocityCommand</tt> 가 반환하는 <tt class="docutils literal">[lin_vel_x, lin_vel_y, ang_vel_z]</tt> 는 robot base frame 기준
+command다. 따라서 양의 <tt class="docutils literal">lin_vel_x</tt> 는 로봇이 현재 바라보는 방향의 전진, 양의 <tt class="docutils literal">lin_vel_y</tt> 는 로봇 기준
+좌측 이동, 양의 <tt class="docutils literal">ang_vel_z</tt> 는 z축 주위 반시계 방향 회전을 뜻한다. 선속도 tracking 함수는 실제 world 선속도에서
+roll/pitch를 제외한 yaw 회전만 역변환한 gravity-aligned yaw frame 속도와 x/y command를 비교한다. 반면 현재
+각속도 tracking 함수는 command의 z 성분과 world-frame <tt class="docutils literal"><span class="pre">root_ang_vel_w[:,</span> 2]</tt> 를 비교한다. 평평하고 직립한
+상태에서는 두 z축이 거의 같지만, 몸체가 크게 기울면 완전히 동일한 표현은 아니다.</p>
+<p>부모 command 설정의 <tt class="docutils literal">heading_command=True</tt> 와 <tt class="docutils literal">rel_heading_envs=1.0</tt> 도 그대로 적용된다. 따라서 학습 중
+yaw command는 처음 표본화한 각속도를 그대로 유지하는 방식이 아니다. World frame target heading을 표본화하고,
+매 step <tt class="docutils literal">0.5 * wrap_to_pi(target_heading - current_heading)</tt> 을 계산한 뒤 현재 <tt class="docutils literal">ang_vel_z</tt> 범위인
+<tt class="docutils literal"><span class="pre">(-0.6,</span> 0.6) rad/s</tt> 로 clip한 결과를 base-frame command의 z 성분에 저장한다.</p>
+<p>현재 <tt class="docutils literal">feet_air_time</tt> 은 <tt class="docutils literal">threshold=0.55 s</tt>, <tt class="docutils literal">weight=0.75</tt> 를 사용한다. 따라서 최대 raw reward는
+<tt class="docutils literal">0.55</tt> 이고, 최대 pre-<tt class="docutils literal">dt</tt> 항목 크기는 <tt class="docutils literal">0.55 * 0.75 = 0.4125</tt> 이다. 이 설정은 긴 single stance를
+기존 <tt class="docutils literal">threshold=0.4</tt> 보다 강하게 보상한다.</p>
+<p>Contact sensor는 <tt class="docutils literal">update_period=0.002 s</tt> 와 <tt class="docutils literal">history_length=self.decimation=5</tt> 를 사용한다. 따라서
+<tt class="docutils literal">feet_slide</tt>, <tt class="docutils literal">undesired_contacts</tt>, <tt class="docutils literal">illegal_body_contact</tt> 처럼 <tt class="docutils literal">net_forces_w_history</tt> 를 검사하는
+항목은 최근 policy interval의 5개 physics contact sample을 확인한다. 반면 <tt class="docutils literal">feet_air_time_positive_biped</tt> 는
+이 force history가 아니라 sensor의 현재 <tt class="docutils literal">current_air_time</tt> 과 <tt class="docutils literal">current_contact_time</tt> 을 사용한다.
+이 contact-force history는 policy observation history와 별개의 buffer이다.</p>
+<p>Play 환경은 <tt class="docutils literal">lin_vel_x=0.85 m/s</tt> 를 사용하고 lateral/yaw command는 0으로 고정한다. 별도의 Teleop 환경은
+<tt class="docutils literal">heading_command=False</tt> 와 긴 resampling interval을 사용하고, gamepad 또는 keyboard의
+<tt class="docutils literal">[lin_vel_x, lin_vel_y, ang_vel_z]</tt> 를 동일한 base-frame command buffer에 직접 기록한다. 입력은 학습 범위
+<tt class="docutils literal"><span class="pre">(-0.1,</span> 0.85) m/s</tt>, <tt class="docutils literal"><span class="pre">(-0.3,</span> 0.3) m/s</tt>, <tt class="docutils literal"><span class="pre">(-0.6,</span> 0.6) rad/s</tt> 안으로 scale된다. 이는 inference command
+source만 바꾸며 reward 정의나 학습 checkpoint 자체를 변경하지 않는다.</p>
+</div>
+<div class="section" id="termination-reward">
+<h1>Termination과 Reward의 연결</h1>
+<p>RoK4 flat task는 Isaac Lab의 <tt class="docutils literal">TerminationsCfg</tt> 를 수정하지 않고 로컬 <tt class="docutils literal">RoK4TerminationsCfg</tt> 로 상속한다.
+부모의 <tt class="docutils literal">time_out</tt> 은 유지하고 <tt class="docutils literal">base_contact</tt> 는 비활성화한 뒤 <tt class="docutils literal">illegal_body_contact</tt> 를 추가한다.</p>
+<pre class="code python literal-block">
+<span class="keyword">class</span> <span class="name class">RoK4TerminationsCfg</span><span class="punctuation">(</span><span class="name">TerminationsCfg</span><span class="punctuation">):</span>
+    <span class="name">base_contact</span> <span class="operator">=</span> <span class="keyword constant">None</span>
+    <span class="name">illegal_body_contact</span> <span class="operator">=</span> <span class="name">DoneTerm</span><span class="punctuation">(</span>
+        <span class="name">func</span><span class="operator">=</span><span class="name">mdp</span><span class="operator">.</span><span class="name">illegal_contact</span><span class="punctuation">,</span>
+        <span class="name">params</span><span class="operator">=</span><span class="punctuation">{</span>
+            <span class="literal string double">&quot;sensor_cfg&quot;</span><span class="punctuation">:</span> <span class="name">SceneEntityCfg</span><span class="punctuation">(</span>
+                <span class="literal string double">&quot;contact_forces&quot;</span><span class="punctuation">,</span>
+                <span class="name">body_names</span><span class="operator">=</span><span class="name">ROK4_ILLEGAL_CONTACT_BODY_NAMES</span><span class="punctuation">,</span>
+            <span class="punctuation">),</span>
+            <span class="literal string double">&quot;threshold&quot;</span><span class="punctuation">:</span> <span class="literal number float">1.0</span><span class="punctuation">,</span>
+        <span class="punctuation">},</span>
+    <span class="punctuation">)</span>
+</pre>
+<p><tt class="docutils literal">ROK4_ILLEGAL_CONTACT_BODY_NAMES</tt> 에는 <tt class="docutils literal">Base_Link</tt>, <tt class="docutils literal">Upper_Body_Link</tt> 와 좌우 <tt class="docutils literal">Hip_Yaw</tt>, <tt class="docutils literal">Hip_Roll</tt>,
+<tt class="docutils literal">Thigh</tt>, <tt class="docutils literal">Calf</tt>, <tt class="docutils literal">Ankle_Pitch</tt>, <tt class="docutils literal">Ankle_Roll</tt> link가 포함된다. 정상 접촉 body인 <tt class="docutils literal">L_Foot_Link</tt> 와
+<tt class="docutils literal">R_Foot_Link</tt> 만 제외된다. 선택된 body 중 하나라도 contact force가 <tt class="docutils literal">1.0 N</tt> 을 넘으면 episode가 종료된다.</p>
+<p><tt class="docutils literal">mdp.is_terminated</tt> 는 non-timeout termination을 감지하므로 <tt class="docutils literal">illegal_body_contact</tt> 가 발생하면
+<tt class="docutils literal"><span class="pre">termination_penalty=-200.0</span></tt> 가 함께 작동한다. 반면 부모에서 상속한 정상 <tt class="docutils literal">time_out</tt> 에는 이 penalty가
+적용되지 않는다. 여러 body가 동시에 접촉해도 termination flag는 boolean이므로 termination penalty는 한 번만
+적용된다. Contact sensor는 상대 물체 종류를 구분하지 않은 net contact force를 사용하므로 self-collision으로
+선택 body에 큰 접촉력이 생겨도 종료될 수 있다.</p>
+</div>
+<div class="section" id="id3">
+<h1>현재 설계 의도</h1>
+<p>현재 reward는 다음 목표를 동시에 가진다.</p>
+<pre class="code text literal-block">
+1. command velocity를 따라간다.
 2. upright 자세를 유지한다.
 3. 한 발씩 드는 biped stepping pattern을 만든다.
 4. 발 미끄러짐을 줄인다.
-5. torque, joint acceleration, action rate를 줄여 움직임을 부드럽게 한다.
+5. torque, joint acceleration, action rate, second action rate를 줄여 움직임을 부드럽게 한다.
 6. ankle limit, hip/torso deviation을 제한한다.
-7. base/upper body 접촉을 넘어짐으로 처리한다.</pre>
-
-  <h2>튜닝 시 우선 확인할 항목</h2>
-  <table>
-    <tr><th>현상</th><th>먼저 볼 항목</th></tr>
-    <tr><td>너무 자주 넘어진다</td><td><code>termination_penalty</code>, <code>base_contact</code>, <code>flat_orientation_l2</code>, 초기 자세</td></tr>
-    <tr><td>거의 걷지 않고 버틴다</td><td><code>track_lin_vel_xy_exp</code>, command range, <code>feet_air_time</code></td></tr>
-    <tr><td>발이 많이 미끄러진다</td><td><code>feet_slide</code>, foot collision, friction, contact sensor</td></tr>
-    <tr><td>관절이 떨린다</td><td><code>action_rate_l2</code>, <code>dof_acc_l2</code>, PD gain, action scale</td></tr>
-    <tr><td>토크가 과도하다</td><td><code>dof_torques_l2</code>, effort limit, action scale</td></tr>
-    <tr><td>발목이 limit 근처로 간다</td><td><code>dof_pos_limits</code>, ankle default pose, action scale</td></tr>
-  </table>
+7. Foot를 제외한 body 접촉을 실패 종료로 처리한다.
+</pre>
+</div>
+<div class="section" id="id4">
+<h1>튜닝 시 우선 확인할 항목</h1>
+<table border="1" class="docutils">
+<colgroup>
+<col width="50%" />
+<col width="50%" />
+</colgroup>
+<thead valign="bottom">
+<tr><th class="head">현상</th>
+<th class="head">먼저 볼 항목</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>너무 자주 넘어진다</td>
+<td><tt class="docutils literal">termination_penalty</tt>, <tt class="docutils literal">illegal_body_contact</tt>, self-collision, <tt class="docutils literal">flat_orientation_l2</tt>, 초기 자세</td>
+</tr>
+<tr><td>거의 걷지 않고 버틴다</td>
+<td><tt class="docutils literal">track_lin_vel_xy_exp</tt>, command range, <tt class="docutils literal">feet_air_time</tt></td>
+</tr>
+<tr><td>발이 많이 미끄러진다</td>
+<td><tt class="docutils literal">feet_slide</tt>, foot collision, friction, contact sensor</td>
+</tr>
+<tr><td>관절이 떨린다</td>
+<td><tt class="docutils literal">action_rate_l2</tt>, <tt class="docutils literal">second_action_rate_l2</tt>, <tt class="docutils literal">dof_acc_l2</tt>, PD gain, action scale</td>
+</tr>
+<tr><td>토크가 과도하다</td>
+<td><tt class="docutils literal">dof_torques_l2</tt>, effort limit, action scale</td>
+</tr>
+<tr><td>관절이 limit 근처로 간다</td>
+<td><tt class="docutils literal">dof_pos_limits</tt>, <tt class="docutils literal">action_pos_limits</tt>, 해당 joint의 default pose, action scale, USD hard limit</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 </body>
 </html>
