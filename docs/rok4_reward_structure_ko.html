@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="ko" lang="ko">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
@@ -363,7 +363,7 @@ ul.auto-toc {
 <div class="document" id="rok4-reward-structure">
 <h1 class="title">RoK4 Reward Structure</h1>
 
-<p>작성일: 2026-07-14</p>
+<p>작성일: 2026-07-15</p>
 <p>이 문서는 <tt class="docutils literal"><span class="pre">RoK4-Isaac-Velocity-Flat-v0</span></tt> task의 현재 reward 구조와 reward function 설정을 정리한다.
 현재 reward는 Isaac Lab G1 velocity task 구조를 RoK4 링크/관절 이름에 맞게 이식한 flat walking 초기
 baseline이다. 최종 튜닝값이 아니라 첫 보행 실험을 위한 시작점으로 봐야 한다.</p>
@@ -661,7 +661,7 @@ total_reward =
 </tr>
 <tr><td><tt class="docutils literal">joint_deviation_torso</tt></td>
 <td><tt class="docutils literal">mdp.joint_deviation_l1</tt></td>
-<td><tt class="docutils literal"><span class="pre">-0.1</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">-1.0</span></tt></td>
 <td><tt class="docutils literal">Torso_Yaw_Joint</tt></td>
 <td>torso yaw가 default pose에서 과도하게 벗어나지 않게 한다.</td>
 </tr>
@@ -748,7 +748,7 @@ reward weight는 Gym과 같지만, transmission 좌표계가 다르므로 raw pe
 </tr>
 <tr><td><tt class="docutils literal">flat_orientation_l2</tt></td>
 <td><tt class="docutils literal">mdp.flat_orientation_l2</tt></td>
-<td><tt class="docutils literal"><span class="pre">-1.0</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">-10.0</span></tt></td>
 <td>기본 robot root</td>
 <td>몸이 기울어지는 것을 줄이고 upright 자세를 유도한다.</td>
 </tr>

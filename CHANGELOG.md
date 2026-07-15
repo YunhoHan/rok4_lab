@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Changed
+
+- Increased the RoK4 flat-orientation penalty weight from `-1.0` to `-10.0` to strengthen upright posture.
+- Increased the torso-yaw deviation penalty weight from `-0.1` to `-1.0` to reduce excessive torso twisting.
+
+### Added
+
+- Added env-0 left/right foot total ground-reaction-force arrows and a live force-magnitude panel to the RoK4 contact
+  sensor debug visualization.
+- Recorded training run `2026-07-15_17-28-41` at checkpoint `model_4999.pt` as the experimental `Yunho v1`
+  flat-walking baseline.
+
 ## 0.2.0 - 2026-07-14
 
 ### Added

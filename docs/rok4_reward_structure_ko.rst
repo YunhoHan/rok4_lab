@@ -1,7 +1,7 @@
 RoK4 Reward Structure
 =============================================================
 
-작성일: 2026-07-14
+작성일: 2026-07-15
 
 이 문서는 ``RoK4-Isaac-Velocity-Flat-v0`` task의 현재 reward 구조와 reward function 설정을 정리한다.
 현재 reward는 Isaac Lab G1 velocity task 구조를 RoK4 링크/관절 이름에 맞게 이식한 flat walking 초기
@@ -277,7 +277,7 @@ RoK4 전용 Reward Terms
      - hip yaw/roll이 default pose에서 과도하게 벗어나지 않게 한다.
    * - ``joint_deviation_torso``
      - ``mdp.joint_deviation_l1``
-     - ``-0.1``
+     - ``-1.0``
      - ``Torso_Yaw_Joint``
      - torso yaw가 default pose에서 과도하게 벗어나지 않게 한다.
    * - ``dof_acc_l2``
@@ -350,7 +350,7 @@ reward weight는 Gym과 같지만, transmission 좌표계가 다르므로 raw pe
      - roll/pitch angular velocity를 줄인다.
    * - ``flat_orientation_l2``
      - ``mdp.flat_orientation_l2``
-     - ``-1.0``
+     - ``-10.0``
      - 기본 robot root
      - 몸이 기울어지는 것을 줄이고 upright 자세를 유도한다.
    * - ``undesired_contacts``

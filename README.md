@@ -2,7 +2,9 @@
 
 Current project version: `0.2.0`
 
-Flat walking baseline: `v1` (experimental)
+Flat walking baseline: `Yunho v1` (experimental)
+
+Reference policy: run `2026-07-15_17-28-41`, checkpoint `model_4999.pt`
 
 RoK4 Lab contains lightweight Isaac Lab scripts and RoK4 asset configuration code used to validate the RoK4 whole-body robot model before building reinforcement-learning tasks.
 
@@ -194,6 +196,21 @@ Registered task names:
 | `RoK4-Isaac-Velocity-Flat-v0` | Train RoK4 flat-ground velocity tracking with `rok4_train.usd`. |
 | `RoK4-Isaac-Velocity-Flat-Play-v0` | Play a trained RoK4 flat-ground policy with the visual `rok4_test.usd` asset. |
 | `RoK4-Isaac-Velocity-Flat-Teleop-v0` | Drive the trained policy with an Isaac Lab SE(2) gamepad or keyboard device. |
+
+### Contact-Force Debug View
+
+The RoK4 contact sensor adds a local debug view without modifying Isaac Lab. In the Isaac Sim UI, open
+`Scene Debug Visualization` and enable `Contact Forces`. The view displays only environment 0:
+
+- a blue arrow for the left-foot world-frame total ground reaction force,
+- a green arrow for the right-foot world-frame total ground reaction force,
+- a `RoK4 Contact Forces` panel with the left/right force magnitudes in newtons.
+
+For each foot, the visualizer adds the ground-filtered world-frame normal force and tangential contact force reported by
+PhysX. Arrow direction follows this total `[Fx, Fy, Fz]` vector, while arrow length and the numeric panel use
+`sqrt(Fx^2 + Fy^2 + Fz^2)`. The arrow origin is shifted along the force direction so its tail starts just above the foot
+instead of clipping into the ground. This is one resultant GRF arrow per foot, not separate arrows for each axis and not
+a six-axis ankle force/torque sensor. The visualizer is disabled by default and does not run in normal headless training.
 
 The actor observation is proprioceptive and history-based. It does not use camera images, terrain height scans, or
 base linear velocity:

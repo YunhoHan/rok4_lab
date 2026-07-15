@@ -14,6 +14,9 @@ from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import (
 
 import rok4_tasks.manager_based.locomotion.velocity.mdp as mdp
 from rok4_tasks.assets.robots.rok4 import ROK4_ACTION_SCALE, ROK4_JOINT_ORDER, ROK4_TEST_CFG, ROK4_TRAIN_CFG
+from rok4_tasks.manager_based.locomotion.velocity.config.rok4.contact_force_visualizer import (
+    RoK4ContactForceVisualizer,
+)
 from rok4_tasks.manager_based.locomotion.velocity.config.rok4.domain_randomization_cfg import (
     apply_rok4_domain_randomization,
 )
@@ -38,6 +41,9 @@ ROK4_LIN_VEL_Y_RANGE = (-0.3, 0.3)
 
 ROK4_ANG_VEL_Z_RANGE = (-0.6, 0.6)
 """RoK4 yaw velocity command range [rad/s]."""
+
+ROK4_GROUND_COLLISION_PRIM_PATH = "/World/ground/terrain/GroundPlane/CollisionPlane"
+"""Collision prim used to isolate foot-ground contact forces in the flat task."""
 
 
 @configclass
@@ -92,7 +98,7 @@ class RoK4RewardsCfg(RewardsCfg):
     )
     joint_deviation_torso = RewTerm(
         func=mdp.joint_deviation_l1,
-        weight=-0.1,
+        weight=-1.0,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Torso_Yaw_Joint"])},
     )
     dof_acc_l2 = RewTerm(
@@ -153,8 +159,13 @@ class RoK4FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.sim.render_interval = self.decimation
         if self.scene.contact_forces is not None:
             # Retain one contact-force sample per physics step across each policy interval.
+            self.scene.contact_forces.class_type = RoK4ContactForceVisualizer
             self.scene.contact_forces.history_length = self.decimation
             self.scene.contact_forces.update_period = self.sim.dt
+            # PhysX reports normal and tangential contact forces separately. Filter against the ground so the
+            # visualizer can sum both components into one world-frame GRF vector for each foot.
+            self.scene.contact_forces.filter_prim_paths_expr = [ROK4_GROUND_COLLISION_PRIM_PATH]
+            self.scene.contact_forces.track_friction_forces = True
 
         # Scene. Use the RoK4 train asset and turn the inherited rough-terrain setup into a flat plane task.
         self.scene.robot = ROK4_TRAIN_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
@@ -188,7 +199,7 @@ class RoK4FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         # Rewards. These weights adapt the inherited velocity-locomotion penalties to RoK4's body and joint names.
         self.rewards.lin_vel_z_l2.weight = -0.2
         self.rewards.ang_vel_xy_l2.weight = -0.05
-        self.rewards.flat_orientation_l2.weight = -1.0
+        self.rewards.flat_orientation_l2.weight = -10.0
         self.rewards.undesired_contacts.weight = -1.0
         self.rewards.undesired_contacts.params["sensor_cfg"].body_names = ["Base_Link", "Upper_Body_Link"]
 
