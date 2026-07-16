@@ -4,11 +4,26 @@
 
 ### Changed
 
+- Removed the unused nominal actuator limits and split the actuator limit scaling into independent torque and velocity
+  factors.
+- Restored the PhysX joint-effort safety limits to the unscaled mechanical maxima while retaining the 90% actuator
+  torque limit for control and reward evaluation.
+- Changed the first actuator-interface experiment to reuse the previous Isaac Lab PD gains before testing the higher
+  Isaac Gym actuator gains.
+- Changed the flat policy interface from joint coordinates to 13 actuator coordinates while preserving the 13D action
+  and 240D observation tensor shapes.
+- Changed torque, velocity, acceleration, limit, and action-smoothness rewards to operate in RoK4 actuator coordinates.
 - Increased the RoK4 flat-orientation penalty weight from `-1.0` to `-10.0` to strengthen upright posture.
 - Increased the torso-yaw deviation penalty weight from `-0.1` to `-1.0` to reduce excessive torso twisting.
 
 ### Added
 
+- Added a dedicated Korean ADAPT control-structure document covering matrix transforms, action/actuator relationships,
+  target and state origins, velocity-target handling, explicit PD flow, and torque limits.
+- Added a configurable RoK4 ADAPT transmission and actuator-space explicit PD model with actuator torque and velocity
+  safety limits.
+- Added actuator-space action processing and proprioceptive observation terms while retaining the existing observation
+  history length and symmetric actor-critic configuration.
 - Added env-0 left/right foot total ground-reaction-force arrows and a live force-magnitude panel to the RoK4 contact
   sensor debug visualization.
 - Recorded training run `2026-07-15_17-28-41` at checkpoint `model_4999.pt` as the experimental `Yunho v1`

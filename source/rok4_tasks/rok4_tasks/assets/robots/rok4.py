@@ -5,8 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import isaaclab.sim as sim_utils
-from isaaclab.actuators import IdealPDActuatorCfg
 from isaaclab.assets import ArticulationCfg
+
+from .rok4_adapt import RoK4AdaptActuatorCfg
 
 ROK4_LAB_ROOT = Path(__file__).resolve().parents[5]
 ROK4_ASSET_DIR = ROK4_LAB_ROOT / "assets" / "rok4_wholebody" / "urdf"
@@ -44,61 +45,110 @@ _ROK4_INIT_JOINT_POS = {
     ".*_Ankle_Roll_Joint": 0.0,
 }
 
-ROK4_KP = _make_joint_dict(
-    [
-        200.0,
-        200.0,
-        200.0,
-        200.0,
-        20.0,
-        20.0,
-        200.0,
-        200.0,
-        200.0,
-        200.0,
-        20.0,
-        20.0,
-        100.0,
-    ]
-)
-"""Joint position gains used by the explicit torque PD actuator."""
+ROK4_ADAPT_LINK_ALPHA = 0.09845
+"""ADAPT reference link length [m]."""
 
-ROK4_KD = _make_joint_dict(
-    [
-        5.0,
-        5.0,
-        5.0,
-        5.0,
-        2.0,
-        2.0,
-        5.0,
-        5.0,
-        5.0,
-        5.0,
-        2.0,
-        2.0,
-        5.0,
-    ]
-)
-"""Joint velocity gains used by the explicit torque PD actuator."""
+ROK4_ADAPT_LINK_BETA = 0.06
+"""ADAPT differential link length [m]."""
 
-ROK4_EFFORT_LIMITS = _make_joint_dict(
-    [
-        150.0,
-        150.0,
-        300.0,
-        480.0,
-        180.0,
-        180.0,
-        150.0,
-        150.0,
-        300.0,
-        480.0,
-        180.0,
-        180.0,
-        150.0,
-    ]
-)
+ROK4_ACTUATOR_KP_VALUES = [
+    200.0,
+    200.0,
+    200.0,
+    200.0,
+    20.0,
+    20.0,
+    200.0,
+    200.0,
+    200.0,
+    200.0,
+    20.0,
+    20.0,
+    100.0,
+]
+ROK4_ACTUATOR_KP = _make_joint_dict(ROK4_ACTUATOR_KP_VALUES)
+"""Previous Isaac Lab baseline gains, applied by the ADAPT actuator-space PD model."""
+
+ROK4_ACTUATOR_KD_VALUES = [
+    5.0,
+    5.0,
+    5.0,
+    5.0,
+    2.0,
+    2.0,
+    5.0,
+    5.0,
+    5.0,
+    5.0,
+    2.0,
+    2.0,
+    5.0,
+]
+ROK4_ACTUATOR_KD = _make_joint_dict(ROK4_ACTUATOR_KD_VALUES)
+"""Previous Isaac Lab baseline damping gains, applied in actuator coordinates."""
+
+ROK4_JOINT_TORQUE_LIMIT_VALUES = [
+    150.0,
+    150.0,
+    300.0,
+    480.0,
+    180.0,
+    180.0,
+    150.0,
+    150.0,
+    300.0,
+    480.0,
+    180.0,
+    180.0,
+    150.0,
+]
+ROK4_JOINT_TORQUE_LIMITS_SIM = _make_joint_dict(ROK4_JOINT_TORQUE_LIMIT_VALUES)
+"""Joint-space PhysX safety limits at the mechanical maxima [N m]."""
+
+ROK4_ACTUATOR_TORQUE_LIMIT_VALUES = [
+    150.0,
+    150.0,
+    150.0,
+    150.0,
+    90.0,
+    90.0,
+    150.0,
+    150.0,
+    150.0,
+    150.0,
+    90.0,
+    90.0,
+    150.0,
+]
+"""Actuator-space mechanical torque maxima before safety factors [N m]."""
+
+ROK4_ACTUATOR_VELOCITY_LIMIT_VALUES = [
+    12.0,
+    12.0,
+    12.0,
+    12.0,
+    15.0,
+    15.0,
+    12.0,
+    12.0,
+    12.0,
+    12.0,
+    15.0,
+    15.0,
+    12.0,
+]
+"""Actuator-space mechanical velocity maxima before safety factors [rad/s]."""
+
+ROK4_ACTUATOR_TORQUE_LIMIT_FACTOR = 0.9
+"""Factor applied to actuator mechanical torque maxima."""
+
+ROK4_ACTUATOR_VELOCITY_LIMIT_FACTOR = 0.9
+"""Factor applied to actuator mechanical velocity maxima."""
+
+# Compatibility aliases only; ROK4_TRAIN_CFG uses the ROK4_ACTUATOR_* names below.
+ROK4_KP = ROK4_ACTUATOR_KP
+ROK4_KD = ROK4_ACTUATOR_KD
+ROK4_EFFORT_LIMITS = _make_joint_dict(ROK4_JOINT_TORQUE_LIMIT_VALUES)
 
 ROK4_ARMATURE = _make_joint_dict(
     [
@@ -154,24 +204,26 @@ ROK4_VISCOUS_FRICTION = _make_joint_dict(
     ]
 )
 
-ROK4_ACTION_SCALE = _make_joint_dict(
-    [
-        0.4,
-        0.5,
-        1.25,
-        1.5,
-        0.75,
-        0.75,
-        0.4,
-        0.5,
-        1.25,
-        1.5,
-        0.75,
-        0.75,
-        0.4,
-    ]
-)
-"""Joint action scale values matching the Isaac Gym RoK4 actuator action ranges."""
+ROK4_ACTUATOR_ACTION_SCALE_VALUES = [
+    0.4,
+    0.5,
+    1.25,
+    1.5,
+    0.75,
+    0.75,
+    0.4,
+    0.5,
+    1.25,
+    1.5,
+    0.75,
+    0.75,
+    0.4,
+]
+ROK4_ACTUATOR_ACTION_SCALE = _make_joint_dict(ROK4_ACTUATOR_ACTION_SCALE_VALUES)
+"""Raw policy action to actuator-position offset scales [rad]."""
+
+# Compatibility alias retained while downstream scripts migrate to the actuator-space name.
+ROK4_ACTION_SCALE = ROK4_ACTUATOR_ACTION_SCALE
 
 
 ROK4_TRAIN_CFG = ArticulationCfg(
@@ -207,14 +259,19 @@ ROK4_TRAIN_CFG = ArticulationCfg(
     ),
     soft_joint_pos_limit_factor=0.95,
     actuators={
-        "body": IdealPDActuatorCfg(
+        "body": RoK4AdaptActuatorCfg(
             joint_names_expr=ROK4_JOINT_ORDER,
-            # With IdealPDActuatorCfg, stiffness/damping are explicit torque-PD gains.
-            # PhysX position-drive stiffness/damping stay disabled for current-control style simulation.
-            effort_limit=ROK4_EFFORT_LIMITS,
-            effort_limit_sim=ROK4_EFFORT_LIMITS,
-            stiffness=ROK4_KP,
-            damping=ROK4_KD,
+            expected_joint_names=ROK4_JOINT_ORDER,
+            link_alpha=ROK4_ADAPT_LINK_ALPHA,
+            link_beta=ROK4_ADAPT_LINK_BETA,
+            actuator_torque_limit=ROK4_ACTUATOR_TORQUE_LIMIT_VALUES,
+            actuator_velocity_limit=ROK4_ACTUATOR_VELOCITY_LIMIT_VALUES,
+            torque_limit_factor=ROK4_ACTUATOR_TORQUE_LIMIT_FACTOR,
+            velocity_limit_factor=ROK4_ACTUATOR_VELOCITY_LIMIT_FACTOR,
+            # PD gains are indexed in actuator coordinates; PhysX joint drives remain disabled.
+            stiffness=ROK4_ACTUATOR_KP,
+            damping=ROK4_ACTUATOR_KD,
+            effort_limit_sim=ROK4_JOINT_TORQUE_LIMITS_SIM,
             armature=ROK4_ARMATURE,
             friction=ROK4_STATIC_FRICTION,
             viscous_friction=ROK4_VISCOUS_FRICTION,

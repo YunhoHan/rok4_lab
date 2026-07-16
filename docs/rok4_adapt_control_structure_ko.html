@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+<title>RoK4 ADAPT Action/Actuator 제어 구조 문서</title>
+<style type="text/css">
+
+/* Minimal style sheet for the HTML output of Docutils.                    */
+/*                                                                         */
+/* :Author: Günter Milde, based on html4css1.css by David Goodger          */
+/* :Id: $Id: minimal.css 8642 2021-03-26 13:51:14Z milde $               */
+/* :Copyright: © 2015 Günter Milde.                                        */
+/* :License: Released under the terms of the `2-Clause BSD license`_,      */
+/*    in short:                                                            */
+/*                                                                         */
+/*    Copying and distribution of this file, with or without modification, */
+/*    are permitted in any medium without royalty provided the copyright   */
+/*    notice and this notice are preserved.                                */
+/*                                                                         */
+/*    This file is offered as-is, without any warranty.                    */
+/*                                                                         */
+/* .. _2-Clause BSD license: http://www.spdx.org/licenses/BSD-2-Clause     */
+
+/* This CSS2.1_ stylesheet defines rules for Docutils elements without    */
+/* HTML equivalent. It is required to make the document semantic visible. */
+/*                                                                        */
+/* .. _CSS2.1: http://www.w3.org/TR/CSS2                                  */
+/* .. _validates: http://jigsaw.w3.org/css-validator/validator$link       */
+
+/* titles */
+p.topic-title,
+p.admonition-title,
+p.system-message-title {
+  font-weight: bold;
+}
+p.sidebar-title,
+p.rubric {
+  font-weight: bold;
+  font-size: larger;
+}
+p.rubric {
+  color: maroon;
+}
+p.subtitle,
+p.section-subtitle,
+p.sidebar-subtitle {
+  font-weight: bold;
+  margin-top: -0.5em;
+}
+h1 + p.subtitle {
+  font-size: 1.6em;
+}
+h2 + p.section-subtitle, a.toc-backref {
+  color: black;
+  text-decoration: none;
+}
+
+/* Warnings, Errors */
+.system-messages h2,
+.system-message-title,
+span.problematic {
+  color: red;
+}
+
+/* Inline Literals */
+.docutils.literal {
+  font-family: monospace;
+  white-space: pre-wrap;
+}
+/* do not wrap at hyphens and similar: */
+.literal > span.pre { white-space: nowrap; }
+
+/* Lists */
+
+/* compact and simple lists: no margin between items */
+.simple  li, .simple  ul, .simple  ol,
+.compact li, .compact ul, .compact ol,
+.simple  > li p, dl.simple  > dd,
+.compact > li p, dl.compact > dd {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+/* Nested Paragraphs */
+p:first-child { margin-top: 0; }
+p:last-child { margin-bottom: 0; }
+td > p, th > p { margin-bottom: 0; }
+
+/* Table of Contents */
+.topic.contents { margin: 0.5em 0; }
+.topic.contents ul.auto-toc {
+  list-style-type: none;
+  padding-left: 1.5em;
+}
+
+/* Enumerated Lists */
+ol.arabic     { list-style: decimal }
+ol.loweralpha { list-style: lower-alpha }
+ol.upperalpha { list-style: upper-alpha }
+ol.lowerroman { list-style: lower-roman }
+ol.upperroman { list-style: upper-roman }
+
+/* Definition Lists and Derivatives */
+dt .classifier { font-style: italic }
+dt .classifier:before {
+  font-style: normal;
+  margin: 0.5em;
+  content: ":";
+}
+/* Field Lists and similar */
+/* bold field name, content starts on the same line */
+dl.field-list > dt,
+dl.option-list > dt,
+dl.docinfo > dt,
+dl.footnote > dt,
+dl.citation > dt {
+  font-weight: bold;
+  clear: left;
+  float: left;
+  margin: 0;
+  padding: 0;
+  padding-right: 0.5em;
+}
+/* Offset for field content (corresponds to the --field-name-limit option) */
+dl.field-list > dd,
+dl.option-list > dd,
+dl.docinfo > dd {
+  margin-left:  9em; /* ca. 14 chars in the test examples, fit all Docinfo fields */
+}
+/* start field-body on a new line after long field names */
+dl.field-list > dd > *:first-child,
+dl.option-list > dd > *:first-child
+{
+  display: inline-block;
+  width: 100%;
+  margin: 0;
+}
+/* field names followed by a colon */
+dl.field-list > dt:after,
+dl.docinfo > dt:after {
+  content: ":";
+}
+
+/* Bibliographic Fields (docinfo) */
+dl.docinfo pre.address {
+  font: inherit;
+  margin: 0.5em 0;
+}
+dl.docinfo > dd.authors > p { margin: 0; }
+
+/* Option Lists */
+dl.option-list > dt { font-weight: normal; }
+span.option { white-space: nowrap; }
+
+/* Footnotes and Citations  */
+dl.footnote.superscript > dd { margin-left: 1em; }
+dl.footnote.brackets > dd { margin-left: 2em; }
+dl.footnote > dt { font-weight: normal; }
+a.footnote-reference.brackets:before,
+dt.label > span.brackets:before { content: "["; }
+a.footnote-reference.brackets:after,
+dt.label > span.brackets:after { content: "]"; }
+a.footnote-reference.superscript,
+dl.footnote.superscript > dt.label {
+  vertical-align: super;
+  font-size: small;
+}
+dt.label > span.fn-backref {
+  margin-left: 0.2em;
+  font-weight: normal;
+}
+dt.label > span.fn-backref > a { font-style: italic; }
+
+/* Alignment */
+.align-left   {
+  text-align: left;
+  margin-right: auto;
+}
+.align-center {
+  clear: both;
+  text-align: center;
+  margin-left: auto;
+  margin-right: auto;
+}
+.align-right  {
+  text-align: right;
+  margin-left: auto;
+}
+.align-top    { vertical-align: top; }
+.align-middle { vertical-align: middle; }
+.align-bottom { vertical-align: bottom; }
+
+/* reset inner alignment in figures and tables */
+figure.align-left, figure.align-right,
+table.align-left, table.align-center, table.align-right {
+  text-align: inherit;
+}
+
+/* Text Blocks */
+blockquote,
+div.topic,
+aside.topic {
+  margin: 1em 2em;
+}
+.sidebar,
+.admonition,
+.system-message {
+  border: thin solid;
+  margin: 1em 2em;
+  padding: 0.5em 1em;
+}
+.sidebar {
+  width: 30%;
+  max-width: 26em;
+  float: right;
+  clear: right;
+}
+div.line-block { display: block; }
+div.line-block div.line-block, pre { margin-left: 2em; }
+
+/* Code line numbers: dropped when copying text from the page */
+pre.code .ln { display: none; }
+pre.code code:before {
+  content: attr(data-lineno); /* …, none) fallback not supported by any browser */
+  color: gray;
+}
+
+/* Tables */
+table {
+  border-collapse: collapse;
+}
+td, th {
+  border: thin solid silver;
+  padding: 0 1ex;
+}
+.borderless td, .borderless th {
+  border: 0;
+  padding: 0;
+  padding-right: 0.5em /* separate table cells */
+}
+
+table > caption {
+  text-align: left;
+  margin-top: 0.2em;
+  margin-bottom: 0.2em;
+}
+table.captionbelow {
+  caption-side: bottom;
+}
+
+/* Document Header and Footer */
+header { border-bottom: 1px solid black; }
+footer { border-top: 1px solid black; }
+
+/* Images are block-level by default in Docutils */
+/* New HTML5 block elements: set display for older browsers */
+img, header, section, footer, aside, nav, main, article, figure, video {
+  display: block;
+}
+/* inline images */
+p img, p video, figure img, figure video {
+  display: inline;
+}
+
+</style>
+<style type="text/css">
+
+/* CSS31_ style sheet for the output of Docutils HTML writers.             */
+/* Rules for easy reading and pre-defined style variants.                  */
+/*                                                                         */
+/* :Author: Günter Milde, based on html4css1.css by David Goodger          */
+/* :Id: $Id: plain.css 8636 2021-03-19 00:23:33Z milde $                                                               */
+/* :Copyright: © 2015 Günter Milde.                                        */
+/* :License: Released under the terms of the `2-Clause BSD license`_,      */
+/*    in short:                                                            */
+/*                                                                         */
+/*    Copying and distribution of this file, with or without modification, */
+/*    are permitted in any medium without royalty provided the copyright   */
+/*    notice and this notice are preserved.                                */
+/*                                                                         */
+/*    This file is offered as-is, without any warranty.                    */
+/*                                                                         */
+/* .. _2-Clause BSD license: http://www.spdx.org/licenses/BSD-2-Clause     */
+/* .. _CSS3: http://www.w3.org/TR/CSS3                                     */
+
+
+/* Document Structure */
+/* ****************** */
+
+/* "page layout" */
+body {
+  margin: 0;
+  background-color: #dbdbdb;
+}
+main, footer, header {
+  line-height:1.3;
+  /* avoid long lines --> better reading */
+  /* optimum is 45…75 characters/line <http://webtypography.net/2.1.2> */
+  /* OTOH: lines should not be too short because of missing hyphenation, */
+  max-width: 50rem;
+  padding: 1px 2%; /* 1px on top avoids grey bar above title (mozilla) */
+  margin: auto;
+}
+main {
+  counter-reset: table figure;
+  background-color: white;
+}
+footer, header {
+  font-size: smaller;
+  padding: 0.5em 2%;
+  border: none;
+}
+
+/* Transitions */
+hr.docutils {
+  width: 80%;
+  margin-top: 1em;
+  margin-bottom: 1em;
+  clear: both;
+}
+
+/* Paragraphs */
+
+/* vertical space (parskip) */
+p, ol, ul, dl, li, dd,
+div.line-block,
+div.topic,
+table {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+p:first-child { margin-top: 0; }
+/* (:last-child is new in CSS 3) */
+p:last-child  { margin-bottom: 0; }
+
+h1, h2, h3, h4, h5, h6,
+dl > dd {
+  margin-bottom: 0.5em;
+}
+
+/* Lists */
+/* ===== */
+
+/* Separate list entries in compound lists */
+dl > dd, ol > li,
+
+/* Definition Lists */
+/* Indent lists nested in definition lists */
+/* (:only-child is new in CSS 3)           */
+dd > ul:only-child, dd > ol:only-child { padding-left: 1em; }
+
+/* Description Lists */
+/* styled like in most dictionaries, encyclopedias etc. */
+dl.description > dt {
+  font-weight: bold;
+  clear: left;
+  float: left;
+  margin: 0;
+  padding: 0;
+  padding-right: 0.5em;
+}
+
+/* Field Lists */
+
+/* example for custom field-name width */
+dl.field-list.narrow > dd {
+  margin-left: 5em;
+}
+/* run-in: start field-body on same line after long field names */
+dl.field-list.run-in > dd p {
+  display: block;
+}
+
+/* Bibliographic Fields */
+
+/* generally, bibliographic fields use special definition list dl.docinfo */
+/* but dedication and abstract are placed into "topic" divs */
+div.abstract p.topic-title {
+  text-align: center;
+}
+div.dedication {
+  margin: 2em 5em;
+  text-align: center;
+  font-style: italic;
+}
+div.dedication p.topic-title {
+  font-style: normal;
+}
+
+/* Text Blocks */
+/* =========== */
+
+/* Literal Blocks */
+pre.literal-block, pre.doctest-block,
+pre.math, pre.code {
+  font-family: monospace;
+}
+
+/* Block Quotes */
+blockquote > table,
+div.topic > table {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+blockquote p.attribution,
+div.topic p.attribution {
+  text-align: right;
+  margin-left: 20%;
+}
+
+/* Tables */
+/* ====== */
+
+/* th { vertical-align: bottom; } */
+
+table tr { text-align: left; }
+
+/* "booktabs" style (no vertical lines) */
+table.booktabs {
+  border: 0;
+  border-top: 2px solid;
+  border-bottom: 2px solid;
+  border-collapse: collapse;
+}
+table.booktabs * {
+  border: 0;
+}
+table.booktabs th {
+  border-bottom: thin solid;
+}
+
+/* numbered tables (counter defined in div.document) */
+table.numbered > caption:before {
+  counter-increment: table;
+  content: "Table " counter(table) ": ";
+  font-weight: bold;
+}
+
+/* Explicit Markup Blocks */
+/* ====================== */
+
+/* Footnotes and Citations */
+/* ----------------------- */
+
+/* line on the left */
+dl.footnote {
+  padding-left: 1ex;
+  border-left: solid;
+  border-left-width: thin;
+}
+
+/* Directives */
+/* ---------- */
+
+/* Body Elements */
+/* ~~~~~~~~~~~~~ */
+
+/* Images and Figures */
+
+/* let content flow to the side of aligned images and figures */
+figure.align-left,
+img.align-left,
+video.align-left,
+object.align-left {
+  clear: left;
+  float: left;
+  margin-right: 1em;
+}
+figure.align-right,
+img.align-right,
+video.align-right,
+object.align-right {
+  clear: right;
+  float: right;
+  margin-left: 1em;
+}
+/* Stop floating sidebars, images and figures */
+h1, h2, h3, h4, footer, header { clear: both; }
+
+/* Numbered figures */
+figure.numbered > figcaption > p:before {
+  counter-increment: figure;
+  content: "Figure " counter(figure) ": ";
+  font-weight: bold;
+}
+
+/* Admonitions and System Messages */
+.caution p.admonition-title,
+.attention p.admonition-title,
+.danger p.admonition-title,
+.error p.admonition-title,
+.warning p.admonition-title,
+div.error {
+  color: red;
+}
+
+/* Sidebar */
+/* Move right. In a layout with fixed margins, */
+/* it can be moved into the margin.            */
+aside.sidebar {
+  width: 30%;
+  max-width: 26em;
+  margin-left: 1em;
+  margin-right: -2%;
+  background-color: #ffffee;
+}
+
+/* Code */
+pre.code { padding: 0.7ex }
+pre.code, code { background-color: #eeeeee }
+/* basic highlighting: for a complete scheme, see */
+/* http://docutils.sourceforge.net/sandbox/stylesheets/ */
+pre.code .comment, code .comment { color: #5C6576 }
+pre.code .keyword, code .keyword { color: #3B0D06; font-weight: bold }
+pre.code .literal.string, code .literal.string { color: #0C5404 }
+pre.code .name.builtin, code .name.builtin { color: #352B84 }
+pre.code .deleted, code .deleted { background-color: #DEB0A1}
+pre.code .inserted, code .inserted { background-color: #A3D289}
+
+/* Math */
+/* styled separately (see math.css for math-output=HTML) */
+
+/* Epigraph           */
+/* Highlights         */
+/* Pull-Quote         */
+/* Compound Paragraph */
+/* Container          */
+
+/* Inline Markup */
+/* ============= */
+
+/* Inline Literals                                          */
+/* possible values: normal, nowrap, pre, pre-wrap, pre-line */
+/*   span.docutils.literal { white-space: pre-wrap; }       */
+
+/* Hyperlink References */
+a { text-decoration: none; }
+
+/* External Targets       */
+/*   span.target.external */
+/* Internal Targets       */
+/*   span.target.internal */
+/* Footnote References    */
+/*   a.footnote-reference */
+/* Citation References    */
+/*   a.citation-reference */
+
+</style>
+</head>
+<body>
+<main id="rok4-adapt-action-actuator">
+<h1 class="title">RoK4 ADAPT Action/Actuator 제어 구조 문서</h1>
+<dl class="docinfo simple">
+<dt>작성일</dt>
+<dd><p>2026-07-16</p>
+</dd>
+<dt>대상 저장소</dt>
+<dd><p><span class="docutils literal">/home/rclab/rok4_lab</span></p>
+</dd>
+<dt>기준 환경</dt>
+<dd><p>Isaac Lab v2.3.2, Isaac Sim 5.1.0, <span class="docutils literal">env_isaaclab</span></p>
+</dd>
+</dl>
+<section id="id1">
+<h2>문서 목적</h2>
+<p>이 문서는 RoK4의 policy action이 ADAPT actuator position target을 거쳐 PhysX joint effort가 되기까지의 전체
+제어 경로를 설명한다. 특히 다음처럼 코드만 보면 혼동하기 쉬운 부분을 구분한다.</p>
+<ul class="simple">
+<li><p><span class="docutils literal">actions.py</span> 와 <span class="docutils literal">rok4_adapt.py</span> 의 관계는 상속이 아니라 runtime 객체 참조다.</p></li>
+<li><p>policy는 actuator torque가 아니라 normalized actuator position offset을 출력한다.</p></li>
+<li><p><span class="docutils literal">actions.py</span> 가 기록하는 <span class="docutils literal">q_target</span> 은 PhysX position drive 명령이 아니라 explicit actuator의 입력이다.</p></li>
+<li><p><span class="docutils literal">compute()</span> 의 <span class="docutils literal">joint_pos</span> 와 <span class="docutils literal">joint_vel</span> 은 action이 아니라 PhysX가 계산한 현재 robot state다.</p></li>
+<li><p>현재 velocity target은 사용되지 않는 변수가 아니라 값이 0인 damping 목표다.</p></li>
+<li><p><span class="docutils literal">control_action.joint_velocities</span> 는 표준 runtime 입력에서는 <span class="docutils literal">None</span> 이 아니라 zero tensor다.</p></li>
+<li><p><span class="docutils literal">compute()</span> 출력에서 position/velocity를 <span class="docutils literal">None</span> 으로 만드는 것은 PhysX drive를 끄기 위한 별도 단계다.</p></li>
+</ul>
+</section>
+<section id="id2">
+<h2>관련 파일과 역할</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>파일</p></th>
+<th class="head"><p>주요 역할</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p><span class="docutils literal">assets/robots/rok4.py</span></p></td>
+<td><p>joint/actuator 순서, ADAPT 링크 길이, gain, action scale, torque/velocity limit과 <span class="docutils literal">ROK4_TRAIN_CFG</span> 정의</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">assets/robots/rok4_adapt.py</span></p></td>
+<td><p>ADAPT 행렬 변환과 actuator-space explicit PD torque 계산</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">velocity/mdp/actions.py</span></p></td>
+<td><p>policy raw action을 <span class="docutils literal">psi_target</span> 과 mapped <span class="docutils literal">q_target</span> 으로 변환</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">velocity/mdp/observations.py</span></p></td>
+<td><p>현재 joint state를 actuator-space observation으로 변환</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">velocity/mdp/rewards.py</span></p></td>
+<td><p>actuator torque/velocity/acceleration, limit, action smoothness reward 계산</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">config/rok4/flat_env_cfg.py</span></p></td>
+<td><p>action/observation/reward term을 task에 조립하고 timing과 weight 설정</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="class">
+<h2>Class 상속과 객체 참조 관계</h2>
+<p><span class="docutils literal">RoK4ActuatorPositionAction</span> 과 <span class="docutils literal">RoK4AdaptActuator</span> 사이에는 Python 상속 관계가 없다. 두 class는 서로 다른
+Isaac Lab base class를 상속하고, action term이 robot asset에 이미 생성된 actuator instance를 찾아 그 안의
+transmission 객체를 참조한다.</p>
+<pre class="code text literal-block"><code>Isaac Lab ActionTerm
+  └─ RoK4ActuatorPositionAction                 [actions.py]
+
+Isaac Lab IdealPDActuator
+  └─ RoK4AdaptActuator                          [rok4_adapt.py]
+       └─ contains RoK4AdaptTransmission
+
+Runtime reference
+  RoK4ActuatorPositionAction.__init__()
+    -&gt; actuator = robot.actuators[&quot;body&quot;]
+    -&gt; type check: isinstance(actuator, RoK4AdaptActuator)
+    -&gt; self._transmission = actuator.transmission</code></pre>
+<p>따라서 action과 actuator는 같은 <span class="docutils literal">RoK4AdaptTransmission</span> instance를 공유한다. Action target과 actuator PD가
+서로 다른 ADAPT 행렬을 별도로 만들지 않으므로 링크 길이나 행렬 정의가 어긋나지 않는다.</p>
+</section>
+<section id="id3">
+<h2>좌표 순서와 변환 대상</h2>
+<p>모든 policy/ADAPT 계산은 <span class="docutils literal">rok4.py</span> 의 <span class="docutils literal">ROK4_JOINT_ORDER</span> 를 기준으로 한다.</p>
+<pre class="code text literal-block"><code>index 0   L_Hip_Yaw_Joint       direct
+index 1   L_Hip_Roll_Joint      direct
+index 2   L_Hip_Pitch_Joint     ┐
+index 3   L_Knee_Pitch_Joint    │ left ADAPT block
+index 4   L_Ankle_Pitch_Joint   │
+index 5   L_Ankle_Roll_Joint    ┘
+
+index 6   R_Hip_Yaw_Joint       direct
+index 7   R_Hip_Roll_Joint      direct
+index 8   R_Hip_Pitch_Joint     ┐
+index 9   R_Knee_Pitch_Joint    │ right ADAPT block
+index 10  R_Ankle_Pitch_Joint   │
+index 11  R_Ankle_Roll_Joint    ┘
+
+index 12  Torso_Yaw_Joint       direct</code></pre>
+<p><span class="docutils literal">RoK4AdaptTransmission.COUPLED_SLICES</span> 는 <span class="docutils literal">slice(2, 6)</span> 과 <span class="docutils literal">slice(8, 12)</span> 이다. <span class="docutils literal">_map_coupled()</span> 는
+13차원 입력을 먼저 clone한 뒤 이 두 4차원 구간만 행렬 변환한다. Index <span class="docutils literal">0,1,6,7,12</span> 는 clone된 값이 그대로
+남으므로 direct-drive coordinate로 통과한다.</p>
+</section>
+<section id="adapt-position">
+<h2>ADAPT position 행렬</h2>
+<p>한쪽 다리의 coupled coordinate를 column vector로 표현하면 다음 관계를 사용한다.</p>
+<pre class="code text literal-block"><code>q = J psi
+psi = J^-1 q
+
+J = [  0.5,    0.5,      0,       0 ]
+    [  0.5,   -0.5,      0,       0 ]
+    [ -0.5,    0.5,    0.5,     0.5 ]
+    [    0,      0, -beta/alpha, beta/alpha ]</code></pre>
+<p>현재 <span class="docutils literal">alpha=0.09845 m</span>, <span class="docutils literal">beta=0.06 m</span> 이며 <span class="docutils literal">ratio=beta/alpha</span> 다. PyTorch state는
+<span class="docutils literal">[num_envs, 13]</span> 의 row-vector batch이므로 column-vector 수식과 transpose 방향이 달라진다.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>함수</p></th>
+<th class="head"><p>Column-vector 수식</p></th>
+<th class="head"><p>코드의 row-vector 연산</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p><span class="docutils literal">actuator_to_joint_position</span></p></td>
+<td><p><span class="docutils literal">q = J psi</span></p></td>
+<td><p><span class="docutils literal">psi_row &#64; J.T</span></p></td>
+</tr>
+<tr><td><p><span class="docutils literal">joint_to_actuator_position</span></p></td>
+<td><p><span class="docutils literal">psi = <span class="pre">J^-1</span> q</span></p></td>
+<td><p><span class="docutils literal">q_row &#64; <span class="pre">J^-1.T</span></span></p></td>
+</tr>
+</tbody>
+</table>
+<p><span class="docutils literal">joint_to_actuator_position(values)</span> 의 실제 helper 동작을 반복문 두 번으로 펼치면 다음과 같다.</p>
+<pre class="code python literal-block"><code><span class="name">mapped</span> <span class="operator">=</span> <span class="name">values</span><span class="operator">.</span><span class="name">clone</span><span class="punctuation">()</span>
+<span class="name">mapped</span><span class="punctuation">[</span><span class="operator">...</span><span class="punctuation">,</span> <span class="literal number integer">2</span><span class="punctuation">:</span><span class="literal number integer">6</span><span class="punctuation">]</span> <span class="operator">=</span> <span class="name">values</span><span class="punctuation">[</span><span class="operator">...</span><span class="punctuation">,</span> <span class="literal number integer">2</span><span class="punctuation">:</span><span class="literal number integer">6</span><span class="punctuation">]</span> <span class="operator">&#64;</span> <span class="name">q_j_psi_inv</span><span class="operator">.</span><span class="name">T</span>
+<span class="name">mapped</span><span class="punctuation">[</span><span class="operator">...</span><span class="punctuation">,</span> <span class="literal number integer">8</span><span class="punctuation">:</span><span class="literal number integer">12</span><span class="punctuation">]</span> <span class="operator">=</span> <span class="name">values</span><span class="punctuation">[</span><span class="operator">...</span><span class="punctuation">,</span> <span class="literal number integer">8</span><span class="punctuation">:</span><span class="literal number integer">12</span><span class="punctuation">]</span> <span class="operator">&#64;</span> <span class="name">q_j_psi_inv</span><span class="operator">.</span><span class="name">T</span>
+<span class="keyword">return</span> <span class="name">mapped</span></code></pre>
+<p>한쪽 다리 joint block을 <span class="docutils literal">[q_hp, q_knee, q_ap, q_ar]</span> 로 놓으면 actuator position은 다음과 같다.</p>
+<pre class="code text literal-block"><code>psi_1 = q_hp + q_knee
+psi_2 = q_hp - q_knee
+psi_3 = q_knee + q_ap - alpha/(2 beta) * q_ar
+psi_4 = q_knee + q_ap + alpha/(2 beta) * q_ar</code></pre>
+<p>현재 <span class="docutils literal"><span class="pre">alpha/(2</span> beta)</span> 는 약 <span class="docutils literal">0.8204</span> 다. 따라서 ADAPT block 안에서는 joint 하나가 actuator 하나에만
+대응하지 않고 여러 actuator coordinate에 함께 반영된다.</p>
+</section>
+<section id="adapt-torque">
+<h2>ADAPT torque 행렬</h2>
+<p>Position과 torque는 같은 방향의 행렬을 사용하지 않는다. Virtual-work 관계로 다음 식을 사용한다.</p>
+<pre class="code text literal-block"><code>tau_psi = J.T tau_q
+tau_q   = J^-T tau_psi</code></pre>
+<p>Row-vector batch 코드에서는 다음과 같다.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>함수</p></th>
+<th class="head"><p>물리 수식</p></th>
+<th class="head"><p>코드 연산</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p><span class="docutils literal">actuator_to_joint_torque</span></p></td>
+<td><p><span class="docutils literal">tau_q = <span class="pre">J^-T</span> tau_psi</span></p></td>
+<td><p><span class="docutils literal">tau_psi_row &#64; <span class="pre">J^-1</span></span></p></td>
+</tr>
+<tr><td><p><span class="docutils literal">joint_to_actuator_torque</span></p></td>
+<td><p><span class="docutils literal">tau_psi = J.T tau_q</span></p></td>
+<td><p><span class="docutils literal">tau_q_row &#64; J</span></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="policy-step-action">
+<h2>Policy step의 action 처리</h2>
+<p>Policy는 100 Hz로 13차원 raw actuator action을 출력한다. <span class="docutils literal">process_actions()</span> 는 policy step마다 한 번 다음
+순서로 target을 준비한다.</p>
+<pre class="code text literal-block"><code>policy output [num_envs, 13]
+  -&gt; raw_action을 [-1, 1]로 clip
+  -&gt; actuator_offset = raw_action * ROK4_ACTUATOR_ACTION_SCALE
+  -&gt; psi_default = J^-1 q_default
+  -&gt; psi_target = psi_default + actuator_offset
+  -&gt; q_target = J psi_target
+  -&gt; processed_actions에 q_target 보관</code></pre>
+<p><span class="docutils literal">apply_actions()</span> 는 이 <span class="docutils literal">q_target</span> 을 <span class="docutils literal">Articulation.set_joint_position_target()</span> 으로 기록한다. 이 함수는
+즉시 PhysX position drive를 실행하지 않고 <span class="docutils literal">ArticulationData.joint_pos_target</span> buffer만 갱신한다.</p>
+</section>
+<section id="adapt">
+<h2>학습 시작 시 ADAPT 진단 출력</h2>
+<p><span class="docutils literal">RoK4ActuatorPositionAction</span> 은 초기화할 때 전체 environment를 반복 출력하지 않고 첫 environment의 공통 default
+pose를 사용해 한 번 진단한다. 먼저 <span class="docutils literal">q_J_psi</span>, <span class="docutils literal">q_J_psi_inv</span>, <span class="docutils literal">q_J_psi_T</span>, <span class="docutils literal">q_J_psi_invT</span> 네 행렬을
+출력하고 다음 최대 오차를 검사한다. Isaac Lab RSL-RL 학습은 CUDA TF32 행렬곱을 활성화하므로 작은 <span class="docutils literal">4x4</span>
+FP32 검증 행렬곱에도 약 <span class="docutils literal"><span class="pre">2.44e-4</span></span> 의 반올림 오차가 생길 수 있다. 이는 ADAPT 행렬 정의 오류가 아니므로
+행렬의 구조적 관계와 기준 왕복 변환은 CPU FP64로 검사한다.</p>
+<pre class="code text literal-block"><code>max|J &#64; J^-1 - I|
+max|J^-1 &#64; J - I|
+max|stored J^T - J^T|
+max|stored J^-T - J^-T|
+max|J(J^-1 q_default) - q_default|  (CPU FP64 reference)
+max|psi_default runtime - psi_default FP64|
+max|q_default runtime round trip - q_default|</code></pre>
+<p>CPU FP64 구조 검사는 <span class="docutils literal"><span class="pre">1e-5</span></span> 를, 실제 CUDA FP32/TF32 mapping과 왕복 변환은 <span class="docutils literal"><span class="pre">5e-4</span> rad</span> 를 넘으면 학습 전에
+<span class="docutils literal">RuntimeError</span> 를 발생시킨다. 검사를 통과하면 canonical 13-coordinate 순서로
+<span class="docutils literal">q_default (13x1) <span class="pre">-&gt;</span> psi_default (13x1)</span> 변환 표를 출력한다. 따라서 <span class="docutils literal">_ROK4_INIT_JOINT_POS</span> 가 올바른
+순서와 ADAPT 행렬로 <span class="docutils literal">_default_actuator_pos</span> 에 들어갔는지 training log에서 바로 확인할 수 있다.</p>
+</section>
+<section id="q-target">
+<h2><span class="docutils literal">q_target</span> 을 만드는 이유</h2>
+<p>Policy action은 actuator 좌표인데도 <span class="docutils literal">actions.py</span> 가 다시 <span class="docutils literal">q_target</span> 을 만드는 이유는 Isaac Lab actuator
+interface가 articulation joint target buffer를 통해 custom actuator에 target을 전달하기 때문이다.</p>
+<pre class="code text literal-block"><code>actions.py
+  psi_target -&gt; q_target
+    -&gt; joint_pos_target buffer
+    -&gt; Articulation._apply_actuator_model()
+    -&gt; RoK4AdaptActuator.compute()
+    -&gt; q_target -&gt; psi_target</code></pre>
+<p>겉으로는 왕복 변환처럼 보이지만 선형이고 invertible한 같은 <span class="docutils literal">J</span> 를 공유하므로 원래 <span class="docutils literal">psi_target</span> 이 복원된다.
+이 <span class="docutils literal">q_target</span> 은 explicit actuator 입력이며 PhysX joint position drive에 직접 전달되지 않는다.</p>
+</section>
+<section id="physics-step-actuator">
+<h2>Physics step의 actuator 계산</h2>
+<p>Physics는 500 Hz로 실행되고 <span class="docutils literal">decimation=5</span> 이므로 하나의 policy target을 유지한 채 actuator PD를 5번 다시
+계산한다. 각 physics step에서 Isaac Lab <span class="docutils literal">Articulation._apply_actuator_model()</span> 이 target buffer와 현재 state를
+모아 <span class="docutils literal">RoK4AdaptActuator.compute()</span> 를 호출한다.</p>
+<pre class="code text literal-block"><code>Articulation target buffers
+  joint_pos_target
+  joint_vel_target
+  joint_effort_target
+           +
+Current PhysX state
+  joint_pos
+  joint_vel
+           |
+           v
+RoK4AdaptActuator.compute()
+  -&gt; canonical ADAPT 순서로 reorder
+  -&gt; q, q_target       -&gt; psi, psi_target
+  -&gt; q_dot             -&gt; psi_dot
+  -&gt; q_dot_target      -&gt; psi_dot_target
+  -&gt; tau_psi_requested = Kp(psi_target-psi) + Kd(psi_dot_target-psi_dot) + tau_ff
+  -&gt; actuator torque limit으로 tau_psi_applied clip
+  -&gt; tau_q = J^-T tau_psi_applied
+  -&gt; USD model order로 복원
+  -&gt; PhysX joint effort 반환</code></pre>
+</section>
+<section id="compute">
+<h2><span class="docutils literal">compute()</span> 입력 변수의 출처</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p><span class="docutils literal">compute()</span> 입력</p></th>
+<th class="head"><p>현재 RoK4 task의 값</p></th>
+<th class="head"><p>출처와 의미</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p><span class="docutils literal">control_action.joint_positions</span></p></td>
+<td><p><span class="docutils literal">q_target</span> tensor</p></td>
+<td><p><span class="docutils literal">actions.py</span> 가 <span class="docutils literal">joint_pos_target</span> buffer에 기록한 목표 joint position</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">control_action.joint_velocities</span></p></td>
+<td><p>zero tensor</p></td>
+<td><p>Isaac Lab이 초기화한 <span class="docutils literal">joint_vel_target</span> buffer; 현재 action term은 이 buffer를 수정하지 않음</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">control_action.joint_efforts</span></p></td>
+<td><p>zero tensor</p></td>
+<td><p>Isaac Lab이 초기화한 feedforward <span class="docutils literal">joint_effort_target</span> buffer</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">joint_pos</span></p></td>
+<td><p>현재 <span class="docutils literal">q</span> tensor</p></td>
+<td><p>PhysX simulation의 현재 joint position state; action 값이 아님</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">joint_vel</span></p></td>
+<td><p>현재 <span class="docutils literal">q_dot</span> tensor</p></td>
+<td><p>PhysX simulation의 현재 joint velocity state; action 값이 아님</p></td>
+</tr>
+</tbody>
+</table>
+<p>모든 tensor의 마지막 차원은 actuator group의 13개 joint이며 environment batch가 앞에 붙는다.</p>
+</section>
+<section id="velocity-target-damping">
+<h2>현재 velocity target과 damping</h2>
+<p>현재 task는 position action만 사용하므로 nonzero velocity target을 명령하지 않는다. 그러나
+<span class="docutils literal">actuator_vel_target</span> 변수가 사용되지 않는 것은 아니다. 실제 값이 0인 목표 속도로 damping 항에 사용된다.</p>
+<pre class="code text literal-block"><code>joint_vel_target = 0
+  -&gt; actuator_vel_target = J^-1 * 0 = 0
+
+tau_psi
+  = Kp(psi_target - psi)
+    + Kd(actuator_vel_target - actuator_vel)
+    + tau_ff
+
+  = Kp(psi_target - psi) - Kd psi_dot</code></pre>
+<p>따라서 현재 <span class="docutils literal">actuator_vel_target</span> 은 zero-velocity damping reference다. 향후 별도의 velocity target을 쓰면 같은
+코드가 nonzero target을 처리할 수 있다.</p>
+</section>
+<section id="none">
+<h2><span class="docutils literal">None</span> 분기의 실제 의미</h2>
+<p>Isaac Lab <span class="docutils literal">Articulation</span> 은 초기화할 때 position, velocity, effort target buffer를 모두 zero tensor로 할당한다.
+따라서 현재 표준 RoK4 runtime에서 <span class="docutils literal">compute()</span> 로 들어오는 <span class="docutils literal">control_action.joint_velocities</span> 와
+<span class="docutils literal">control_action.joint_efforts</span> 는 <span class="docutils literal">None</span> 이 아니라 zero tensor다.</p>
+<pre class="code python literal-block"><code><span class="keyword">if</span> <span class="name">control_action</span><span class="operator">.</span><span class="name">joint_velocities</span> <span class="operator word">is</span> <span class="keyword constant">None</span><span class="punctuation">:</span>
+    <span class="name">actuator_vel_target</span> <span class="operator">=</span> <span class="name">torch</span><span class="operator">.</span><span class="name">zeros_like</span><span class="punctuation">(</span><span class="name">actuator_vel</span><span class="punctuation">)</span>
+<span class="keyword">else</span><span class="punctuation">:</span>
+    <span class="comment single"># 현재 runtime은 이 경로이며 입력 tensor 값이 모두 0이다.</span>
+    <span class="name">actuator_vel_target</span> <span class="operator">=</span> <span class="name">joint_to_actuator_velocity</span><span class="punctuation">(</span><span class="name">joint_vel_target</span><span class="punctuation">)</span></code></pre>
+<p><span class="docutils literal">None</span> 입력 분기는 custom actuator를 별도로 호출하거나 target이 생략된 <span class="docutils literal">ArticulationActions</span> 를 받을 때를
+위한 방어 코드다. 현재 ManagerBasedEnv의 정상 호출에서는 실행되지 않는다.</p>
+<p>반면 <span class="docutils literal">compute()</span> 마지막의 다음 코드는 출력 단계의 의미가 다르다.</p>
+<pre class="code python literal-block"><code><span class="name">control_action</span><span class="operator">.</span><span class="name">joint_efforts</span> <span class="operator">=</span> <span class="name">applied_joint_effort</span>
+<span class="name">control_action</span><span class="operator">.</span><span class="name">joint_positions</span> <span class="operator">=</span> <span class="keyword constant">None</span>
+<span class="name">control_action</span><span class="operator">.</span><span class="name">joint_velocities</span> <span class="operator">=</span> <span class="keyword constant">None</span></code></pre>
+<p>입력 target을 계산에 사용한 뒤 position/velocity를 <span class="docutils literal">None</span> 으로 바꾸어 Isaac Lab이 PhysX position/velocity
+target buffer에 쓰지 못하게 한다. 최종적으로 PhysX에는 <span class="docutils literal">joint_efforts=tau_q</span> 만 전달된다. 다음 physics step에는
+Articulation이 원래 target buffer에서 새로운 <span class="docutils literal">ArticulationActions</span> 를 만들기 때문에 velocity 입력은 다시 zero
+tensor이며 이전 출력의 <span class="docutils literal">None</span> 이 target buffer에 저장되는 것은 아니다.</p>
+</section>
+<section id="actuator-pd-output">
+<h2>Actuator PD의 실제 수식과 output</h2>
+<p>현재 position-only action에서 실제 actuator PD는 다음과 같다.</p>
+<pre class="code text literal-block"><code>tau_psi_requested = Kp(psi_target - psi) - Kd psi_dot
+tau_psi_applied   = clip(tau_psi_requested, -tau_limit, +tau_limit)
+tau_q_applied     = J^-T tau_psi_applied</code></pre>
+<p>Custom actuator는 두 종류의 torque를 별도로 보관한다.</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>Buffer</p></th>
+<th class="head"><p>의미</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p><span class="docutils literal">computed_actuator_effort</span></p></td>
+<td><p>clip 전 actuator torque 요청값; torque-limit reward가 saturation 요구를 검사할 때 사용</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">applied_actuator_effort</span></p></td>
+<td><p>actuator torque limit으로 clip된 실제 actuator torque; torque L2 reward에 사용</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">computed_effort</span></p></td>
+<td><p>clip 전 actuator torque를 joint coordinate로 변환한 값</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">applied_effort</span></p></td>
+<td><p>clip된 actuator torque를 joint coordinate로 변환하여 PhysX에 전달하는 값</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="torque-velocity-limit">
+<h2>Torque와 velocity limit</h2>
+<p>Actuator와 joint limit은 역할이 다르다.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>Limit</p></th>
+<th class="head"><p>현재 설정</p></th>
+<th class="head"><p>역할</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p>Actuator torque limit</p></td>
+<td><p>mechanical maximum의 <span class="docutils literal">0.9</span></p></td>
+<td><p><span class="docutils literal">tau_psi</span> 실제 clip과 clip 전 초과 요청 reward 기준</p></td>
+</tr>
+<tr><td><p>Actuator velocity limit</p></td>
+<td><p>mechanical maximum의 <span class="docutils literal">0.9</span></p></td>
+<td><p><span class="docutils literal">abs(psi_dot)</span> 초과 reward 기준; state를 강제로 clip하지 않음</p></td>
+</tr>
+<tr><td><p>PhysX joint effort limit</p></td>
+<td><p>factor 없는 joint mechanical maximum</p></td>
+<td><p>ADAPT 변환된 <span class="docutils literal">tau_q</span> 에 대한 최종 solver 안전 상한</p></td>
+</tr>
+</tbody>
+</table>
+<p>PhysX joint effort limit은 actuator torque에 0.9를 다시 곱하는 계산이 아니다. <span class="docutils literal">tau_q</span> 가 상한 안에 있으면
+그대로 적용하고 상한을 넘을 때만 PhysX가 clip한다.</p>
+</section>
+<section id="observation-reward-adapt">
+<h2>Observation과 reward에서 ADAPT 사용</h2>
+<p><span class="docutils literal">observations.py</span> 는 현재 joint state를 같은 transmission으로 변환한다.</p>
+<pre class="code text literal-block"><code>actuator_pos_rel = J^-1 (q - q_default)
+actuator_vel_rel = J^-1 (q_dot - q_dot_default)</code></pre>
+<p><span class="docutils literal">rewards.py</span> 는 custom actuator buffer와 transmission을 사용한다.</p>
+<pre class="code text literal-block"><code>actuator_torques_l2       -&gt; applied_actuator_effort
+actuator_torque_limits    -&gt; computed_actuator_effort의 limit 초과량
+actuator_vel_l2           -&gt; J^-1 q_dot
+actuator_velocity_limits  -&gt; J^-1 q_dot의 velocity limit 초과량
+actuator_acc_l2           -&gt; J^-1 q_ddot
+joint_action_target_pos_limits -&gt; mapped q_target의 joint soft-limit 초과량</code></pre>
+</section>
+<section id="policy-step">
+<h2>한 policy step의 전체 요약</h2>
+<pre class="code text literal-block"><code>[100 Hz policy]
+observation(q, q_dot -&gt; psi, psi_dot)
+  -&gt; network raw actuator action
+  -&gt; clip/scale
+  -&gt; psi_target
+  -&gt; q_target
+  -&gt; Articulation joint_pos_target buffer
+
+[500 Hz physics, 위 target으로 5회 반복]
+current q, q_dot + q_target + zero velocity/effort targets
+  -&gt; RoK4AdaptActuator.compute()
+  -&gt; psi, psi_dot, psi_target
+  -&gt; actuator PD tau_psi
+  -&gt; actuator torque clip
+  -&gt; joint torque tau_q
+  -&gt; PhysX joint effort</code></pre>
+</section>
+<section id="id4">
+<h2>검증 포인트</h2>
+<ul class="simple">
+<li><p>Action Manager 출력 dimension은 13이어야 한다.</p></li>
+<li><p>Policy observation은 5-step history를 포함해 240 dimension이어야 한다.</p></li>
+<li><p><span class="docutils literal">actions.py</span> 와 actuator가 같은 transmission instance를 사용해야 한다.</p></li>
+<li><p><span class="docutils literal">control_action.joint_positions</span> 는 runtime에서 <span class="docutils literal">None</span> 이면 안 된다.</p></li>
+<li><p>현재 <span class="docutils literal">joint_vel_target</span> 과 <span class="docutils literal">joint_effort_target</span> 은 zero tensor여야 한다.</p></li>
+<li><p><span class="docutils literal">compute()</span> 출력은 joint effort만 남기고 position/velocity target은 <span class="docutils literal">None</span> 이어야 한다.</p></li>
+<li><p>Joint PhysX drive stiffness/damping은 사용하지 않고 explicit actuator torque가 적용되어야 한다.</p></li>
+<li><p>Joint PhysX effort limit은 100% mechanical maximum, actuator torque clip은 90%여야 한다.</p></li>
+</ul>
+</section>
+<section id="isaac-lab">
+<h2>Isaac Lab 원본과의 경계</h2>
+<p>이 구현은 Isaac Lab 원본 source를 수정하지 않는다. RoK4 로컬 class가 Isaac Lab public actuator/action interface를
+상속하고, Isaac Lab <span class="docutils literal">Articulation</span> 이 제공하는 target/state 전달 경로를 그대로 사용한다. 변경 대상은 모두
+<span class="docutils literal">/home/rclab/rok4_lab</span> 내부다.</p>
+</section>
+</main>
+</body>
+</html>

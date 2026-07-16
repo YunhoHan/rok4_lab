@@ -19,6 +19,52 @@ assets/                    Local asset install location, ignored by git
 docs/                      RST/HTML/PDF project notes
 ```
 
+Core inheritance and configuration relationships:
+
+```text
+Isaac Lab
+  ├─ IdealPDActuator
+  │    └─ RoK4AdaptActuator
+  │         ├─ contains RoK4AdaptTransmission
+  │         └─ overrides actuator-space compute()
+  ├─ IdealPDActuatorCfg
+  │    └─ RoK4AdaptActuatorCfg
+  │         └─ instantiated by rok4.py inside ROK4_TRAIN_CFG
+  ├─ ActionTerm
+  │    └─ RoK4ActuatorPositionAction
+  └─ LocomotionVelocityRoughEnvCfg
+       └─ RoK4FlatEnvCfg
+            ├─ RoK4ActionsCfg
+            ├─ RoK4ObservationsCfg
+            ├─ RoK4RewardsCfg
+            └─ ROK4_TRAIN_CFG
+
+RSL-RL
+  ├─ PPO -> RoK4PPO
+  └─ OnPolicyRunner -> RoK4OnPolicyRunner
+
+RoK4 local MDP
+  ├─ actions.py       raw actuator action -> psi_target -> q_target
+  ├─ observations.py  joint state -> actuator-space observation
+  └─ rewards.py       actuator-space penalties and action smoothness
+
+Debug and verification
+  ├─ ContactSensor -> RoK4ContactForceVisualizer
+  ├─ check_rok4_zero.py
+  ├─ check_rok4_random.py
+  └─ check_rok4_joint_monkey.py
+```
+
+`rok4.py` does not inherit from `rok4_adapt.py`. It imports `RoK4AdaptActuatorCfg`, fills it with the concrete RoK4
+link lengths, gains, and limits, and stores that config object in `ROK4_TRAIN_CFG`.
+
+`RoK4ObservationsCfg` is a newly defined RoK4 config container rather than a subclass of the parent task's
+`ObservationsCfg`. Its nested `PolicyCfg` inherits `ObservationGroupCfg`, while `RoK4FlatEnvCfg.observations` replaces
+the inherited observation-config object as a whole. The resulting frame has 48 values and its five-frame flattened
+history produces the 240-value policy input. Its actuator state terms use `J^-1 (q - q_default)` position and
+`J^-1 (q_dot - q_dot_default)` velocity without a manual observation scale, matching the parent task's relative-state
+naming and centering convention in actuator coordinates.
+
 ## Documentation
 
 Project notes are kept in `docs/` as editable RST/HTML files and generated PDFs:
@@ -27,6 +73,7 @@ Project notes are kept in `docs/` as editable RST/HTML files and generated PDFs:
 | --- | --- |
 | `docs/_build/pdf/rok4_flat_task_structure_ko.pdf` | RoK4 flat task file structure, task registration flow, DR module, and config relationships. |
 | `docs/_build/pdf/rok4_reward_structure_ko.pdf` | RoK4 reward terms, inherited reward settings, reward/DR separation, and reward function meanings. |
+| `docs/_build/pdf/rok4_adapt_control_structure_ko.pdf` | ADAPT matrices, action/actuator object relationships, target/state origins, explicit PD call flow, and torque limits. |
 
 After downloading the assets, the expected local layout is:
 
@@ -120,7 +167,7 @@ Mode-specific options:
 | `check_rok4_zero.py` | `--mode passive` | Sends zero joint effort commands and does not hold a target pose. |
 | `check_rok4_zero.py` | `--interactive_drag` | Forces CPU PhysX so Isaac Sim Shift + left mouse drag can apply link forces without GPU Direct API errors. |
 | `check_rok4_joint_monkey.py` | `--mode teleport` | Writes joint state directly. Use this for visual joint-axis and limit inspection. |
-| `check_rok4_joint_monkey.py` | `--mode torque_pd` | Sends changing position targets through `IdealPDActuatorCfg`; use this to inspect torque-PD tracking. |
+| `check_rok4_joint_monkey.py` | `--mode torque_pd` | Sends changing joint targets through the ADAPT actuator-space torque-PD model. |
 | `check_rok4_joint_monkey.py` | `--motion limits` | Sweeps each selected joint through its exact joint position limits. |
 | `check_rok4_joint_monkey.py` | `--motion amplitude` | Sweeps around `--center` or the default pose by `--amplitude`. |
 | `check_rok4_joint_monkey.py` | `--joint all` | Sweeps all RoK4 actuated joints in order. This is the default. |
@@ -172,15 +219,28 @@ Small sinusoidal actuator check:
 
 ## Control Notes
 
-RoK4 uses `IdealPDActuatorCfg` in `source/rok4_tasks/rok4_tasks/assets/robots/rok4.py`.
+RoK4 uses the local `RoK4AdaptActuatorCfg` explicit actuator in
+`source/rok4_tasks/rok4_tasks/assets/robots/rok4_adapt.py`. The configurable link lengths are
+`link_alpha=0.09845 m` and `link_beta=0.06 m`.
 
-For this explicit actuator, `stiffness` and `damping` are torque-PD gains (`Kp`, `Kd`), not PhysX position-drive stiffness and damping. Isaac Lab computes:
+For each leg's coupled hip-pitch through ankle-roll block, actuator and joint coordinates satisfy:
 
 ```text
-tau = Kp * (q_des - q) + Kd * (qd_des - qd) + tau_ff
+q = J * psi
+psi = inverse(J) * q
+tau_psi = Kp * (psi_des - psi) + Kd * (psi_dot_des - psi_dot)
+tau_q = inverse(J).T * tau_psi
 ```
 
-The resulting torque is clipped by the configured effort limits and sent to PhysX as joint actuation force.
+Hip yaw, hip roll, and torso yaw pass through directly. Torque is clipped in actuator coordinates before it is mapped
+to joint effort and sent to PhysX. Isaac Lab's PhysX joint drives remain disabled, so a second joint-space PD loop is
+not added. The custom actuator also reorders between USD storage order and the canonical policy order
+`[left leg, right leg, torso]` internally.
+
+`actions.py` writes `q_target` into Isaac Lab's joint-position-target buffer because that buffer is the input interface
+to the explicit actuator model. It is not sent directly to a PhysX position drive. During each simulation step,
+`RoK4AdaptActuator.compute()` reads `q_target` and the current joint state, converts them to actuator coordinates,
+computes and clips `tau_psi`, maps it to `tau_q`, clears the position target, and returns only joint effort to PhysX.
 
 Self-collision is enabled in the RoK4 articulation config through `enabled_self_collisions=True`.
 
@@ -220,8 +280,8 @@ base linear velocity:
   base_ang_vel
   projected_gravity
   velocity_commands
-  joint_pos
-  joint_vel
+  actuator_pos relative to default actuator pose
+  actuator_vel
   last_action
 ```
 
@@ -237,36 +297,63 @@ Action processing follows this pipeline:
 
 ```text
 policy output
-  -> clip to [-1, 1] through RslRlVecEnvWrapper clip_actions = 1.0
-  -> q_target = default_joint_pos + clipped_raw_action * ROK4_ACTION_SCALE
-  -> explicit torque-PD actuator
+  -> clip raw actuator action to [-1, 1]
+  -> actuator_offset = clipped_raw_action * ROK4_ACTUATOR_ACTION_SCALE
+  -> psi_default = inverse(J) * q_default
+  -> psi_target = psi_default + actuator_offset
+  -> q_target = J * psi_target
+  -> actuator-space explicit torque-PD
+  -> clip tau_psi at 90% actuator torque limits
+  -> tau_q = inverse(J).T * tau_psi
+  -> PhysX joint effort, guarded by the unscaled mechanical joint-torque limits
 ```
+
+At environment startup, the action term prints `J`, `J^-1`, `J^T`, and `J^-T`, validates their inverse/transpose
+relations and the reference default-pose round trip in CPU FP64 to `1e-5`, and prints a 13-row
+`q_default -> psi_default` conversion table. The actual CUDA FP32/TF32 default-pose mapping and round trip are checked
+separately to `5e-4` rad so Isaac Lab's training-time TF32 mode does not cause a false matrix-validation failure. This
+diagnostic is emitted once for the shared action term rather than once per environment.
 
 The `last_action` observation term stores the clipped raw policy action, not the scaled joint target. When an exported
 ONNX/TorchScript policy is called outside Isaac Lab train/play, clamp the policy output to `[-1, 1]` before applying
-`ROK4_ACTION_SCALE` and before saving it as the next `last_action`.
+`ROK4_ACTUATOR_ACTION_SCALE` and before saving it as the next `last_action`.
 
 The action smoothness rewards use scaled action-offset differences. In other words, `action_rate_l2` and
-`second_action_rate_l2` penalize changes in `clipped_raw_action * ROK4_ACTION_SCALE`, while the observation still stores
-the unscaled clipped raw action.
+`second_action_rate_l2` penalize changes in `clipped_raw_action * ROK4_ACTUATOR_ACTION_SCALE`, while the observation
+still stores the unscaled clipped raw actuator action.
 
-The torque and joint-velocity penalties also match the previous Isaac Gym RoK4 weighting: all 13 joints contribute,
-Hip Pitch and Knee Pitch indices `[2, 3, 8, 9]` use a `0.5` multiplier, `dof_torques_l2` uses weight `-1.0e-5`, and
-`joint_vel_l2` uses weight `-1.0e-4`. The Lab implementation reads the explicit actuator's applied joint torque and
-the articulation joint velocity. The weighting and reward coefficients match Gym, but the signals are not numerically
-identical: Gym measured actuator-space torque/velocity before its ADAPT transmission mapping, while Lab measures the
-articulation joint-space signals available from the current model.
+The torque, velocity, and acceleration penalties now operate in actuator coordinates, matching the previous Isaac Gym
+RoK4 basis. All 13 actuators contribute; hip-pitch and knee indices `[2, 3, 8, 9]` use a `0.5` multiplier.
+`actuator_torques_l2`, `actuator_vel_l2`, and `actuator_acc_l2` use weights `-1.0e-5`, `-1.0e-4`, and `-1.0e-8`.
 
-`ROK4_ACTION_SCALE` matches the previous Isaac Gym RoK4 actuator ranges. In left-leg, right-leg, and torso order, the
-values are `[0.4, 0.5, 1.25, 1.5, 0.75, 0.75, 0.4, 0.5, 1.25, 1.5, 0.75, 0.75, 0.4]`. The same values are shared by
-the joint-target calculation and both action smoothness rewards.
+> **Checkpoint compatibility:** The tensor sizes remain 13 actions and 240 observations, but their semantics changed
+> from joint coordinates to actuator coordinates. Do not resume or play a joint-space checkpoint, including the
+> `2026-07-15_17-28-41` Yunho v1 baseline, with this actuator-interface branch. Start a new training run.
+Acceleration remains the physical Isaac Lab acceleration transformed by `inverse(J)`, not Gym's undivided velocity
+difference.
+
+`ROK4_ACTUATOR_ACTION_SCALE` matches the previous Isaac Gym RoK4 actuator ranges. In left-leg, right-leg, and torso
+order, the values are `[0.4, 0.5, 1.25, 1.5, 0.75, 0.75, 0.4, 0.5, 1.25, 1.5, 0.75, 0.75, 0.4]`. The same values are
+shared by actuator-target calculation and both action smoothness rewards.
+
+Actuator mechanical torque limits are `[150, 150, 150, 150, 90, 90] N m` per leg and `150 N m` for torso yaw.
+Velocity limits are `[12, 12, 12, 12, 15, 15] rad/s` per leg and `12 rad/s` for torso yaw.
+`torque_limit_factor=0.9` and `velocity_limit_factor=0.9` independently scale these mechanical maxima. The resulting
+torque limit clips the PD command, and the resulting torque/velocity limits are also used by the corresponding limit
+rewards. The actuator stores only the mechanical maxima and the two active limits. No separate actuator-position soft
+limit is introduced; the existing 95% joint-position soft limits continue to protect actual and target joint positions
+after ADAPT mapping.
+
+The PhysX `effort_limit_sim` values remain in joint coordinates and use the unscaled mechanical maxima
+`[150, 150, 300, 480, 180, 180] N m` per leg and `150 N m` for torso yaw. They are a final solver safety guard, not a
+second 90% control limit. The active control limit is the actuator-space torque limit above.
 
 The Isaac Gym geometry notes map the gait-ready CoM reference `(0.0575 / 2, 0.0, 0.835) m` to the gait-ready base
 position `(0.0552, 0.0, 0.907) m`. The straight-leg standing base height is `z=0.919 m`. The articulation root therefore
 starts at `(0.0552, 0.0, 0.929) m`, adding `0.010 m` ground clearance above the straight-leg base height. This root
 position is separate from `_ROK4_INIT_JOINT_POS`, which matches the active Isaac Gym gait-ready joint pose: hip pitch
 `-0.0924 rad`, knee pitch `0.345 rad`, ankle pitch `-0.253 rad`, and zero for hip yaw/roll, ankle roll, and torso yaw.
-Because `use_default_offset=True`, this same joint pose is also the center offset for policy actions.
+This joint pose is converted once with `psi_default = inverse(J) * q_default` and becomes the center of actuator actions.
 
 RoK4 overrides the parent Isaac Lab locomotion timing without modifying Isaac Lab itself:
 
@@ -297,13 +384,11 @@ The `dof_pos_limits` reward applies to all 13 joints in `ROK4_JOINT_ORDER`. It u
 `soft_joint_pos_limits`, derived from the USD hard limits with `soft_joint_pos_limit_factor=0.95`, and penalizes only
 the amount outside those soft limits with weight `-1.0`.
 
-The `action_pos_limits` reward is the Isaac Lab counterpart of the previous Isaac Gym RoK4
-`penalty_action_limits`. It compares the `joint_pos` action term's processed target
-(`default_joint_pos + clipped_raw_action * ROK4_ACTION_SCALE`) against the same 95% soft limits for all 13 joints.
+The `joint_action_target_pos_limits` reward is the Isaac Lab counterpart of the previous Isaac Gym RoK4
+`penalty_action_limits`. It compares the `actuator_pos` action term's processed joint target
+(`J * (psi_default + clipped_raw_action * ROK4_ACTUATOR_ACTION_SCALE)`) against the same 95% soft limits for all 13 joints.
 Only target overshoot is summed, with the previous Gym coefficient `-0.001`; `dof_pos_limits` independently checks the
-actual simulated joint positions. Gym evaluated joint targets after its actuator-to-joint ADAPT mapping, whereas the
-current Lab action term commands articulation joints directly, so this reward checks the actual Lab target rather than
-reproducing the old transmission coordinates.
+actual simulated joint positions. Both Gym and the current Lab task therefore evaluate the mapped joint target.
 
 The Play task uses a fixed `lin_vel_x=0.85 m/s` command while keeping lateral and yaw commands at zero. The separate
 Teleop task accepts a manual base-frame `[lin_vel_x, lin_vel_y, ang_vel_z]` command, disables heading control and
@@ -323,8 +408,9 @@ source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/rok4/
   domain_randomization_cfg.py     Owns RoK4 DR ranges and event modes
 source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/mdp/
   __init__.py                     Re-exports Isaac Lab locomotion mdp plus RoK4 local mdp
-  rewards.py                      Owns RoK4-specific reward calculations such as action_pos_limits,
-                                  weighted joint_acc_l2, action_rate_l2, and second_action_rate_l2
+  actions.py                      Converts raw actuator actions to mapped joint targets
+  observations.py                 Converts joint state to actuator-space observations
+  rewards.py                      Owns actuator-space reward calculations and action smoothness terms
 ```
 
 Current DR groups:
@@ -380,7 +466,8 @@ Isaac Lab train/play.py:
 External sim2sim/sim2real policy call:
   obs -> saved observation normalizer if it is not embedded in the exported policy
   policy output -> clamp [-1, 1]
-  clipped action -> default_joint_pos + action * ROK4_ACTION_SCALE
+  clipped action -> psi_target = psi_default + action * ROK4_ACTUATOR_ACTION_SCALE
+  psi_target -> q_target = J * psi_target
 ```
 
 Train a short smoke test:

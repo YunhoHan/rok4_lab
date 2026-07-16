@@ -1,7 +1,7 @@
 RoK4 Flat RSL-RL Task 구조 문서
 ========================================================================
 
-:작성일: 2026-07-14
+:작성일: 2026-07-15
 :대상 저장소: ``/home/rclab/rok4_lab``
 :기준 환경: Isaac Lab v2.3.2, Isaac Sim 5.1.0, ``env_isaaclab``
 
@@ -14,6 +14,11 @@ RoK4 Flat RSL-RL Task 구조 문서
 중요한 점은 G1을 그대로 복사한 것이 아니라는 점이다. G1은 잘 정리된 Isaac Lab humanoid locomotion
 task 구조를 참고한 템플릿이고, 실제 로봇 asset, 관절 순서, action dimension, reward body 이름은 모두
 RoK4 기준으로 다시 작성했다.
+
+ADAPT 행렬, ``actions.py`` 와 actuator의 객체 관계, ``compute()`` 입력 target/state 출처, velocity target과
+``None`` 처리, torque limit을 포함한 상세 제어 흐름은 ``docs/rok4_adapt_control_structure_ko.rst`` 와 생성된
+``docs/_build/pdf/rok4_adapt_control_structure_ko.pdf`` 에 별도로 정리한다. 이 문서는 전체 task 구조와 연결 관계를
+중심으로 설명한다.
 
 현재 생성된 task는 다음 세 개다.
 
@@ -46,9 +51,14 @@ RoK4 기준으로 다시 작성했다.
            assets/
              robots/
                rok4.py                  # RoK4 asset, actuator, joint order 정의
+               rok4_adapt.py            # ADAPT 행렬과 actuator-space explicit PD
            manager_based/
              locomotion/
                velocity/
+                 mdp/
+                   actions.py           # actuator action -> mapped joint target
+                   observations.py      # joint state -> actuator state
+                   rewards.py           # RoK4 actuator-space reward 계산
                  config/
                    rok4/
                      __init__.py        # Gym task 등록
@@ -103,16 +113,249 @@ RoK4 구조 관계
 
 환경 설정 관계는 다음과 같다.
 
+전체 class 상속/사용 관계
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+아래 트리에서 ``상속`` 은 Python class inheritance이고, ``포함/사용`` 은 config 객체를 만들거나 참조하는
+관계다. 따라서 ``rok4.py`` 는 ``rok4_adapt.py`` 를 상속하지 않고, 그 파일의 config class를 import해
+``ROK4_TRAIN_CFG`` 안에 포함한다.
+
+.. code-block:: text
+
+   Isaac Lab
+     ├─ ArticulationCfg
+     │    └─ instance: ROK4_TRAIN_CFG                         [rok4.py]
+     │         ├─ spawn/init_state/joint physical properties
+     │         └─ actuators["body"]
+     │              └─ instance: RoK4AdaptActuatorCfg(...)   [rok4_adapt.py의 class 사용]
+     │                   ├─ link_alpha/link_beta
+     │                   ├─ actuator Kp/Kd
+     │                   ├─ actuator torque/velocity limits
+     │                   └─ torque/velocity limit factors
+     │
+     ├─ IdealPDActuatorCfg
+     │    └─ 자식(상속): RoK4AdaptActuatorCfg                 [rok4_adapt.py]
+     │         └─ class_type = RoK4AdaptActuator
+     │
+     ├─ IdealPDActuator
+     │    └─ 자식(상속): RoK4AdaptActuator                    [rok4_adapt.py]
+     │         ├─ 포함: RoK4AdaptTransmission
+     │         │    ├─ q = J psi
+     │         │    ├─ psi = J^-1 q
+     │         │    └─ tau_q = J^-T tau_psi
+     │         └─ override: compute()
+     │              ├─ joint state -> actuator state
+     │              ├─ actuator-space explicit PD
+     │              ├─ actuator torque limit clip
+     │              └─ actuator torque -> PhysX joint torque
+     │
+     ├─ ActionTermCfg
+     │    └─ 자식(상속): RoK4ActuatorPositionActionCfg        [mdp/actions.py]
+     ├─ ActionTerm
+     │    └─ 자식(상속): RoK4ActuatorPositionAction           [mdp/actions.py]
+     │         └─ raw action -> psi_target -> q_target
+     ├─ ObservationGroupCfg
+     │    └─ 자식(상속): RoK4ObservationsCfg.PolicyCfg        [flat_env_cfg.py]
+     │
+     ├─ LocomotionVelocityRoughEnvCfg                         [Isaac Lab velocity_env_cfg.py]
+     │    └─ 자식(상속): RoK4FlatEnvCfg                       [flat_env_cfg.py]
+     │         ├─ 포함: RoK4ActionsCfg
+     │         ├─ 포함: RoK4ObservationsCfg
+     │         ├─ 포함: RoK4RewardsCfg
+     │         ├─ 포함: RoK4TerminationsCfg
+     │         ├─ scene.robot = ROK4_TRAIN_CFG
+     │         ├─ 자식(상속): RoK4FlatEnvCfg_PLAY
+     │         │    └─ 자식(상속): RoK4FlatEnvCfg_TELEOP
+     │         └─ Gym task 등록 -> ManagerBasedRLEnv
+     │
+     ├─ RewardsCfg                                            [Isaac Lab velocity_env_cfg.py]
+     │    └─ 자식(상속): RoK4RewardsCfg                       [flat_env_cfg.py]
+     └─ TerminationsCfg                                       [Isaac Lab velocity_env_cfg.py]
+          └─ 자식(상속): RoK4TerminationsCfg                  [flat_env_cfg.py]
+
+   RSL-RL
+     ├─ PPO
+     │    └─ 자식(상속): RoK4PPO                             [scripts/rsl_rl/rok4_ppo.py]
+     └─ OnPolicyRunner
+          └─ 자식(상속): RoK4OnPolicyRunner                  [scripts/rsl_rl/rok4_ppo.py]
+               └─ RoK4PPO 생성 + KL logging
+
+   RoK4 local MDP
+     ├─ actions.py
+     │    ├─ RoK4ActuatorPositionActionCfg
+     │    └─ RoK4ActuatorPositionAction
+     │         ├─ clipped raw actuator action 보관
+     │         ├─ psi_default + scaled action -> psi_target
+     │         └─ J psi_target -> q_target
+     ├─ observations.py
+     │    ├─ actuator_pos_rel: J^-1 (q - q_default)
+     │    └─ actuator_vel_rel: J^-1 (qdot - qdot_default)
+     └─ rewards.py
+          ├─ actuator torque/velocity/acceleration penalty
+          ├─ actuator torque/velocity limit penalty
+          ├─ mapped joint action-position limit penalty
+          └─ 1차/2차 scaled actuator action-rate penalty
+
+   RoK4 debug/verification
+     ├─ ContactSensor
+     │    └─ 자식(상속): RoK4ContactForceVisualizer          [contact_force_visualizer.py]
+     │         ├─ env-0 좌우 발 world-frame GRF 화살표
+     │         └─ 좌우 발 force magnitude 숫자 panel
+     ├─ domain_randomization_cfg.py
+     │    └─ material/mass/COM/external wrench/reset DR 설정
+     ├─ check_rok4_zero.py
+     │    └─ passive/zero-command/torque-hold 검사
+     ├─ check_rok4_random.py
+     │    └─ 작은 sinusoidal target으로 전체 actuator/PD 검사
+     └─ check_rok4_joint_monkey.py
+          ├─ joint axis/order/position-limit 검사
+          └─ teleport 또는 ADAPT actuator torque-PD sweep
+
+runtime actuator 생성 관계는 다음과 같다. 이 구간은 class 상속이 아니라 config 객체 전달이다.
+
+.. code-block:: text
+
+   rok4.py
+     ROK4_ADAPT_LINK_ALPHA/BETA, gain, limit 정의
+       -> RoK4AdaptActuatorCfg(...) 생성
+       -> ROK4_TRAIN_CFG.actuators["body"]에 저장
+       -> Isaac Lab Articulation이 actuator_cfg.class_type 호출
+       -> RoK4AdaptActuator(cfg=actuator_cfg) 생성
+       -> RoK4AdaptTransmission(cfg.link_alpha, cfg.link_beta) 생성
+       -> 모든 environment에 ADAPT actuator-space PD 적용
+
+상속, config 기본값, override의 차이
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+이 구조에는 서로 다른 네 가지 관계가 함께 있으므로 구분해서 읽어야 한다.
+
+.. list-table::
+   :header-rows: 1
+
+   * - 관계
+     - 예시
+     - 의미
+   * - class 상속
+     - ``RoK4AdaptActuator(IdealPDActuator)``
+     - 부모 actuator의 초기화, gain/effort buffer, Isaac Lab actuator interface를 물려받고 ``compute()`` 를 재정의
+   * - config class 상속
+     - ``RoK4AdaptActuatorCfg(IdealPDActuatorCfg)``
+     - 부모 config의 ``joint_names_expr``, ``stiffness``, ``damping`` 같은 field에 ADAPT field를 추가
+   * - config 객체 생성/override
+     - ``RoK4AdaptActuatorCfg(link_alpha=ROK4_ADAPT_LINK_ALPHA, ...)``
+     - ``rok4.py`` 가 config 기본값 중 RoK4에서 실제 사용할 값을 명시적으로 덮어씀
+   * - runtime 포함
+     - ``ROK4_TRAIN_CFG.actuators["body"]``
+     - 완성된 actuator config 객체를 robot asset config가 보관하고 Isaac Lab Articulation이 runtime actuator를 생성
+
+``rok4.py`` 와 ``rok4_adapt.py`` 사이에는 상속 관계가 없다. ``rok4.py`` 가
+``RoK4AdaptActuatorCfg`` 를 import하고 config 객체를 만들어 사용하는 관계다.
+
+ADAPT 링크 값 전달 예시
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``ROK4_ADAPT_LINK_ALPHA`` 가 ``cfg.link_alpha`` 로 바뀌는 별도 대입문은 보이지 않는다. ``@configclass`` 가
+생성한 constructor의 keyword argument 대입으로 같은 동작이 이루어진다.
+
+.. code-block:: text
+
+   rok4.py
+     ROK4_ADAPT_LINK_ALPHA = 0.09845
+       -> RoK4AdaptActuatorCfg(link_alpha=ROK4_ADAPT_LINK_ALPHA)
+       -> actuator_cfg.link_alpha = 0.09845
+       -> Isaac Lab Articulation:
+            actuator_cfg.class_type(cfg=actuator_cfg, ...)
+       -> RoK4AdaptActuator.__init__(cfg=actuator_cfg)
+       -> RoK4AdaptTransmission(link_alpha=cfg.link_alpha)
+       -> self.link_alpha = 0.09845
+       -> ratio = link_beta / link_alpha
+       -> J, J^-1, J^T, J^-T 생성
+
+``RoK4AdaptActuatorCfg`` 의 ``link_alpha=0.09845``, ``link_beta=0.06``, ``torque_limit_factor=0.9``,
+``velocity_limit_factor=0.9`` 은 caller가 값을 생략했을 때 사용하는 fallback 기본값이다. 현재
+``ROK4_TRAIN_CFG`` 는 이 값들을 모두 명시적으로 전달하므로 ``rok4.py`` 의 값이 우선한다. 반면
+``expected_joint_names``, ``actuator_torque_limit``, ``actuator_velocity_limit`` 은 ``MISSING`` 이므로 반드시
+외부 config에서 넣어야 하며, 빠뜨리면 초기화 단계에서 잘못된 설정으로 처리된다.
+
+Gain 값 전달과 실제 사용
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Gain은 Gym YAML처럼 canonical actuator 순서를 쉽게 확인할 수 있도록 먼저 13개 list로 정의하고,
+Isaac Lab config가 joint name으로 안전하게 resolve하도록 dictionary로 변환한다. USD 내부 순서는 좌우 joint가
+교차되어 있으므로 이름 dictionary와 runtime canonical reorder가 단순 list 직접 전달보다 안전하다.
+
+.. code-block:: text
+
+   ROK4_ACTUATOR_KP_VALUES / ROK4_ACTUATOR_KD_VALUES
+     -> _make_joint_dict(...)
+     -> ROK4_ACTUATOR_KP / ROK4_ACTUATOR_KD
+     -> RoK4AdaptActuatorCfg(stiffness=..., damping=...)
+     -> IdealPDActuator 초기화 buffer
+     -> RoK4AdaptActuator.compute()에서 canonical actuator 순서로 변환
+     -> tau_psi = Kp (psi_target - psi) - Kd psi_dot
+
+첫 actuator-interface 실험은 이전 Isaac Lab baseline gain을 사용한다.
+
+.. code-block:: text
+
+   한쪽 다리 Kp: [200, 200, 200, 200, 20, 20]
+   한쪽 다리 Kd: [  5,   5,   5,   5,  2,  2]
+   Torso yaw:     Kp=100, Kd=5
+
+``ROK4_KP`` 와 ``ROK4_KD`` 는 이전 이름을 import하는 코드의 호환 alias다. 현재 ``ROK4_TRAIN_CFG`` 의 실제
+제어 경로는 ``ROK4_ACTUATOR_KP`` 와 ``ROK4_ACTUATOR_KD`` 를 직접 사용한다.
+
+Actuator limit 값 전달과 적용
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+최대 limit list는 config를 통해 runtime actuator에 전달된 뒤 environment 수만큼 GPU tensor로 확장된다.
+
+.. code-block:: text
+
+   actuator maximum torque list
+     -> cfg.actuator_torque_limit
+     -> actuator_torque_limit_max tensor [num_envs, 13]
+     -> actuator_torque_limit = maximum * torque_limit_factor
+
+   actuator maximum velocity list
+     -> cfg.actuator_velocity_limit
+     -> actuator_velocity_limit_max tensor [num_envs, 13]
+     -> actuator_velocity_limit = maximum * velocity_limit_factor
+
+현재 두 factor는 모두 ``0.9`` 이지만 서로 독립적으로 조정할 수 있다. ``actuator_torque_limit`` 은 PD가 요청한
+``tau_psi`` 를 실제로 clip하며 torque-limit reward의 기준도 된다. ``actuator_velocity_limit`` 은 Gym 코드와
+같이 velocity-limit reward의 초과량 검사 기준이며 velocity state 자체를 강제로 잘라내지는 않는다. Runtime에는
+두 maximum tensor와 두 factor가 적용된 limit tensor만 저장한다.
+Actuator torque를 joint torque로 변환한 뒤에는 ``ROK4_JOINT_TORQUE_LIMITS_SIM`` 이 PhysX solver의 최종
+안전 상한으로 적용된다. 이 값은 joint mechanical maximum을 그대로 사용하며 별도의 0.9 factor를 적용하지 않는다.
+별도의 actuator-position soft limit은 추가하지 않았고, ADAPT mapping 뒤 joint target과 실제 joint position에는
+기존 joint 95% soft position limit 검사가 유지된다.
+
+환경 config의 포함 관계
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 .. code-block:: text
 
    RoK4FlatEnvCfg
      ├─ 상속: IsaacLab LocomotionVelocityRoughEnvCfg
+     ├─ 포함: actions = RoK4ActionsCfg()
+     ├─ 포함: observations = RoK4ObservationsCfg()
      ├─ 포함: rewards = RoK4RewardsCfg()
      ├─ 포함: terminations = RoK4TerminationsCfg()
      ├─ 학습 사용: ROK4_TRAIN_CFG
      ├─ 사용: ROK4_JOINT_ORDER
-     ├─ 사용: ROK4_ACTION_SCALE
+     ├─ 사용: ROK4_ACTUATOR_ACTION_SCALE
      └─ 호출: apply_rok4_domain_randomization(self)
+
+   RoK4ActuatorPositionAction
+     ├─ clipped raw actuator action 유지
+     ├─ psi_target = psi_default + scale * action
+     └─ q_target = J * psi_target
+
+   RoK4AdaptActuator
+     ├─ q, qdot -> psi, psi_dot
+     ├─ actuator-space PD 및 torque clip
+     └─ tau_q = J^-T * tau_psi
 
    RoK4FlatEnvCfg_PLAY
      ├─ 상속: RoK4FlatEnvCfg
@@ -143,6 +386,70 @@ RoK4 구조 관계
      ├─ Isaac Lab 공통 mdp reward 함수 호출
      └─ locomotion velocity 전용 mdp reward 함수 호출
 
+Observation config의 새 정의와 field 교체
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``RoK4ObservationsCfg`` 자체는 Isaac Lab 부모 ``ObservationsCfg`` 를 상속하지 않는다. RoK4에서 필요한 term만
+모아 새로 만든 outer config container다. 반면 내부 ``RoK4ObservationsCfg.PolicyCfg`` 는 ``ObsGroup``, 즉
+Isaac Lab ``ObservationGroupCfg`` 를 상속하므로 history, corruption, term concatenation 같은 observation-group
+기능을 사용한다.
+
+.. code-block:: text
+
+   새 class 정의
+     RoK4ObservationsCfg                          # 부모 ObservationsCfg 상속 없음
+       └─ PolicyCfg(ObsGroup)                    # ObservationGroupCfg 상속
+
+   환경 field 교체
+     LocomotionVelocityRoughEnvCfg
+       └─ observations = 부모 observation config
+
+     RoK4FlatEnvCfg(LocomotionVelocityRoughEnvCfg)
+       └─ observations: RoK4ObservationsCfg = RoK4ObservationsCfg()
+            -> 상속받은 observations field의 객체를 RoK4 config로 통째로 교체
+
+따라서 이것은 ``RoK4ObservationsCfg`` 가 부모 observation class를 상속해 method를 override하는 구조가 아니다.
+``RoK4FlatEnvCfg`` 가 상속받은 ``observations`` config field를 새 객체로 대체하는 config-level override다. 부모의
+``base_lin_vel``, ``joint_pos``, ``joint_vel``, ``height_scan`` term은 자동으로 남지 않으며, RoK4가 아래 term을
+명시적으로 다시 구성한다.
+
+.. list-table::
+   :header-rows: 1
+
+   * - 단일 frame term
+     - 차원
+     - 의미
+   * - ``base_ang_vel``
+     - 3
+     - base angular velocity
+   * - ``projected_gravity``
+     - 3
+     - base frame에 투영된 gravity direction
+   * - ``velocity_commands``
+     - 3
+     - ``[vx, vy, wz]`` command
+   * - ``actuator_pos``
+     - 13
+     - ``J^-1(q-q_default)`` actuator position relative to the default pose
+   * - ``actuator_vel``
+     - 13
+     - ``J^-1(q_dot-q_dot_default)`` actuator velocity relative to the default velocity
+   * - ``actions``
+     - 13
+     - 이전 clipped raw actuator action
+   * - 합계
+     - 48
+     - history 적용 전 한 frame의 observation dimension
+
+``history_length=5`` 와 ``flatten_history_dim=True`` 를 적용하므로 최종 policy tensor는 ``48 * 5 = 240``
+차원이다. ``enable_corruption=True`` 는 각 ``ObsTerm`` 에 설정된 noise를 활성화하지만 dimension을 바꾸지 않는다.
+``concatenate_terms=True`` 는 선언된 term들을 하나의 policy tensor로 이어 붙인다.
+
+현재 ``actuator_pos`` 와 ``actuator_vel`` term은 부모 Isaac Lab의 ``joint_pos_rel``, ``joint_vel_rel`` 패턴처럼
+default state를 뺀 뒤 actuator 좌표로 변환한다. Position은 gait-ready default pose에서 0이 되고, 현재
+``q_dot_default=0`` 이므로 velocity 값은 absolute velocity와 수치상 같다. 별도의 수동 observation scale은
+곱하지 않으며, relative 표현은 원점 이동이고 scale은 값의 크기 조절이라는 서로 다른 연산이다.
+
 각 파일의 관계를 역할로 나누면 다음과 같다.
 
 .. list-table::
@@ -160,12 +467,21 @@ RoK4 구조 관계
    * - ``domain_randomization_cfg.py``
      - DR config
      - RoK4 foot material, base mass, COM, external wrench, reset randomization 범위와 event mode 설정
+   * - ``contact_force_visualizer.py``
+     - ``ContactSensor`` 확장
+     - env-0 좌우 발의 world-frame GRF vector를 화살표로 그리고 force magnitude를 숫자로 표시
    * - ``mdp/__init__.py``
      - mdp re-export
      - Isaac Lab locomotion mdp를 다시 export하고 RoK4 로컬 mdp 함수를 함께 노출
+   * - ``mdp/actions.py``
+     - RoK4 action 계산
+     - 13차원 clipped raw actuator action을 actuator target과 ADAPT joint target으로 변환
+   * - ``mdp/observations.py``
+     - RoK4 observation 계산
+     - articulation joint position/velocity를 actuator position/velocity로 변환
    * - ``mdp/rewards.py``
      - RoK4 reward 계산식
-     - RoK4 전용 ``action_pos_limits`` 및 weighted ``joint_torques_l2``, ``joint_vel_l2``, ``joint_acc_l2``, ``action_rate_l2``, ``second_action_rate_l2`` 등의 reward raw value 계산 함수/클래스 정의
+     - RoK4 전용 actuator torque/velocity/acceleration, actuator limit, action smoothness reward 계산
    * - ``agents/rsl_rl_ppo_cfg.py``
      - 학습 config
      - RSL-RL PPO network와 algorithm hyperparameter 설정
@@ -175,6 +491,18 @@ RoK4 구조 관계
    * - ``assets/robots/rok4.py``
      - robot asset config
      - USD path, initial pose, actuator, joint order, action scale, self-collision 설정 제공
+   * - ``assets/robots/rok4_adapt.py``
+     - transmission/actuator 구현
+     - configurable ADAPT 링크 길이, ``q <-> psi`` 행렬, actuator PD, torque mapping과 limit 적용
+   * - ``scripts/check_rok4_zero.py``
+     - actuator 정적 검사
+     - passive, zero-command, torque-hold 상태에서 asset과 PD 동작 확인
+   * - ``scripts/check_rok4_random.py``
+     - actuator 동적 검사
+     - 작은 sinusoidal position target으로 전체 actuator 응답 확인
+   * - ``scripts/check_rok4_joint_monkey.py``
+     - joint/actuator 검사
+     - joint 순서, axis, limit, teleport, ADAPT torque-PD sweep 확인
    * - IsaacLab ``velocity_env_cfg.py``
      - 부모 config
      - manager-based velocity locomotion의 공통 scene/action/obs/reward/termination 틀 제공
@@ -243,9 +571,9 @@ Gymnasium task를 등록하는 파일이다. 여기에서 다음 task 이름이 
    * - Terrain
      - plane terrain 사용, rough terrain generator와 height scanner 제거
    * - Action
-     - ``ROK4_JOINT_ORDER`` 기준 13차원 joint position target
+     - ``ROK4_JOINT_ORDER`` 기준 13차원 normalized actuator position offset
    * - Observation
-     - blind proprioceptive history observation
+     - actuator position/velocity를 포함한 blind proprioceptive history observation
    * - Domain randomization
      - ``domain_randomization_cfg.py`` 의 ``apply_rok4_domain_randomization(self)`` 호출
    * - Reward
@@ -280,31 +608,64 @@ RoK4 action space는 다음 13축이다.
    Torso:
      Torso_Yaw_Joint
 
-관절 순서는 반드시 ``rok4.py`` 의 ``ROK4_JOINT_ORDER`` 를 따른다. G1의 관절 순서를 그대로 쓰지 않는다.
+정책/ADAPT 순서는 반드시 ``rok4.py`` 의 ``ROK4_JOINT_ORDER`` 를 따른다. USD 내부 joint storage 순서는
+좌우 관절이 교차되어 있으므로 ``RoK4AdaptActuator`` 가 canonical ADAPT 순서와 USD 순서를 내부에서 변환한다.
 
 Action pipeline과 clip
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-RoK4 policy가 출력하는 action은 먼저 RSL-RL wrapper에서 ``clip_actions = 1.0`` 설정을 통해 ``[-1, 1]`` 로
-잘린다. 그 다음 RoK4 action scale과 default pose offset이 적용되어 실제 joint position target이 된다.
+RoK4 policy가 출력하는 13차원 값은 normalized actuator action이다. wrapper와 local action term에서
+``[-1, 1]`` 로 제한하고 actuator scale과 default actuator pose를 적용한 뒤 ADAPT 행렬로 joint target을 만든다.
 
 .. code-block:: text
 
    actor network output
      -> RslRlVecEnvWrapper clip_actions = 1.0
-     -> clipped_raw_action in [-1, 1]
-     -> q_target = default_joint_pos + clipped_raw_action * ROK4_ACTION_SCALE
-     -> IdealPDActuatorCfg explicit torque-PD
+     -> clipped_raw_actuator_action in [-1, 1]
+     -> psi_default = J^-1 * q_default
+     -> psi_target = psi_default + clipped_raw_actuator_action * ROK4_ACTUATOR_ACTION_SCALE
+     -> q_target = J * psi_target
+     -> tau_psi = Kp * (psi_target - psi) - Kd * psi_dot
+     -> tau_psi actuator torque-limit clip (maximum * 0.9)
+     -> tau_q = J^-T * tau_psi
+     -> PhysX joint effort (unscaled mechanical joint-torque limit으로 최종 보호)
 
-중요한 점은 ``last_action`` observation이 ``q_target`` 이나 ``clipped_raw_action * ROK4_ACTION_SCALE`` 이 아니라
-clipped raw policy action이라는 점이다. 즉 observation 안의 action 항목은 "이전 step에서 policy가 낸 action"을
-의미하고, motor target은 별도로 action scale과 default pose를 거쳐 만들어진다.
+``actions.py`` 가 ``q_target`` 을 ``set_joint_position_target()`` 으로 기록하는 것은 Isaac Lab explicit actuator에
+목표값을 전달하기 위한 interface다. 이 값이 PhysX position drive에 직접 입력되는 것은 아니다. 매 physics step에
+Articulation이 target buffer와 현재 joint state를 ``RoK4AdaptActuator.compute()`` 에 전달하면 다음 과정이 실행된다.
+
+.. code-block:: text
+
+   actions.py
+     q_target을 joint-position-target buffer에 기록
+       -> Isaac Lab Articulation._apply_actuator_model()
+       -> RoK4AdaptActuator.compute(q_target, q, q_dot)
+            ├─ q_target, q, q_dot -> psi_target, psi, psi_dot
+            ├─ actuator PD로 tau_psi 계산
+            ├─ actuator 최대 torque * 0.9로 tau_psi clip
+            ├─ tau_q = J^-T tau_psi
+            └─ position/velocity target 제거 + joint effort만 반환
+       -> PhysX에는 tau_q joint effort가 입력됨
+
+따라서 policy action의 의미는 actuator position target이지만 simulation에 최종 입력되는 제어량은 ADAPT 변환을
+거친 joint torque다. PhysX의 ``effort_limit_sim`` 은 joint mechanical maximum
+``[150,150,300,480,180,180] N m`` 와 torso ``150 N m`` 를 factor 없이 사용한다. 이는 마지막 solver 안전
+상한이며 actuator torque에 다시 0.9를 곱하는 제어 단계가 아니다.
+
+중요한 점은 ``last_action`` observation이 ``q_target`` 이나 scaled actuator offset이 아니라 clip된 raw actuator
+action이라는 점이다. motor target만 scale, default actuator pose, ADAPT mapping을 거친다.
+
+.. warning::
+
+   action은 13차원, history observation은 240차원으로 이전 joint-space baseline과 크기가 같지만 각 원소의
+   의미가 actuator 좌표로 바뀌었다. 따라서 ``2026-07-15_17-28-41`` Yunho v1을 포함한 기존 joint-space
+   checkpoint를 이 브랜치에서 resume/play하지 말고 actuator-interface 학습을 새로 시작해야 한다.
 
 반면 ``action_rate_l2`` 와 ``second_action_rate_l2`` reward는 raw action 차이를 그대로 쓰지 않고,
-``clipped_raw_action * ROK4_ACTION_SCALE`` 차이를 사용한다. 즉 observation은 raw action 의미를 유지하고,
-smoothness reward는 실제 joint target offset 변화량에 더 가까운 값으로 계산한다.
+``clipped_raw_action * ROK4_ACTUATOR_ACTION_SCALE`` 차이를 사용한다. observation은 raw actuator action 의미를
+유지하고 smoothness reward는 actuator target offset 변화량을 계산한다.
 
-``ROK4_ACTION_SCALE`` 은 기존 Isaac Gym RoK4의 actuator action scale과 동일하다. 좌측 다리, 우측 다리,
+``ROK4_ACTUATOR_ACTION_SCALE`` 은 기존 Isaac Gym RoK4의 actuator action scale과 동일하다. 좌측 다리, 우측 다리,
 torso 순서의 값은 다음과 같다.
 
 .. code-block:: text
@@ -313,7 +674,21 @@ torso 순서의 값은 다음과 같다.
     0.4, 0.5, 1.25, 1.5, 0.75, 0.75,
     0.4]
 
-이 하나의 scale 배열을 joint target 계산과 두 action smoothness reward가 공통으로 사용한다.
+이 하나의 scale 배열을 actuator target 계산과 두 action smoothness reward가 공통으로 사용한다.
+
+ADAPT 링크/limit 설정
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``RoK4AdaptTransmission`` 은 ``link_alpha=0.09845 m``, ``link_beta=0.06 m`` 를 받아 ``ratio=beta/alpha`` 와
+``J``, ``J^-1``, ``J^T``, ``J^-T`` 를 만든다. 링크 길이가 바뀌면 ``rok4.py`` 의 두 상수만 수정하면 action,
+observation, actuator PD, torque mapping이 같은 행렬을 사용한다.
+
+Actuator 최대 torque는 한쪽 다리 ``[150,150,150,150,90,90] N m``, torso ``150 N m`` 이고 velocity는
+한쪽 다리 ``[12,12,12,12,15,15] rad/s``, torso ``12 rad/s`` 이다. ``torque_limit_factor=0.9`` 와
+``velocity_limit_factor=0.9`` 를 각각 곱한 값만 실제 actuator limit으로 저장한다. Torque limit은 PD torque
+clip과 torque-limit reward에 사용하고, velocity limit은 velocity-limit reward에 사용한다. 별도의 actuator
+position soft limit은 추가하지 않는다. 변환된 joint torque에 대한 PhysX ``effort_limit_sim`` 은 factor를
+적용하지 않은 joint mechanical maximum을 사용한다.
 
 학습 command 범위
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -358,8 +733,7 @@ Play 환경은 ``lin_vel_x=0.85 m/s`` 의 고정 전진 명령을 사용하고 `
    * - Ankle Roll / Torso Yaw
      - ``0.0``
 
-``use_default_offset=True`` 이므로 이 초기 관절 자세는 policy action에 더해지는 joint position target의
-기준 자세로도 사용된다.
+초기 관절 자세는 ``psi_default = J^-1 * q_default`` 로 변환되어 actuator action의 기준 자세가 된다.
 
 Isaac Lab의 ``train.py`` 와 ``play.py`` 를 사용할 때는 ``RslRlVecEnvWrapper`` 가 자동으로 clipping을 수행한다.
 반면 ONNX/TorchScript policy를 직접 호출하는 sim2sim 또는 sim2real 코드에서는 같은 동작을 외부 코드에서
@@ -369,7 +743,8 @@ Isaac Lab의 ``train.py`` 와 ``play.py`` 를 사용할 때는 ``RslRlVecEnvWrap
 
    policy_output = policy(obs)
    clipped_raw_action = torch.clamp(policy_output, -1.0, 1.0)
-   q_target = default_joint_pos + clipped_raw_action * ROK4_ACTION_SCALE
+   psi_target = default_actuator_pos + clipped_raw_action * ROK4_ACTUATOR_ACTION_SCALE
+   q_target = adapt.actuator_to_joint_position(psi_target)
    last_action = clipped_raw_action
 
 Actor observation은 5-step history를 사용한다.
@@ -379,8 +754,8 @@ Actor observation은 5-step history를 사용한다.
    base_ang_vel
    projected_gravity
    velocity_commands
-   joint_pos
-   joint_vel
+   actuator_pos_rel
+   actuator_vel_rel
    last_action
 
 Actor에는 다음 정보를 넣지 않는다.
@@ -769,7 +1144,7 @@ Contact Forces debug toggle로 환경 0의 좌우 발 접촉력 화살표와 실
    * - actor input
      - 5-step history 기반 240차원
    * - actor output
-     - 13차원 joint position target
+     - 13차원 normalized actuator action
    * - PPO 1 iteration
      - 성공
    * - 생성 checkpoint

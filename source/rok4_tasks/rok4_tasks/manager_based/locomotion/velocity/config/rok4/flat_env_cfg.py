@@ -3,6 +3,8 @@
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
+from isaaclab.managers import ObservationGroupCfg as ObsGroup
+from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.utils import configclass
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
@@ -13,7 +15,12 @@ from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import (
 )
 
 import rok4_tasks.manager_based.locomotion.velocity.mdp as mdp
-from rok4_tasks.assets.robots.rok4 import ROK4_ACTION_SCALE, ROK4_JOINT_ORDER, ROK4_TEST_CFG, ROK4_TRAIN_CFG
+from rok4_tasks.assets.robots.rok4 import (
+    ROK4_ACTUATOR_ACTION_SCALE,
+    ROK4_JOINT_ORDER,
+    ROK4_TEST_CFG,
+    ROK4_TRAIN_CFG,
+)
 from rok4_tasks.manager_based.locomotion.velocity.config.rok4.contact_force_visualizer import (
     RoK4ContactForceVisualizer,
 )
@@ -44,6 +51,61 @@ ROK4_ANG_VEL_Z_RANGE = (-0.6, 0.6)
 
 ROK4_GROUND_COLLISION_PRIM_PATH = "/World/ground/terrain/GroundPlane/CollisionPlane"
 """Collision prim used to isolate foot-ground contact forces in the flat task."""
+
+
+@configclass
+class RoK4ActionsCfg:
+    """Actuator-space action specifications for RoK4."""
+
+    actuator_pos = mdp.RoK4ActuatorPositionActionCfg(
+        asset_name="robot",
+        actuator_name="body",
+        joint_names=ROK4_JOINT_ORDER,
+        scale=ROK4_ACTUATOR_ACTION_SCALE,
+        raw_action_clip=(-1.0, 1.0),
+    )
+
+
+@configclass
+class RoK4ObservationsCfg:
+    """Blind actuator-space observations for RoK4."""
+
+    @configclass
+    class PolicyCfg(ObsGroup):
+        """Policy observation group with the existing 48-value frame shape."""
+
+        base_ang_vel = ObsTerm(func=mdp.base_ang_vel, noise=Unoise(n_min=-0.2, n_max=0.2))
+        projected_gravity = ObsTerm(
+            func=mdp.projected_gravity,
+            noise=Unoise(n_min=-0.05, n_max=0.05),
+        )
+        velocity_commands = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
+        actuator_pos = ObsTerm(
+            func=mdp.actuator_pos_rel,
+            params={
+                "asset_cfg": SceneEntityCfg("robot", joint_names=ROK4_JOINT_ORDER, preserve_order=True),
+                "actuator_name": "body",
+            },
+            noise=Unoise(n_min=-0.01, n_max=0.01),
+        )
+        actuator_vel = ObsTerm(
+            func=mdp.actuator_vel_rel,
+            params={
+                "asset_cfg": SceneEntityCfg("robot", joint_names=ROK4_JOINT_ORDER, preserve_order=True),
+                "actuator_name": "body",
+            },
+            noise=Unoise(n_min=-1.5, n_max=1.5),
+        )
+        actions = ObsTerm(func=mdp.last_action, params={"action_name": "actuator_pos"})
+
+        def __post_init__(self):
+            """Configure policy history and corruption."""
+            self.history_length = 5
+            self.flatten_history_dim = True
+            self.enable_corruption = True
+            self.concatenate_terms = True
+
+    policy: PolicyCfg = PolicyCfg()
 
 
 @configclass
@@ -83,11 +145,11 @@ class RoK4RewardsCfg(RewardsCfg):
         weight=-1.0,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=ROK4_JOINT_ORDER, preserve_order=True)},
     )
-    action_pos_limits = RewTerm(
-        func=mdp.action_pos_limits,
+    joint_action_target_pos_limits = RewTerm(
+        func=mdp.joint_action_target_pos_limits,
         weight=-1.0e-3,
         params={
-            "action_name": "joint_pos",
+            "action_name": "actuator_pos",
             "asset_cfg": SceneEntityCfg("robot", joint_names=ROK4_JOINT_ORDER, preserve_order=True),
         },
     )
@@ -101,19 +163,31 @@ class RoK4RewardsCfg(RewardsCfg):
         weight=-1.0,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Torso_Yaw_Joint"])},
     )
-    dof_acc_l2 = RewTerm(
-        func=mdp.joint_acc_l2,
+    dof_acc_l2 = None
+    dof_torques_l2 = None
+    actuator_acc_l2 = RewTerm(
+        func=mdp.actuator_acc_l2,
         weight=-1.0e-8,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=ROK4_JOINT_ORDER, preserve_order=True)},
     )
-    dof_torques_l2 = RewTerm(
-        func=mdp.joint_torques_l2,
+    actuator_torques_l2 = RewTerm(
+        func=mdp.actuator_torques_l2,
         weight=-1.0e-5,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=ROK4_JOINT_ORDER, preserve_order=True)},
     )
-    joint_vel_l2 = RewTerm(
-        func=mdp.joint_vel_l2,
+    actuator_vel_l2 = RewTerm(
+        func=mdp.actuator_vel_l2,
         weight=-1.0e-4,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=ROK4_JOINT_ORDER, preserve_order=True)},
+    )
+    actuator_velocity_limits = RewTerm(
+        func=mdp.actuator_velocity_limits,
+        weight=-1.0e-3,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=ROK4_JOINT_ORDER, preserve_order=True)},
+    )
+    actuator_torque_limits = RewTerm(
+        func=mdp.actuator_torque_limits,
+        weight=-1.0e-5,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=ROK4_JOINT_ORDER, preserve_order=True)},
     )
     action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.1)
@@ -144,6 +218,9 @@ class RoK4FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
 
     # Replace the parent locomotion reward set with RoK4-specific reward terms.
     rewards: RoK4RewardsCfg = RoK4RewardsCfg()
+    # Keep the 13-dimensional interface while interpreting it in actuator coordinates.
+    actions: RoK4ActionsCfg = RoK4ActionsCfg()
+    observations: RoK4ObservationsCfg = RoK4ObservationsCfg()
     # Keep the inherited timeout and replace base-only contact with RoK4 non-foot illegal contact.
     terminations: RoK4TerminationsCfg = RoK4TerminationsCfg()
 
@@ -174,24 +251,8 @@ class RoK4FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.scene.height_scanner = None
         self.curriculum.terrain_levels = None
 
-        # Actions. The policy output is interpreted as joint-position offsets around the default pose.
-        self.actions.joint_pos.joint_names = ROK4_JOINT_ORDER
-        self.actions.joint_pos.scale = ROK4_ACTION_SCALE
-        self.actions.joint_pos.preserve_order = True
-        self.actions.joint_pos.use_default_offset = True
-
-        # Blind policy observations. Keep base linear velocity out of the actor input.
-        self.observations.policy.base_lin_vel = None
-        self.observations.policy.height_scan = None
-        self.observations.policy.history_length = 5
-        self.observations.policy.flatten_history_dim = True
-        self.observations.policy.enable_corruption = True
-        self.observations.policy.concatenate_terms = True
-        # Keep local copies of the inherited observation noise ranges so RoK4 can tune them without editing Isaac Lab.
-        self.observations.policy.base_ang_vel.noise = Unoise(n_min=-0.2, n_max=0.2)
-        self.observations.policy.projected_gravity.noise = Unoise(n_min=-0.05, n_max=0.05)
-        self.observations.policy.joint_pos.noise = Unoise(n_min=-0.01, n_max=0.01)
-        self.observations.policy.joint_vel.noise = Unoise(n_min=-1.5, n_max=1.5)
+        # Actions and observations are actuator-space terms configured above. The single-frame observation remains
+        # 48 values and history remains 5 frames, so actor/critic input dimensions stay unchanged at 240.
 
         # Events/randomization. The DR values live in domain_randomization_cfg.py for easier tuning.
         apply_rok4_domain_randomization(self)
