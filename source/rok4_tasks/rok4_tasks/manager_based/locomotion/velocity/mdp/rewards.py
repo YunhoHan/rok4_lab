@@ -8,8 +8,10 @@ from typing import TYPE_CHECKING
 import torch
 
 from isaaclab.managers import ManagerTermBase, RewardTermCfg, SceneEntityCfg
+from isaaclab.sensors import ContactSensor
+from isaaclab.utils.math import quat_apply, quat_apply_inverse, yaw_quat
 
-from rok4_tasks.assets.robots.rok4 import ROK4_ACTUATOR_ACTION_SCALE, ROK4_JOINT_ORDER
+from rok4_tasks.assets.robots.rok4 import ROK4_JOINT_ORDER
 
 from .observations import _adapt_actuator
 
@@ -17,10 +19,75 @@ if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
 ROK4_RELAXED_ACTION_IDS = (2, 3, 8, 9)
-"""Action indices with reduced smoothness penalty, matching the Isaac Gym RoK4 setup."""
+"""Actuator indices with reduced physical effort and state penalties."""
 
-ROK4_ACTION_SCALE_VALUES = tuple(ROK4_ACTUATOR_ACTION_SCALE[joint_name] for joint_name in ROK4_JOINT_ORDER)
-"""Action scale values ordered by :data:`ROK4_JOINT_ORDER`."""
+def feet_flat_orientation_l2(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg,
+    sensor_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Penalize the tilt of feet that are in contact with the ground."""
+    asset = env.scene[asset_cfg.name]
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+
+    foot_quat_w = asset.data.body_quat_w[:, asset_cfg.body_ids]
+    foot_up_local = torch.zeros_like(foot_quat_w[..., :3])
+    foot_up_local[..., 2] = 1.0
+    foot_up_w = quat_apply(foot_quat_w, foot_up_local)
+    tilt_error = torch.sum(torch.square(foot_up_w[..., :2]), dim=-1)
+
+    in_contact = contact_sensor.data.current_contact_time[:, sensor_cfg.body_ids] > 0.0
+    contact_count = torch.sum(in_contact, dim=1).clamp(min=1)
+    return torch.sum(tilt_error * in_contact, dim=1) / contact_count
+
+
+def feet_stance_width_l2(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    target_width: float,
+    hard_min_width: float,
+    wide_coeff: float,
+    hard_narrow_coeff: float,
+    asset_cfg: SceneEntityCfg,
+    lateral_command_threshold: float = 0.05,
+    yaw_command_threshold: float = 0.05,
+    moving_command_threshold: float = 0.05,
+) -> torch.Tensor:
+    """Penalize an excessively wide or crossed stance during straight walking."""
+    asset = env.scene[asset_cfg.name]
+    foot_pos_w = asset.data.body_pos_w[:, asset_cfg.body_ids]
+    if foot_pos_w.shape[1] != 2:
+        raise ValueError(f"Expected exactly two feet, received {foot_pos_w.shape[1]} bodies.")
+
+    left_to_right_w = foot_pos_w[:, 0] - foot_pos_w[:, 1]
+    left_to_right_yaw = quat_apply_inverse(yaw_quat(asset.data.root_quat_w), left_to_right_w)
+    stance_width = left_to_right_yaw[:, 1]
+
+    width_too_wide = torch.relu(stance_width - target_width)
+    width_too_narrow = torch.relu(hard_min_width - stance_width)
+    penalty = wide_coeff * torch.square(width_too_wide)
+    penalty += hard_narrow_coeff * torch.square(width_too_narrow)
+
+    command = env.command_manager.get_command(command_name)
+    straight_command = (torch.abs(command[:, 1]) <= lateral_command_threshold) & (
+        torch.abs(command[:, 2]) <= yaw_command_threshold
+    )
+    moving_command = torch.linalg.vector_norm(command, dim=1) > moving_command_threshold
+    return penalty * straight_command * moving_command
+
+
+def stand_still_joint_deviation_l2(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Penalize squared joint-position deviations in designated standing environments [rad^2]."""
+    asset = env.scene[asset_cfg.name]
+    command_term = env.command_manager.get_term(command_name)
+    joint_pos_error = (
+        asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
+    )
+    return torch.sum(torch.square(joint_pos_error), dim=1) * command_term.is_standing_env
 
 
 def _weighted_l2(values: torch.Tensor) -> torch.Tensor:
@@ -54,16 +121,15 @@ def actuator_vel_l2(
     return _weighted_l2(actuator_vel)
 
 
-def _scaled_action_l2(action_delta: torch.Tensor) -> torch.Tensor:
-    """Compute weighted squared action-target offset difference."""
-    action_scale = action_delta.new_tensor(ROK4_ACTION_SCALE_VALUES)
-    return _weighted_l2(action_delta * action_scale)
+def _raw_action_l2(action_delta: torch.Tensor) -> torch.Tensor:
+    """Compute the weighted squared difference of clipped raw policy actions."""
+    return _weighted_l2(action_delta)
 
 
 def action_rate_l2(env: ManagerBasedRLEnv) -> torch.Tensor:
-    """Penalize first-order scaled action-target changes."""
+    """Penalize first-order clipped raw-action changes."""
     action_rate = env.action_manager.action - env.action_manager.prev_action
-    penalty = _scaled_action_l2(action_rate)
+    penalty = _raw_action_l2(action_rate)
     has_history = torch.any(env.action_manager.prev_action != 0.0, dim=1)
     return torch.where(has_history, penalty, torch.zeros_like(penalty))
 
@@ -132,7 +198,7 @@ def joint_action_target_pos_limits(
 
 
 class second_action_rate_l2(ManagerTermBase):
-    """Penalize second-order scaled action-target changes."""
+    """Penalize second-order clipped raw-action changes."""
 
     def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
         """Initialize the stateful reward term.
@@ -162,7 +228,7 @@ class second_action_rate_l2(ManagerTermBase):
         action = env.action_manager.action
         prev_action = env.action_manager.prev_action
         action_2nd_rate = action - 2.0 * prev_action + self._prev_prev_action
-        penalty = _scaled_action_l2(action_2nd_rate)
+        penalty = _raw_action_l2(action_2nd_rate)
 
         penalty = torch.where(self._action_history_count >= 2, penalty, torch.zeros_like(penalty))
         self._prev_prev_action[:] = prev_action

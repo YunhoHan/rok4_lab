@@ -52,40 +52,40 @@ ROK4_ADAPT_LINK_BETA = 0.06
 """ADAPT differential link length [m]."""
 
 ROK4_ACTUATOR_KP_VALUES = [
-    200.0,
-    200.0,
-    200.0,
-    200.0,
-    20.0,
-    20.0,
-    200.0,
-    200.0,
-    200.0,
-    200.0,
-    20.0,
-    20.0,
+    250.0,
+    250.0,
+    250.0,
+    250.0,
+    120.0,
+    120.0,
+    250.0,
+    250.0,
+    250.0,
+    250.0,
+    120.0,
+    120.0,
     100.0,
 ]
 ROK4_ACTUATOR_KP = _make_joint_dict(ROK4_ACTUATOR_KP_VALUES)
-"""Previous Isaac Lab baseline gains, applied by the ADAPT actuator-space PD model."""
+"""Isaac Gym RoK4 gains applied by the ADAPT actuator-space PD model."""
 
 ROK4_ACTUATOR_KD_VALUES = [
-    5.0,
-    5.0,
-    5.0,
-    5.0,
-    2.0,
-    2.0,
-    5.0,
-    5.0,
-    5.0,
-    5.0,
-    2.0,
-    2.0,
+    12.5,
+    12.5,
+    12.5,
+    12.5,
+    9.0,
+    9.0,
+    12.5,
+    12.5,
+    12.5,
+    12.5,
+    9.0,
+    9.0,
     5.0,
 ]
 ROK4_ACTUATOR_KD = _make_joint_dict(ROK4_ACTUATOR_KD_VALUES)
-"""Previous Isaac Lab baseline damping gains, applied in actuator coordinates."""
+"""Isaac Gym RoK4 damping gains applied in actuator coordinates."""
 
 ROK4_JOINT_TORQUE_LIMIT_VALUES = [
     150.0,

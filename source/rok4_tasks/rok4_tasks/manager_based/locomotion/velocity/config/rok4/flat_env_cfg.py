@@ -9,6 +9,7 @@ from isaaclab.utils import configclass
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
 from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import (
+    CommandsCfg,
     LocomotionVelocityRoughEnvCfg,
     RewardsCfg,
     TerminationsCfg,
@@ -109,6 +110,29 @@ class RoK4ObservationsCfg:
 
 
 @configclass
+class RoK4CommandsCfg(CommandsCfg):
+    """Direct velocity commands with Gym-style periodic standing windows."""
+
+    base_velocity = mdp.RoK4PeriodicFreezeVelocityCommandCfg(
+        asset_name="robot",
+        resampling_time_range=(10.0, 10.0),
+        rel_standing_envs=0.05,
+        rel_heading_envs=0.0,
+        heading_command=False,
+        debug_vis=True,
+        periodic_freeze_enabled=True,
+        periodic_freeze_interval_s=10.0,
+        periodic_freeze_duration_range_s=(1.5, 3.0),
+        ranges=mdp.RoK4PeriodicFreezeVelocityCommandCfg.Ranges(
+            lin_vel_x=ROK4_LIN_VEL_X_RANGE,
+            lin_vel_y=ROK4_LIN_VEL_Y_RANGE,
+            ang_vel_z=ROK4_ANG_VEL_Z_RANGE,
+            heading=None,
+        ),
+    )
+
+
+@configclass
 class RoK4RewardsCfg(RewardsCfg):
     """Reward terms for RoK4 flat velocity tracking."""
 
@@ -129,7 +153,7 @@ class RoK4RewardsCfg(RewardsCfg):
         params={
             "command_name": "base_velocity",
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["L_Foot_Link", "R_Foot_Link"]),
-            "threshold": 0.55,
+            "threshold": 0.4,
         },
     )
     feet_slide = RewTerm(
@@ -138,6 +162,27 @@ class RoK4RewardsCfg(RewardsCfg):
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["L_Foot_Link", "R_Foot_Link"]),
             "asset_cfg": SceneEntityCfg("robot", body_names=["L_Foot_Link", "R_Foot_Link"]),
+        },
+    )
+    feet_flat_orientation_l2 = RewTerm(
+        func=mdp.feet_flat_orientation_l2,
+        weight=-1.0,
+        params={
+            "asset_cfg": SceneEntityCfg(
+                "robot", body_names=["L_Foot_Link", "R_Foot_Link"], preserve_order=True
+            ),
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces", body_names=["L_Foot_Link", "R_Foot_Link"], preserve_order=True
+            ),
+        },
+    )
+    feet_stance_width_l2 = None
+    stand_still_joint_deviation_l2 = RewTerm(
+        func=mdp.stand_still_joint_deviation_l2,
+        weight=-1.0,
+        params={
+            "command_name": "base_velocity",
+            "asset_cfg": SceneEntityCfg("robot", joint_names=ROK4_JOINT_ORDER, preserve_order=True),
         },
     )
     dof_pos_limits = RewTerm(
@@ -160,7 +205,7 @@ class RoK4RewardsCfg(RewardsCfg):
     )
     joint_deviation_torso = RewTerm(
         func=mdp.joint_deviation_l1,
-        weight=-1.0,
+        weight=-0.1,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Torso_Yaw_Joint"])},
     )
     dof_acc_l2 = None
@@ -172,7 +217,7 @@ class RoK4RewardsCfg(RewardsCfg):
     )
     actuator_torques_l2 = RewTerm(
         func=mdp.actuator_torques_l2,
-        weight=-1.0e-5,
+        weight=-2.0e-6,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=ROK4_JOINT_ORDER, preserve_order=True)},
     )
     actuator_vel_l2 = RewTerm(
@@ -190,8 +235,8 @@ class RoK4RewardsCfg(RewardsCfg):
         weight=-1.0e-5,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=ROK4_JOINT_ORDER, preserve_order=True)},
     )
-    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.1)
-    second_action_rate_l2 = RewTerm(func=mdp.second_action_rate_l2, weight=-0.05)
+    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.005)
+    second_action_rate_l2 = RewTerm(func=mdp.second_action_rate_l2, weight=-0.0005)
 
 
 @configclass
@@ -221,6 +266,7 @@ class RoK4FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
     # Keep the 13-dimensional interface while interpreting it in actuator coordinates.
     actions: RoK4ActionsCfg = RoK4ActionsCfg()
     observations: RoK4ObservationsCfg = RoK4ObservationsCfg()
+    commands: RoK4CommandsCfg = RoK4CommandsCfg()
     # Keep the inherited timeout and replace base-only contact with RoK4 non-foot illegal contact.
     terminations: RoK4TerminationsCfg = RoK4TerminationsCfg()
 
@@ -260,7 +306,7 @@ class RoK4FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         # Rewards. These weights adapt the inherited velocity-locomotion penalties to RoK4's body and joint names.
         self.rewards.lin_vel_z_l2.weight = -0.2
         self.rewards.ang_vel_xy_l2.weight = -0.05
-        self.rewards.flat_orientation_l2.weight = -10.0
+        self.rewards.flat_orientation_l2.weight = -1.0
         self.rewards.undesired_contacts.weight = -1.0
         self.rewards.undesired_contacts.params["sensor_cfg"].body_names = ["Base_Link", "Upper_Body_Link"]
 
@@ -268,6 +314,7 @@ class RoK4FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.commands.base_velocity.ranges.lin_vel_x = ROK4_LIN_VEL_X_RANGE
         self.commands.base_velocity.ranges.lin_vel_y = ROK4_LIN_VEL_Y_RANGE
         self.commands.base_velocity.ranges.ang_vel_z = ROK4_ANG_VEL_Z_RANGE
+        self.commands.base_velocity.rel_standing_envs = 0.05
 
 
 @configclass
@@ -285,7 +332,8 @@ class RoK4FlatEnvCfg_PLAY(RoK4FlatEnvCfg):
         self.observations.policy.enable_corruption = False
         self.events.base_external_force_torque = None
         self.events.push_robot = None
-        self.commands.base_velocity.ranges.lin_vel_x = (0.85, 0.85)
+        self.commands.base_velocity.periodic_freeze_enabled = False
+        self.commands.base_velocity.ranges.lin_vel_x = (0.0, 0.0)
         self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
         self.commands.base_velocity.ranges.ang_vel_z = (0.0, 0.0)
 
