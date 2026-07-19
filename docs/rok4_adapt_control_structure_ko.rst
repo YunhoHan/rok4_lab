@@ -2,6 +2,7 @@ RoK4 ADAPT Action/Actuator 제어 구조 문서
 ================================================================================
 
 :작성일: 2026-07-16
+:최종 업데이트: 2026-07-19
 :대상 저장소: ``/home/rclab/rok4_lab``
 :기준 환경: Isaac Lab v2.3.2, Isaac Sim 5.1.0, ``env_isaaclab``
 
@@ -10,6 +11,10 @@ RoK4 ADAPT Action/Actuator 제어 구조 문서
 
 이 문서는 RoK4의 policy action이 ADAPT actuator position target을 거쳐 PhysX joint effort가 되기까지의 전체
 제어 경로를 설명한다. 특히 다음처럼 코드만 보면 혼동하기 쉬운 부분을 구분한다.
+
+현재 actuator-space reference policy는
+``2026-07-19_18-32-43_adapt_raw_action_relaxed_rewards/model_4999.pt`` 이며 experimental
+``Yunho ADAPT v1`` baseline으로 기록한다.
 
 * ``actions.py`` 와 ``rok4_adapt.py`` 의 관계는 상속이 아니라 runtime 객체 참조다.
 * policy는 actuator torque가 아니라 normalized actuator position offset을 출력한다.
@@ -349,6 +354,17 @@ Actuator PD의 실제 수식과 output
    tau_psi_requested = Kp(psi_target - psi) - Kd psi_dot
    tau_psi_applied   = clip(tau_psi_requested, -tau_limit, +tau_limit)
    tau_q_applied     = J^-T tau_psi_applied
+
+현재 gain은 기존 Isaac Gym RoK4의 canonical actuator 순서를 그대로 사용한다. 같은 숫자를 joint-space에 직접
+적용하는 것이 아니라 위 수식의 ``Kp`` 와 ``Kd`` 로 사용한다.
+
+.. code-block:: text
+
+   Left leg actuator Kp:  [250, 250, 250, 250, 120, 120]
+   Left leg actuator Kd:  [12.5, 12.5, 12.5, 12.5, 9, 9]
+   Right leg actuator Kp: [250, 250, 250, 250, 120, 120]
+   Right leg actuator Kd: [12.5, 12.5, 12.5, 12.5, 9, 9]
+   Torso yaw actuator:    Kp=100, Kd=5
 
 Custom actuator는 두 종류의 torque를 별도로 보관한다.
 

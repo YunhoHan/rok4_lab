@@ -2,6 +2,7 @@ RoK4 Flat RSL-RL Task 구조 문서
 ========================================================================
 
 :작성일: 2026-07-15
+:최종 업데이트: 2026-07-19
 :대상 저장소: ``/home/rclab/rok4_lab``
 :기준 환경: Isaac Lab v2.3.2, Isaac Sim 5.1.0, ``env_isaaclab``
 
@@ -19,6 +20,11 @@ ADAPT 행렬, ``actions.py`` 와 actuator의 객체 관계, ``compute()`` 입력
 ``None`` 처리, torque limit을 포함한 상세 제어 흐름은 ``docs/rok4_adapt_control_structure_ko.rst`` 와 생성된
 ``docs/_build/pdf/rok4_adapt_control_structure_ko.pdf`` 에 별도로 정리한다. 이 문서는 전체 task 구조와 연결 관계를
 중심으로 설명한다.
+
+현재 actuator-space 기준 정책은 ``2026-07-19_18-32-43_adapt_raw_action_relaxed_rewards/model_4999.pt`` 이며,
+이 문서에서는 이를 experimental ``Yunho ADAPT v1`` baseline으로 기록한다. 이전
+``2026-07-15_17-28-41/model_4999.pt`` 는 joint-space ``Yunho v1`` reference이므로 ADAPT action interface와
+checkpoint 호환성이 없다.
 
 현재 생성된 task는 다음 세 개다.
 
@@ -57,6 +63,7 @@ ADAPT 행렬, ``actions.py`` 와 actuator의 객체 관계, ``compute()`` 입력
                velocity/
                  mdp/
                    actions.py           # actuator action -> mapped joint target
+                   commands.py          # 10초 주기의 전 환경 exact-zero 정지 command
                    observations.py      # joint state -> actuator state
                    rewards.py           # RoK4 actuator-space reward 계산
                  config/
@@ -194,7 +201,9 @@ RoK4 구조 관계
           ├─ actuator torque/velocity/acceleration penalty
           ├─ actuator torque/velocity limit penalty
           ├─ mapped joint action-position limit penalty
-          └─ 1차/2차 scaled actuator action-rate penalty
+          ├─ 접촉 중 foot flat-orientation penalty
+          ├─ yaw-frame straight-walking stance-width penalty (구현됨, 현재 None)
+          └─ 1차/2차 clipped raw actuator action-rate penalty
 
    RoK4 debug/verification
      ├─ ContactSensor
@@ -294,12 +303,13 @@ Isaac Lab config가 joint name으로 안전하게 resolve하도록 dictionary로
      -> RoK4AdaptActuator.compute()에서 canonical actuator 순서로 변환
      -> tau_psi = Kp (psi_target - psi) - Kd psi_dot
 
-첫 actuator-interface 실험은 이전 Isaac Lab baseline gain을 사용한다.
+현재 actuator-interface 설정은 기존 Isaac Gym RoK4의 actuator-space gain을 사용한다. 이 값은 joint-space
+gain이 아니며 ``RoK4AdaptActuator.compute()`` 의 ``psi`` 오차와 속도에 적용된다.
 
 .. code-block:: text
 
-   한쪽 다리 Kp: [200, 200, 200, 200, 20, 20]
-   한쪽 다리 Kd: [  5,   5,   5,   5,  2,  2]
+   한쪽 다리 Kp: [250, 250, 250, 250, 120, 120]
+   한쪽 다리 Kd: [12.5, 12.5, 12.5, 12.5,   9,   9]
    Torso yaw:     Kp=100, Kd=5
 
 ``ROK4_KP`` 와 ``ROK4_KD`` 는 이전 이름을 import하는 코드의 호환 alias다. 현재 ``ROK4_TRAIN_CFG`` 의 실제
@@ -476,6 +486,9 @@ default state를 뺀 뒤 actuator 좌표로 변환한다. Position은 gait-ready
    * - ``mdp/actions.py``
      - RoK4 action 계산
      - 13차원 clipped raw actuator action을 actuator target과 ADAPT joint target으로 변환
+   * - ``mdp/commands.py``
+     - RoK4 command 계산
+     - 일반 uniform command에 10초 주기의 전 환경 exact-zero 정지 구간과 종료 후 재표본화를 추가
    * - ``mdp/observations.py``
      - RoK4 observation 계산
      - articulation joint position/velocity를 actuator position/velocity로 변환
@@ -574,10 +587,12 @@ Gymnasium task를 등록하는 파일이다. 여기에서 다음 task 이름이 
      - ``ROK4_JOINT_ORDER`` 기준 13차원 normalized actuator position offset
    * - Observation
      - actuator position/velocity를 포함한 blind proprioceptive history observation
+   * - Command
+     - 5% independent standing env와 10초마다 1.5~3.0초 동안 모든 env를 멈추는 periodic freeze
    * - Domain randomization
      - ``domain_randomization_cfg.py`` 의 ``apply_rok4_domain_randomization(self)`` 호출
    * - Reward
-     - velocity tracking, upright, action smoothness, 전체 13관절의 실제/목표 soft position limit, torque/acc penalty, foot contact 관련 reward
+     - velocity tracking, upright, action smoothness, 전체 13관절의 실제/목표 soft position limit, torque/acc penalty, foot flat orientation/contact 관련 reward. stance-width term은 현재 ``None``
    * - Termination
      - 부모 timeout 유지, Foot를 제외한 모든 body의 illegal contact
    * - Play cfg
@@ -661,9 +676,10 @@ action이라는 점이다. motor target만 scale, default actuator pose, ADAPT m
    의미가 actuator 좌표로 바뀌었다. 따라서 ``2026-07-15_17-28-41`` Yunho v1을 포함한 기존 joint-space
    checkpoint를 이 브랜치에서 resume/play하지 말고 actuator-interface 학습을 새로 시작해야 한다.
 
-반면 ``action_rate_l2`` 와 ``second_action_rate_l2`` reward는 raw action 차이를 그대로 쓰지 않고,
-``clipped_raw_action * ROK4_ACTUATOR_ACTION_SCALE`` 차이를 사용한다. observation은 raw actuator action 의미를
-유지하고 smoothness reward는 actuator target offset 변화량을 계산한다.
+``action_rate_l2`` 와 ``second_action_rate_l2`` reward는 observation의 ``last_action`` 과 같은
+``clipped_raw_action`` 좌표에서 각각 1차와 2차 차분을 계산한다. Action scale은 actuator target 생성에만
+사용하며 두 smoothness reward에는 적용하지 않는다. 다만 Hip Pitch/Knee action index ``2,3,8,9`` 는 RoK4의
+동적 보행 자유도를 위해 squared-error weight를 ``0.5`` 로 완화한다.
 
 ``ROK4_ACTUATOR_ACTION_SCALE`` 은 기존 Isaac Gym RoK4의 actuator action scale과 동일하다. 좌측 다리, 우측 다리,
 torso 순서의 값은 다음과 같다.
@@ -674,7 +690,7 @@ torso 순서의 값은 다음과 같다.
     0.4, 0.5, 1.25, 1.5, 0.75, 0.75,
     0.4]
 
-이 하나의 scale 배열을 actuator target 계산과 두 action smoothness reward가 공통으로 사용한다.
+이 scale 배열은 actuator target 계산에 사용한다. 두 action smoothness reward는 raw action을 사용한다.
 
 ADAPT 링크/limit 설정
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -697,13 +713,35 @@ Flat 학습은 ``lin_vel_x=(-0.1, 0.85) m/s``, ``lin_vel_y=(-0.3, 0.3) m/s``,
 ``ang_vel_z=(-0.6, 0.6) rad/s`` 를 사용한다. x command의 제한된 음수 영역은 후진 보행 curriculum의 중간
 단계이며, 이후 기존 Isaac Gym RoK4 범위인 ``(-0.3, 0.85) m/s`` 까지 확장할 수 있다.
 
-``feet_air_time_positive_biped`` 는 ``threshold=0.55 s``, ``weight=0.75`` 를 사용한다. threshold는 정확한 gait
-period 목표가 아니라 보상되는 single-stance 시간의 상한이다. weight를 유지한 채 threshold를 높였으므로 최대
-pre-``dt`` 항목 크기는 ``0.30`` 에서 ``0.4125`` 로 증가한다.
+``RoK4CommandsCfg`` 는 부모 ``CommandsCfg`` 의 ``base_velocity`` 를
+``RoK4PeriodicFreezeVelocityCommandCfg`` 로 교체한다. 일반 command resampling interval은 부모와 같은
+고정 ``(10.0, 10.0) s`` 를 사용한다. 10초 시점에 부모 term이 표본화한 command는 같은 step의 periodic
+freeze가 exact-zero로 덮어쓰며, freeze 종료 시 RoK4 term이 전체 환경의 새 command를 다시 표본화한다.
 
-Play 환경은 ``lin_vel_x=0.85 m/s`` 의 고정 전진 명령을 사용하고 ``lin_vel_y=0.0 m/s``,
+RoK4의 저수준 command interface는 기존 Gym, Teleop, ROS ``cmd_vel`` 과 동일한 base-frame
+``[vx, vy, wz]`` 이다. 따라서 ``heading_command=False``, ``rel_heading_envs=0.0``, ``heading=None`` 을
+사용하고 ``vx``, ``vy``, ``wz`` 를 각 범위에서 직접 표본화한다. World target heading이나 heading-error
+controller는 학습 command 생성에 사용하지 않는다. 일반 resampling에서 ``rel_standing_envs=0.05`` 에 의해
+환경의 약 5%가 독립적으로 exact-zero command를 받는다.
+
+이 독립 standing 표본과 별개로, command term은 10초마다 모든 환경을 동시에 exact-zero command로 바꾼다.
+각 전 환경 정지 구간은 ``Uniform(1.5, 3.0) s`` 로 한 번 표본화하며 모든 환경이 같은 duration을 공유한다.
+정지 중에는 모든 ``is_standing_env`` mask도 true로 강제하고, 정지가 끝나면 전체 환경의 새
+``[vx, vy, wz]`` command를 직접 표본화한다. 따라서 policy는 단순히 처음부터 정지한 episode뿐 아니라
+``walking -> standing -> new walking command`` 전환을 직접 경험한다.
+
+두 종류의 exact-zero standing에서 weight ``-1.0`` 인 ``stand_still_joint_deviation_l2`` 가 command term의
+``is_standing_env`` mask를 사용하여 전체 13관절의 실제 joint position을 default joint pose 근처로 유지한다.
+작은 non-zero 이동 command에는 이 penalty를 적용하지 않으므로 저속 추종과 standing이 충돌하지 않는다.
+
+``feet_air_time_positive_biped`` 는 G1 Flat과 같은 ``threshold=0.4 s``, ``weight=0.75`` 를 사용한다. threshold는
+정확한 gait period 목표가 아니라 보상되는 single-stance 시간의 상한이며, 최대 pre-``dt`` 항목 크기는
+``0.4 * 0.75 = 0.30`` 이다.
+
+Play 환경은 현재 standing 검증을 위해 ``lin_vel_x=0.0 m/s``, ``lin_vel_y=0.0 m/s``,
 ``ang_vel_z=0.0 rad/s`` 로 고정한다. Teleop 환경은 자동 표본화를 끄고 사용자가 입력한 base-frame
-``[lin_vel_x, lin_vel_y, ang_vel_z]`` 를 command buffer에 직접 기록한다.
+``[lin_vel_x, lin_vel_y, ang_vel_z]`` 를 command buffer에 직접 기록한다. Play와 이를 상속하는 Teleop은
+학습 전용 periodic freeze를 비활성화하므로 수동/고정 command를 주기적으로 덮어쓰지 않는다.
 
 초기 root 위치
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -959,7 +997,8 @@ Isaac Lab 원본 ``scripts/reinforcement_learning/rsl_rl/train.py`` 와 ``play.p
    4. 원본의 import isaaclab_tasks 바로 뒤에 import rok4_tasks 삽입
    5. train.py에는 RoK4OnPolicyRunner import/생성을 삽입
    6. teleop이면 device CLI, SE(2) 입력 생성, command update를 play.py에 삽입
-   7. 원본 script를 실행
+   7. keyboard teleop이면 R key의 one-shot environment reset request를 play loop에 삽입
+   8. 원본 script를 실행
 
 이 방식의 장점은 Isaac Lab 본체를 수정하지 않는다는 점이다.
 
@@ -1057,8 +1096,13 @@ Keyboard 실행:
      --checkpoint /path/to/model.pt \
      --real-time
 
-Keyboard는 Up/Down으로 전진/후진, Left/Right로 횡이동, ``Z``/``X`` 로 양/음 yaw, ``L`` 로 누적 command를
-초기화한다. 향후 keyboard mapping을 바꾸더라도 ``--teleop_device keyboard`` entry point는 유지한다.
+Keyboard는 Up/Down으로 전진/후진, Left/Right로 좌/우 횡이동, ``Z``/``X`` 로 양/음 yaw를 명령한다. ``L`` 은
+keyboard command만 ``[0,0,0]`` 으로 초기화한다. ``R`` 은 one-shot reset request를 기록하고, 다음 policy
+loop가 device command, simulation environment, policy state를 함께 초기화한다. Environment tensor는 기존
+play loop의 ``env.step()`` 에서 inference tensor로 생성되므로 수동 ``env.reset()`` 도 반드시
+``torch.inference_mode()`` 안에서 실행한다. 그렇지 않으면 inference tensor inplace-update 예외로 play가
+종료된다. 키 입력 전에 Isaac Sim viewport를 클릭해 keyboard focus를 주어야 한다. 각 motion key를 누르는 동안
+해당 축은 학습 command 범위의 끝값을 사용하고, 키를 놓으면 그 축 command가 제거된다.
 
 Teleop command는 100 Hz play loop 시작 시 command buffer에 기록된다. 다만 그 시점의 policy observation은
 직전 environment step에서 이미 생성되어 있으므로 현재 action에는 직전 command observation이 사용된다. 새
@@ -1203,9 +1247,29 @@ Normal training:
 
    ./isaaclab.sh -p ${ROK4LAB_DIR}/scripts/rsl_rl/train.py \
      --task RoK4-Isaac-Velocity-Flat-v0 \
-     --num_envs 512 \
+     --num_envs 4096 \
      --max_iterations 5000 \
-     --headless
+     --headless \
+     --run_name adapt_raw_action_relaxed_rewards
+
+Training with periodic video:
+
+.. code-block:: bash
+
+   ./isaaclab.sh -p ${ROK4LAB_DIR}/scripts/rsl_rl/train.py \
+     --task RoK4-Isaac-Velocity-Flat-v0 \
+     --num_envs 4096 \
+     --max_iterations 5000 \
+     --headless \
+     --video \
+     --video_length 500 \
+     --video_interval 10000 \
+     --run_name adapt_raw_action_relaxed_rewards_video
+
+``video_length`` 와 ``video_interval`` 은 PPO iteration이 아니라 environment/policy step 기준이다. 현재 100 Hz
+policy에서 위 설정은 5초 영상을 100초의 simulation time마다 기록하며 run folder의 ``videos/train/`` 에
+저장한다. Headless 녹화는 config에 설정된 고정 camera를 사용하므로 학습 중 대화식 zoom/회전은 할 수 없고,
+rendering으로 인해 GPU·학습시간·저장공간 overhead가 추가된다.
 
 Play:
 

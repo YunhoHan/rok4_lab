@@ -2,9 +2,12 @@
 
 Current project version: `0.2.0`
 
-Flat walking baseline: `Yunho v1` (experimental)
+Flat walking baseline: `Yunho ADAPT v1` (experimental)
 
-Reference policy: run `2026-07-15_17-28-41`, checkpoint `model_4999.pt`
+Current actuator-space reference policy: run `2026-07-19_18-32-43_adapt_raw_action_relaxed_rewards`, checkpoint
+`model_4999.pt`
+
+Previous joint-space reference policy: run `2026-07-15_17-28-41`, checkpoint `model_4999.pt`
 
 RoK4 Lab contains lightweight Isaac Lab scripts and RoK4 asset configuration code used to validate the RoK4 whole-body robot model before building reinforcement-learning tasks.
 
@@ -36,6 +39,7 @@ Isaac Lab
        └─ RoK4FlatEnvCfg
             ├─ RoK4ActionsCfg
             ├─ RoK4ObservationsCfg
+            ├─ RoK4CommandsCfg
             ├─ RoK4RewardsCfg
             └─ ROK4_TRAIN_CFG
 
@@ -45,6 +49,7 @@ RSL-RL
 
 RoK4 local MDP
   ├─ actions.py       raw actuator action -> psi_target -> q_target
+  ├─ commands.py      direct velocity command + periodic standing windows
   ├─ observations.py  joint state -> actuator-space observation
   └─ rewards.py       actuator-space penalties and action smoothness
 
@@ -318,13 +323,15 @@ The `last_action` observation term stores the clipped raw policy action, not the
 ONNX/TorchScript policy is called outside Isaac Lab train/play, clamp the policy output to `[-1, 1]` before applying
 `ROK4_ACTUATOR_ACTION_SCALE` and before saving it as the next `last_action`.
 
-The action smoothness rewards use scaled action-offset differences. In other words, `action_rate_l2` and
-`second_action_rate_l2` penalize changes in `clipped_raw_action * ROK4_ACTUATOR_ACTION_SCALE`, while the observation
-still stores the unscaled clipped raw actuator action.
+The action smoothness rewards use clipped raw policy-action differences, matching the G1 first-order convention.
+`action_rate_l2` and `second_action_rate_l2` use weights `-0.005` and `-0.0005`; the second-order term is kept at 10% of
+the first-order weight so it damps high-frequency action changes without dominating swing motion. Action scaling remains
+part of actuator-target generation but is not applied by either smoothness reward. Hip-pitch and knee action indices
+`[2, 3, 8, 9]` retain the RoK4-specific `0.5` squared-error multiplier.
 
 The torque, velocity, and acceleration penalties now operate in actuator coordinates, matching the previous Isaac Gym
 RoK4 basis. All 13 actuators contribute; hip-pitch and knee indices `[2, 3, 8, 9]` use a `0.5` multiplier.
-`actuator_torques_l2`, `actuator_vel_l2`, and `actuator_acc_l2` use weights `-1.0e-5`, `-1.0e-4`, and `-1.0e-8`.
+`actuator_torques_l2`, `actuator_vel_l2`, and `actuator_acc_l2` use weights `-2.0e-6`, `-1.0e-4`, and `-1.0e-8`.
 
 > **Checkpoint compatibility:** The tensor sizes remain 13 actions and 240 observations, but their semantics changed
 > from joint coordinates to actuator coordinates. Do not resume or play a joint-space checkpoint, including the
@@ -333,8 +340,8 @@ Acceleration remains the physical Isaac Lab acceleration transformed by `inverse
 difference.
 
 `ROK4_ACTUATOR_ACTION_SCALE` matches the previous Isaac Gym RoK4 actuator ranges. In left-leg, right-leg, and torso
-order, the values are `[0.4, 0.5, 1.25, 1.5, 0.75, 0.75, 0.4, 0.5, 1.25, 1.5, 0.75, 0.75, 0.4]`. The same values are
-shared by actuator-target calculation and both action smoothness rewards.
+order, the values are `[0.4, 0.5, 1.25, 1.5, 0.75, 0.75, 0.4, 0.5, 1.25, 1.5, 0.75, 0.75, 0.4]`. These values are used
+for actuator-target calculation; action smoothness is evaluated in clipped raw-action coordinates.
 
 Actuator mechanical torque limits are `[150, 150, 150, 150, 90, 90] N m` per leg and `150 N m` for torso yaw.
 Velocity limits are `[12, 12, 12, 12, 15, 15] rad/s` per leg and `12 rad/s` for torso yaw.
@@ -376,9 +383,19 @@ The flat training command ranges are `lin_vel_x=(-0.1, 0.85) m/s`, `lin_vel_y=(-
 `ang_vel_z=(-0.6, 0.6) rad/s`. The limited backward range is an intermediate curriculum step before expanding toward
 the previous Isaac Gym RoK4 range of `(-0.3, 0.85) m/s`.
 
-The positive biped feet-air-time reward uses `threshold=0.55 s` and `weight=0.75`. The threshold caps the rewarded
-single-stance duration; it is not an exact gait-period target. Keeping the weight while raising the threshold increases
-the maximum pre-`dt` contribution from `0.30` to `0.4125`.
+Training uses the RoK4-local `RoK4PeriodicFreezeVelocityCommand`. Normal command sampling uses the parent-compatible
+fixed `10 s` interval and directly samples base-frame `[lin_vel_x, lin_vel_y, ang_vel_z]`; world-heading control is
+disabled so training, Teleop, ROS `cmd_vel`, and the previous Gym task share the same command meaning. Each normal
+resampling independently assigns about 5% of environments an exact-zero standing command. Every 10 seconds the
+command term then forces all environments to `[0, 0, 0]` for one globally sampled `1.5-3.0 s` window. During that
+window it also sets the command term's standing mask, so the `stand_still_joint_deviation_l2` penalty with weight
+`-1.0` is active. When the window ends, all environment commands are resampled. This explicitly trains
+walking-to-standing and standing-to-walking transitions; the periodic freeze is disabled in Play and Teleop
+configurations.
+
+The positive biped feet-air-time reward uses `threshold=0.4 s` and `weight=0.75`, matching the G1 flat baseline. The
+threshold caps the rewarded single-stance duration; it is not an exact gait-period target. Its maximum pre-`dt`
+contribution is `0.4 * 0.75 = 0.30`.
 
 The `dof_pos_limits` reward applies to all 13 joints in `ROK4_JOINT_ORDER`. It uses each joint's
 `soft_joint_pos_limits`, derived from the USD hard limits with `soft_joint_pos_limit_factor=0.95`, and penalizes only
@@ -390,7 +407,7 @@ The `joint_action_target_pos_limits` reward is the Isaac Lab counterpart of the 
 Only target overshoot is summed, with the previous Gym coefficient `-0.001`; `dof_pos_limits` independently checks the
 actual simulated joint positions. Both Gym and the current Lab task therefore evaluate the mapped joint target.
 
-The Play task uses a fixed `lin_vel_x=0.85 m/s` command while keeping lateral and yaw commands at zero. The separate
+The Play task currently uses an exact-zero velocity command to check whether the policy can stand still. The separate
 Teleop task accepts a manual base-frame `[lin_vel_x, lin_vel_y, ang_vel_z]` command, disables heading control and
 automatic command resampling, uses one visual test-asset environment, and extends the episode timeout to 600 seconds.
 
@@ -409,6 +426,7 @@ source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/rok4/
 source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/mdp/
   __init__.py                     Re-exports Isaac Lab locomotion mdp plus RoK4 local mdp
   actions.py                      Converts raw actuator actions to mapped joint targets
+  commands.py                     Adds periodic all-environment exact-zero command windows
   observations.py                 Converts joint state to actuator-space observations
   rewards.py                      Owns actuator-space reward calculations and action smoothness terms
 ```
@@ -491,10 +509,30 @@ Train normally:
 ```bash
 ./isaaclab.sh -p ${ROK4LAB_DIR}/scripts/rsl_rl/train.py \
   --task RoK4-Isaac-Velocity-Flat-v0 \
-  --num_envs 512 \
+  --num_envs 4096 \
   --max_iterations 5000 \
-  --headless
+  --headless \
+  --run_name adapt_raw_action_relaxed_rewards
 ```
+
+Record periodic training videos by adding `--video`. The interval and length count policy/environment steps rather
+than PPO iterations. At the current 100 Hz policy rate, the following records a 5-second clip every 100 simulated
+seconds and writes it under the run directory's `videos/train/` folder:
+
+```bash
+./isaaclab.sh -p ${ROK4LAB_DIR}/scripts/rsl_rl/train.py \
+  --task RoK4-Isaac-Velocity-Flat-v0 \
+  --num_envs 4096 \
+  --max_iterations 5000 \
+  --headless \
+  --video \
+  --video_length 500 \
+  --video_interval 10000 \
+  --run_name adapt_raw_action_relaxed_rewards_video
+```
+
+Headless recording uses the configured fixed camera, so it cannot be interactively zoomed or rotated while training.
+Video rendering adds GPU, runtime, and storage overhead.
 
 Play a checkpoint:
 
@@ -532,6 +570,10 @@ Keyboard input uses the same script and command pipeline:
   --real-time
 ```
 
-Use Up/Down for forward/backward, Left/Right for lateral motion, `Z`/`X` for positive/negative yaw, and `L` to reset
-the keyboard command. The teleoperation command is written once per 100 Hz policy loop; the policy observes the new
+Use Up/Down for forward/backward, Left/Right for left/right lateral motion, `Z`/`X` for positive/negative yaw,
+`L` to reset only the keyboard command, and `R` to reset the simulated environment and policy state. Click the Isaac
+Sim viewport before pressing the keys so it receives keyboard events. Each motion key commands the corresponding
+training-range endpoint while held; releasing it removes that component. The `R` callback queues a one-shot request;
+the inference loop then clears the device command, resets the environment under `torch.inference_mode()`, and resets
+the policy state. The teleoperation command is written once per 100 Hz policy loop; the policy observes the new
 command on the following loop, giving one policy-period (`10 ms`) command latency.
