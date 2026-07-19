@@ -113,6 +113,21 @@ from rok4_tasks.manager_based.locomotion.velocity.config.rok4.flat_env_cfg impor
     return interface
 
 
+class _TeleopResetRequest:
+    """Store a keyboard reset request until the inference loop can process it safely."""
+
+    def __init__(self) -> None:
+        self._requested = False
+
+    def request(self) -> None:
+        self._requested = True
+
+    def consume(self) -> bool:
+        requested = self._requested
+        self._requested = False
+        return requested
+
+
 def _scale_teleop_command(raw_command: torch.Tensor, invert_lateral_and_yaw: bool = False) -> torch.Tensor:
     raw_command = torch.clamp(raw_command, -1.0, 1.0)
     command = torch.empty_like(raw_command)
@@ -147,8 +162,13 @@ def _scale_teleop_command(raw_command: torch.Tensor, invert_lateral_and_yaw: boo
         sim_device=str(env.unwrapped.device),
         dead_zone=args_cli.teleop_dead_zone,
     )
+    teleop_reset_request = _TeleopResetRequest()
+    if args_cli.teleop_device == "keyboard":
+        teleop_interface.add_callback("R", teleop_reset_request.request)
     base_velocity_command = env.unwrapped.command_manager.get_term("base_velocity")
     print(teleop_interface)
+    if args_cli.teleop_device == "keyboard":
+        print("\tReset environment: R")
 '''
         source = _replace_once(
             source,
@@ -159,7 +179,14 @@ def _scale_teleop_command(raw_command: torch.Tensor, invert_lateral_and_yaw: boo
         )
 
         inference_marker = "        # run everything in inference mode\n        with torch.inference_mode():\n"
-        command_update = '''        raw_teleop_command = teleop_interface.advance()
+        command_update = '''        if teleop_reset_request.consume():
+            teleop_interface.reset()
+            with torch.inference_mode():
+                obs, _ = env.reset()
+                reset_dones = torch.ones(env.num_envs, dtype=torch.bool, device=env.unwrapped.device)
+                policy_nn.reset(reset_dones)
+            print("[INFO] Teleoperation environment reset.")
+        raw_teleop_command = teleop_interface.advance()
         teleop_command = _scale_teleop_command(
             raw_teleop_command,
             invert_lateral_and_yaw=args_cli.teleop_device == "gamepad",
