@@ -14,7 +14,11 @@ def _replace_once(source: str, marker: str, replacement: str, script_path: Path,
 
 
 def _prepare_isaaclab_rsl_source(
-    script_path: Path, *, use_rok4_runner: bool = False, use_teleop: bool = False
+    script_path: Path,
+    *,
+    use_rok4_runner: bool = False,
+    use_teleop: bool = False,
+    use_push_ui: bool = False,
 ) -> str:
     """Prepare an Isaac Lab RSL-RL script for local RoK4 execution."""
     source = script_path.read_text(encoding="utf-8")
@@ -42,6 +46,36 @@ def _prepare_isaaclab_rsl_source(
             "runner = RoK4OnPolicyRunner(",
             script_path,
             "OnPolicyRunner construction",
+        )
+
+    if use_push_ui:
+        if script_path.name != "play.py":
+            raise ValueError("RoK4 push UI injection is supported only for the RSL-RL play script.")
+
+        wrapper_marker = "    env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)\n"
+        push_setup = '''
+    push_test_window = getattr(env.unwrapped, "_window", None)
+    if push_test_window is not None and not hasattr(push_test_window, "apply_pending_push"):
+        push_test_window = None
+'''
+        source = _replace_once(
+            source,
+            wrapper_marker,
+            wrapper_marker + push_setup,
+            script_path,
+            "RSL-RL environment wrapper",
+        )
+
+        inference_marker = "        # run everything in inference mode\n        with torch.inference_mode():\n"
+        push_update = '''        if push_test_window is not None:
+            push_test_window.apply_pending_push()
+'''
+        source = _replace_once(
+            source,
+            inference_marker,
+            push_update + inference_marker,
+            script_path,
+            "inference loop",
         )
 
     if use_teleop:
@@ -205,7 +239,10 @@ def _scale_teleop_command(raw_command: torch.Tensor, invert_lateral_and_yaw: boo
 
 
 def run_isaaclab_rsl_script(
-    script_name: str, use_rok4_runner: bool = False, use_teleop: bool = False
+    script_name: str,
+    use_rok4_runner: bool = False,
+    use_teleop: bool = False,
+    use_push_ui: bool = False,
 ) -> None:
     """Execute an Isaac Lab RSL-RL script after registering RoK4 tasks."""
     rok4_lab_dir = Path(__file__).resolve().parents[2]
@@ -228,6 +265,7 @@ def run_isaaclab_rsl_script(
         script_path,
         use_rok4_runner=use_rok4_runner,
         use_teleop=use_teleop,
+        use_push_ui=use_push_ui,
     )
 
     globals_dict = {

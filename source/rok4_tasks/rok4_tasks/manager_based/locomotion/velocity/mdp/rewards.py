@@ -76,18 +76,18 @@ def feet_stance_width_l2(
     return penalty * straight_command * moving_command
 
 
-def stand_still_joint_deviation_l2(
+def stand_still_joint_deviation_l1(
     env: ManagerBasedRLEnv,
     command_name: str,
     asset_cfg: SceneEntityCfg,
 ) -> torch.Tensor:
-    """Penalize squared joint-position deviations in designated standing environments [rad^2]."""
+    """Penalize absolute joint-position deviations in designated standing environments [rad]."""
     asset = env.scene[asset_cfg.name]
     command_term = env.command_manager.get_term(command_name)
     joint_pos_error = (
         asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
     )
-    return torch.sum(torch.square(joint_pos_error), dim=1) * command_term.is_standing_env
+    return torch.sum(torch.abs(joint_pos_error), dim=1) * command_term.is_standing_env
 
 
 def _weighted_l2(values: torch.Tensor) -> torch.Tensor:

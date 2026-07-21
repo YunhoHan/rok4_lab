@@ -903,7 +903,7 @@ checkpoint 호환성이 없다.</p>
             velocity/
               mdp/
                 actions.py           # actuator action -&gt; mapped joint target
-                commands.py          # 10초 주기의 전 환경 exact-zero 정지 command
+                commands.py          # 90/5/5 role과 비동기 exact-zero 정지 command
                 observations.py      # joint state -&gt; actuator state
                 rewards.py           # RoK4 actuator-space reward 계산
               config/
@@ -911,6 +911,7 @@ checkpoint 호환성이 없다.</p>
                   __init__.py        # Gym task 등록
                   flat_env_cfg.py    # RoK4 Flat env/reward/action/obs 정의
                   contact_force_visualizer.py # 발 접촉력 화살표/숫자 debug view
+                  push_test_window.py # Play/Teleop 수동 push UI
                   domain_randomization_cfg.py # RoK4 DR 범위와 event mode 정의
                   agents/
                     rsl_rl_ppo_cfg.py # RSL-RL PPO 설정
@@ -1031,7 +1032,7 @@ RoK4 local MDP
        ├─ actuator torque/velocity/acceleration penalty
        ├─ actuator torque/velocity limit penalty
        ├─ mapped joint action-position limit penalty
-       ├─ 접촉 중 foot flat-orientation penalty
+       ├─ 접촉 중 foot flat-orientation penalty (구현됨, 현재 None)
        ├─ yaw-frame straight-walking stance-width penalty (구현됨, 현재 None)
        └─ 1차/2차 clipped raw actuator action-rate penalty
 
@@ -1040,6 +1041,10 @@ RoK4 debug/verification
   │    └─ 자식(상속): RoK4ContactForceVisualizer          [contact_force_visualizer.py]
   │         ├─ env-0 좌우 발 world-frame GRF 화살표
   │         └─ 좌우 발 force magnitude 숫자 panel
+  ├─ ManagerBasedRLEnvWindow
+  │    └─ 자식(상속): RoK4PushTestWindow                   [push_test_window.py]
+  │         ├─ Play/Teleop의 world-frame root delta-v 버튼
+  │         └─ 다음 policy step에서 선택 env에 push 적용
   ├─ domain_randomization_cfg.py
   │    └─ material/mass/COM/external wrench/reset DR 설정
   ├─ check_rok4_zero.py
@@ -1129,10 +1134,11 @@ Isaac Lab config가 joint name으로 안전하게 resolve하도록 dictionary로
   -&gt; IdealPDActuator 초기화 buffer
   -&gt; RoK4AdaptActuator.compute()에서 canonical actuator 순서로 변환
   -&gt; tau_psi = Kp (psi_target - psi) - Kd psi_dot</code></pre>
-<p>현재 actuator-interface 설정은 기존 Isaac Gym RoK4의 actuator-space gain을 사용한다. 이 값은 joint-space
-gain이 아니며 <span class="docutils literal">RoK4AdaptActuator.compute()</span> 의 <span class="docutils literal">psi</span> 오차와 속도에 적용된다.</p>
-<pre class="code text literal-block"><code>한쪽 다리 Kp: [250, 250, 250, 250, 120, 120]
-한쪽 다리 Kd: [12.5, 12.5, 12.5, 12.5,   9,   9]
+<p>현재 actuator-interface 설정은 Isaac Gym RoK4의 앞쪽 네 actuator gain을 유지하고, 수동적인 toe-off와 지형
+적응성을 시험하기 위해 각 다리의 마지막 coupled actuator pair만 낮춘다. 이 값은 joint-space gain이 아니며
+<span class="docutils literal">RoK4AdaptActuator.compute()</span> 의 <span class="docutils literal">psi</span> 오차와 속도에 적용된다.</p>
+<pre class="code text literal-block"><code>한쪽 다리 Kp: [250, 250, 250, 250,  80,  80]
+한쪽 다리 Kd: [12.5, 12.5, 12.5, 12.5, 7.5, 7.5]
 Torso yaw:     Kp=100, Kd=5</code></pre>
 <p><span class="docutils literal">ROK4_KP</span> 와 <span class="docutils literal">ROK4_KD</span> 는 이전 이름을 import하는 코드의 호환 alias다. 현재 <span class="docutils literal">ROK4_TRAIN_CFG</span> 의 실제
 제어 경로는 <span class="docutils literal">ROK4_ACTUATOR_KP</span> 와 <span class="docutils literal">ROK4_ACTUATOR_KD</span> 를 직접 사용한다.</p>
@@ -1183,7 +1189,8 @@ RoK4AdaptActuator
 
 RoK4FlatEnvCfg_PLAY
   ├─ 상속: RoK4FlatEnvCfg
-  └─ 재생 사용: ROK4_TEST_CFG
+  ├─ 재생 사용: ROK4_TEST_CFG
+  └─ UI 사용: RoK4PushTestWindow
 
 RoK4RewardsCfg
   ├─ 상속: IsaacLab RewardsCfg
@@ -1218,7 +1225,8 @@ Isaac Lab <span class="docutils literal">ObservationGroupCfg</span> 를 상속�
 기능을 사용한다.</p>
 <pre class="code text literal-block"><code>새 class 정의
   RoK4ObservationsCfg                          # 부모 ObservationsCfg 상속 없음
-    └─ PolicyCfg(ObsGroup)                    # ObservationGroupCfg 상속
+    ├─ PolicyCfg(ObsGroup)                    # actor용 5-step noisy history
+    └─ PrivilegedCfg(ObsGroup)                # critic 전용 현재 base linear velocity
 
 환경 field 교체
   LocomotionVelocityRoughEnvCfg
@@ -1229,8 +1237,9 @@ Isaac Lab <span class="docutils literal">ObservationGroupCfg</span> 를 상속�
          -&gt; 상속받은 observations field의 객체를 RoK4 config로 통째로 교체</code></pre>
 <p>따라서 이것은 <span class="docutils literal">RoK4ObservationsCfg</span> 가 부모 observation class를 상속해 method를 override하는 구조가 아니다.
 <span class="docutils literal">RoK4FlatEnvCfg</span> 가 상속받은 <span class="docutils literal">observations</span> config field를 새 객체로 대체하는 config-level override다. 부모의
-<span class="docutils literal">base_lin_vel</span>, <span class="docutils literal">joint_pos</span>, <span class="docutils literal">joint_vel</span>, <span class="docutils literal">height_scan</span> term은 자동으로 남지 않으며, RoK4가 아래 term을
-명시적으로 다시 구성한다.</p>
+부모의 <span class="docutils literal">base_lin_vel</span>, <span class="docutils literal">joint_pos</span>, <span class="docutils literal">joint_vel</span>, <span class="docutils literal">height_scan</span> term은 자동으로 남지 않는다. RoK4는
+아래 policy term을 명시적으로 다시 구성하고, <span class="docutils literal">base_lin_vel</span> 만 별도의 critic 전용 privileged group으로
+다시 추가한다.</p>
 <table>
 <colgroup>
 <col style="width: 33%" />
@@ -1277,6 +1286,11 @@ Isaac Lab <span class="docutils literal">ObservationGroupCfg</span> 를 상속�
 <p><span class="docutils literal">history_length=5</span> 와 <span class="docutils literal">flatten_history_dim=True</span> 를 적용하므로 최종 policy tensor는 <span class="docutils literal">48 * 5 = 240</span>
 차원이다. <span class="docutils literal">enable_corruption=True</span> 는 각 <span class="docutils literal">ObsTerm</span> 에 설정된 noise를 활성화하지만 dimension을 바꾸지 않는다.
 <span class="docutils literal">concatenate_terms=True</span> 는 선언된 term들을 하나의 policy tensor로 이어 붙인다.</p>
+<p><span class="docutils literal">PrivilegedCfg</span> 는 simulator의 현재 <span class="docutils literal"><span class="pre">base_lin_vel_b=[vx,</span> vy, vz]</span> 3개를 noise와 history 없이 제공한다.
+PPO runner의 <span class="docutils literal">obs_groups</span> 는 actor에 <span class="docutils literal">[&quot;policy&quot;]</span>, critic에 <span class="docutils literal">[&quot;policy&quot;, &quot;privileged&quot;]</span> 를 연결한다.
+따라서 actor 입력은 기존과 같은 240차원이고 critic 입력은 <span class="docutils literal">240 + 3 = 243</span> 차원이다. Critic-only 정보는
+inference policy나 ONNX actor 입력에 포함되지 않는다. 다만 critic 첫 입력층 크기가 달라지므로 이 변경 이전의
+240/240 actor-critic checkpoint는 새 설정에 그대로 resume하기보다 새 run으로 학습하는 것이 안전하다.</p>
 <p>현재 <span class="docutils literal">actuator_pos</span> 와 <span class="docutils literal">actuator_vel</span> term은 부모 Isaac Lab의 <span class="docutils literal">joint_pos_rel</span>, <span class="docutils literal">joint_vel_rel</span> 패턴처럼
 default state를 뺀 뒤 actuator 좌표로 변환한다. Position은 gait-ready default pose에서 0이 되고, 현재
 <span class="docutils literal">q_dot_default=0</span> 이므로 velocity 값은 absolute velocity와 수치상 같다. 별도의 수동 observation scale은
@@ -1321,7 +1335,7 @@ default state를 뺀 뒤 actuator 좌표로 변환한다. Position은 gait-ready
 </tr>
 <tr><td><p><span class="docutils literal">mdp/commands.py</span></p></td>
 <td><p>RoK4 command 계산</p></td>
-<td><p>일반 uniform command에 10초 주기의 전 환경 exact-zero 정지 구간과 종료 후 재표본화를 추가</p></td>
+<td><p>90/5/5 episode role과 환경별 비동기 정지 구간을 uniform command에 추가</p></td>
 </tr>
 <tr><td><p><span class="docutils literal">mdp/observations.py</span></p></td>
 <td><p>RoK4 observation 계산</p></td>
@@ -1432,19 +1446,19 @@ RoK4-Isaac-Velocity-Flat-Teleop-v0</code></pre>
 <td><p>actuator position/velocity를 포함한 blind proprioceptive history observation</p></td>
 </tr>
 <tr><td><p>Command</p></td>
-<td><p>5% independent standing env와 10초마다 1.5~3.0초 동안 모든 env를 멈추는 periodic freeze</p></td>
+<td><p>90% mixed, 5% always-standing, 5% always-walking role과 mixed env별 비동기 periodic freeze</p></td>
 </tr>
 <tr><td><p>Domain randomization</p></td>
 <td><p><span class="docutils literal">domain_randomization_cfg.py</span> 의 <span class="docutils literal">apply_rok4_domain_randomization(self)</span> 호출</p></td>
 </tr>
 <tr><td><p>Reward</p></td>
-<td><p>velocity tracking, upright, action smoothness, 전체 13관절의 실제/목표 soft position limit, torque/acc penalty, foot flat orientation/contact 관련 reward. stance-width term은 현재 <span class="docutils literal">None</span></p></td>
+<td><p>velocity tracking, upright, action smoothness, 전체 13관절의 실제/목표 soft position limit, torque/acc/contact 관련 reward. foot-flat orientation과 stance-width term은 현재 <span class="docutils literal">None</span></p></td>
 </tr>
 <tr><td><p>Termination</p></td>
 <td><p>부모 timeout 유지, Foot를 제외한 모든 body의 illegal contact</p></td>
 </tr>
 <tr><td><p>Play cfg</p></td>
-<td><p><span class="docutils literal">ROK4_TEST_CFG</span> 로 교체, 적은 env 수, corruption off, push/random external force off</p></td>
+<td><p><span class="docutils literal">ROK4_TEST_CFG</span> 로 교체, 적은 env 수, corruption off, 자동 push/random external force off, 수동 Push UI 사용</p></td>
 </tr>
 <tr><td><p>Teleop cfg</p></td>
 <td><p>Play cfg를 상속하고 1개 env, 600초 timeout, heading off, 자동 command resampling off 설정</p></td>
@@ -1537,33 +1551,42 @@ position soft limit은 추가하지 않는다. 변환된 joint torque에 대한 
 </section>
 <section id="command">
 <h3>학습 command 범위</h3>
-<p>Flat 학습은 <span class="docutils literal"><span class="pre">lin_vel_x=(-0.1,</span> 0.85) m/s</span>, <span class="docutils literal"><span class="pre">lin_vel_y=(-0.3,</span> 0.3) m/s</span>,
-<span class="docutils literal"><span class="pre">ang_vel_z=(-0.6,</span> 0.6) rad/s</span> 를 사용한다. x command의 제한된 음수 영역은 후진 보행 curriculum의 중간
-단계이며, 이후 기존 Isaac Gym RoK4 범위인 <span class="docutils literal"><span class="pre">(-0.3,</span> 0.85) m/s</span> 까지 확장할 수 있다.</p>
+<p>Flat 학습은 <span class="docutils literal"><span class="pre">lin_vel_x=(-0.3,</span> 0.85) m/s</span>, <span class="docutils literal"><span class="pre">lin_vel_y=(-0.3,</span> 0.3) m/s</span>,
+<span class="docutils literal"><span class="pre">ang_vel_z=(-0.6,</span> 0.6) rad/s</span> 를 사용한다. 이전 Isaac Gym RoK4의 후진 하한을 복원하되, 후진 전용 환경
+population은 따로 분리하지 않고 동일한 uniform x-command 표본화 안에서 학습한다.</p>
 <p><span class="docutils literal">RoK4CommandsCfg</span> 는 부모 <span class="docutils literal">CommandsCfg</span> 의 <span class="docutils literal">base_velocity</span> 를
 <span class="docutils literal">RoK4PeriodicFreezeVelocityCommandCfg</span> 로 교체한다. 일반 command resampling interval은 부모와 같은
-고정 <span class="docutils literal">(10.0, 10.0) s</span> 를 사용한다. 10초 시점에 부모 term이 표본화한 command는 같은 step의 periodic
-freeze가 exact-zero로 덮어쓰며, freeze 종료 시 RoK4 term이 전체 환경의 새 command를 다시 표본화한다.</p>
+고정 <span class="docutils literal">(10.0, 10.0) s</span> 를 사용한다. 각 episode reset에서 환경은 확률적으로 다음 역할 중 하나를 받고,
+해당 episode 동안 역할을 유지한다.</p>
+<pre class="code text literal-block"><code>90% mixed           : moving &lt;-&gt; standing 비동기 전환
+ 5% always-standing : episode 전체 exact-zero command
+ 5% always-walking  : episode 전체 moving command</code></pre>
+<p>Mixed 환경은 <span class="docutils literal">10.0 s</span> cycle 안에서 서로 다른 random phase로 시작한다. 각 환경은 독립적으로
+<span class="docutils literal">Uniform(1.5, 3.0) s</span> standing duration을 표본화하므로 더 이상 모든 환경이 동시에 멈추지 않는다.
+Standing 구간 종료 시 해당 환경만 새 moving command를 표본화한다. 평균 duration <span class="docutils literal">2.25 s</span> 를 기준으로 하면
+전체 time sample은 대략 standing <span class="docutils literal">25%</span>, moving <span class="docutils literal">75%</span> 가 된다. Always-walking 환경은 planar command norm이
+<span class="docutils literal">0.15 m/s</span> 이상일 때까지 다시 표본화하여 연속 보행 표본을 보존한다.</p>
 <p>RoK4의 저수준 command interface는 기존 Gym, Teleop, ROS <span class="docutils literal">cmd_vel</span> 과 동일한 base-frame
 <span class="docutils literal">[vx, vy, wz]</span> 이다. 따라서 <span class="docutils literal">heading_command=False</span>, <span class="docutils literal">rel_heading_envs=0.0</span>, <span class="docutils literal">heading=None</span> 을
 사용하고 <span class="docutils literal">vx</span>, <span class="docutils literal">vy</span>, <span class="docutils literal">wz</span> 를 각 범위에서 직접 표본화한다. World target heading이나 heading-error
-controller는 학습 command 생성에 사용하지 않는다. 일반 resampling에서 <span class="docutils literal">rel_standing_envs=0.05</span> 에 의해
-환경의 약 5%가 독립적으로 exact-zero command를 받는다.</p>
-<p>이 독립 standing 표본과 별개로, command term은 10초마다 모든 환경을 동시에 exact-zero command로 바꾼다.
-각 전 환경 정지 구간은 <span class="docutils literal">Uniform(1.5, 3.0) s</span> 로 한 번 표본화하며 모든 환경이 같은 duration을 공유한다.
-정지 중에는 모든 <span class="docutils literal">is_standing_env</span> mask도 true로 강제하고, 정지가 끝나면 전체 환경의 새
-<span class="docutils literal">[vx, vy, wz]</span> command를 직접 표본화한다. 따라서 policy는 단순히 처음부터 정지한 episode뿐 아니라
-<span class="docutils literal">walking <span class="pre">-&gt;</span> standing <span class="pre">-&gt;</span> new walking command</span> 전환을 직접 경험한다.</p>
-<p>두 종류의 exact-zero standing에서 weight <span class="docutils literal"><span class="pre">-1.0</span></span> 인 <span class="docutils literal">stand_still_joint_deviation_l2</span> 가 command term의
+controller는 학습 command 생성에 사용하지 않는다. 이전 <span class="docutils literal">rel_standing_envs=0.05</span> 부모 경로는 역할 기반
+standing과의 중복 배정을 피하기 위해 현재 <span class="docutils literal">rel_standing_envs=0.0</span> 으로 끈다.
+Exact-zero command는 mixed standing window와 always-standing 역할에서만 생성하며, 두 경로 모두 command를
+<span class="docutils literal">[0, 0, 0]</span> 으로 만드는 동시에 <span class="docutils literal">is_standing_env=True</span> 를 설정한다. 일반 mixed moving command는 크기가
+작더라도 standing으로 변환하지 않으므로 연속적인 저속 command 범위를 유지한다.</p>
+<p>모든 exact-zero standing에서 weight <span class="docutils literal"><span class="pre">-0.2</span></span> 인 <span class="docutils literal">stand_still_joint_deviation_l1</span> 이 command term의
 <span class="docutils literal">is_standing_env</span> mask를 사용하여 전체 13관절의 실제 joint position을 default joint pose 근처로 유지한다.
-작은 non-zero 이동 command에는 이 penalty를 적용하지 않으므로 저속 추종과 standing이 충돌하지 않는다.</p>
+각 관절 오차의 절댓값을 합산하므로 작은 standing 자세 오차도 강하게 억제한다. 작은 non-zero 이동 command에는
+이 penalty를 적용하지 않는다.</p>
 <p><span class="docutils literal">feet_air_time_positive_biped</span> 는 G1 Flat과 같은 <span class="docutils literal">threshold=0.4 s</span>, <span class="docutils literal">weight=0.75</span> 를 사용한다. threshold는
 정확한 gait period 목표가 아니라 보상되는 single-stance 시간의 상한이며, 최대 pre-<span class="docutils literal">dt</span> 항목 크기는
 <span class="docutils literal">0.4 * 0.75 = 0.30</span> 이다.</p>
 <p>Play 환경은 현재 standing 검증을 위해 <span class="docutils literal">lin_vel_x=0.0 m/s</span>, <span class="docutils literal">lin_vel_y=0.0 m/s</span>,
 <span class="docutils literal">ang_vel_z=0.0 rad/s</span> 로 고정한다. Teleop 환경은 자동 표본화를 끄고 사용자가 입력한 base-frame
 <span class="docutils literal">[lin_vel_x, lin_vel_y, ang_vel_z]</span> 를 command buffer에 직접 기록한다. Play와 이를 상속하는 Teleop은
-학습 전용 periodic freeze를 비활성화하므로 수동/고정 command를 주기적으로 덮어쓰지 않는다.</p>
+학습 전용 episode role과 periodic freeze를 비활성화하므로 수동/고정 command를 덮어쓰지 않는다.
+두 환경 모두 <span class="docutils literal">RoK4PushTestWindow</span> 를 사용하므로 고정 command와 수동 command 각각에서 외란 복원 능력을
+같은 버튼으로 검사할 수 있다.</p>
 </section>
 <section id="root">
 <h3>초기 root 위치</h3>
@@ -1805,7 +1828,7 @@ actor 입력을 5 frame 쌓는 <span class="docutils literal">self.observations.
 <td><p><span class="docutils literal">0.01</span></p></td>
 </tr>
 <tr><td><p>obs groups</p></td>
-<td><p>actor와 critic 모두 <span class="docutils literal">policy</span> observation 사용</p></td>
+<td><p>actor는 <span class="docutils literal">policy</span> 240차원, critic은 <span class="docutils literal">policy + privileged</span> 243차원</p></td>
 </tr>
 </tbody>
 </table>
@@ -1886,6 +1909,29 @@ policy가 얼마나 달라졌는지를 측정한다. 기존 TensorBoard event �
 </span>  --task RoK4-Isaac-Velocity-Flat-Play-v0 <span class="literal string escape">\
 </span>  --num_envs <span class="literal number">16</span> <span class="literal string escape">\
 </span>  --checkpoint /path/to/model.pt</code></pre>
+<p>이 local launcher는 Isaac Lab 원본 play loop에 <span class="docutils literal">RoK4PushTestWindow.apply_pending_push()</span> 호출을 삽입한다.
+따라서 UI callback은 simulation tensor를 직접 바꾸지 않고 push 요청만 queue하며, 실제 root velocity 변경은
+다음 policy-step 경계에서 실행된다.</p>
+</section>
+<section id="manual-push-test-ui">
+<h3>Manual push test UI</h3>
+<p><span class="docutils literal">push_test_window.py</span> 의 <span class="docutils literal">RoK4PushTestWindow</span> 는 Isaac Lab의 <span class="docutils literal">ManagerBasedRLEnvWindow</span> 를 상속하고
+기존 Isaac Lab 창에 <span class="docutils literal">RoK4 Push Test</span> frame을 추가한다. 별도의 키보드/gamepad mapping 없이 마우스로 다음
+버튼을 사용할 수 있다.</p>
+<ul class="simple">
+<li><p><span class="docutils literal">+X</span>, <span class="docutils literal"><span class="pre">-X</span></span>, <span class="docutils literal">+Y</span>, <span class="docutils literal"><span class="pre">-Y</span></span>: 선택 방향으로 root 선속도를 변경</p></li>
+<li><p><span class="docutils literal">Random XY</span>: X/Y 속도 변화를 각각 독립적으로 <span class="docutils literal"><span class="pre">[-magnitude,</span> magnitude]</span> 에서 표본화</p></li>
+<li><p><span class="docutils literal">Delta velocity [m/s]</span>: <span class="docutils literal"><span class="pre">0.05-1.0</span> m/s</span> 범위의 변화량, 기본값 <span class="docutils literal">0.5 m/s</span></p></li>
+</ul>
+<p>버튼이 만드는 값은 world frame의 <span class="docutils literal">Delta <span class="pre">v=[Delta</span> vx, Delta vy, 0]</span> 이다. 선택한 환경의 현재
+<span class="docutils literal"><span class="pre">root_vel_w=[vx,vy,vz,wx,wy,wz]</span></span> 를 읽고 X/Y 성분에만 <span class="docutils literal">Delta v</span> 를 더한 뒤
+<span class="docutils literal">write_root_velocity_to_sim()</span> 으로 기록한다. 따라서 이는 newton 단위의 일정 시간 외력을 적분하는 방식이
+아니라, 충격 외란과 비슷한 순간 root 속도 변화다. velocity command 자체는 바꾸지 않는다.</p>
+<p>Play가 여러 환경을 사용할 때는 <span class="docutils literal">Viewer Settings &gt; Environment Index</span> 로 선택한 환경 하나에만 적용한다.
+Teleop은 env가 하나이므로 항상 env 0이다. 학습 중 부모 <span class="docutils literal">push_robot</span> event는 각 환경에 10-15초 간격으로
+독립적인 X/Y 속도 외란을 자동 적용하지만, Play/Teleop에서는 자동 event를 끄고 이 수동 버튼만 사용한다.
+버튼 UI는 GUI가 있는 local <span class="docutils literal">play.py</span> 및 <span class="docutils literal">play_teleop.py</span> wrapper에서만 동작하며 headless 학습에는
+생성되지 않는다. Isaac Lab 원본 파일은 수정하지 않는다.</p>
 </section>
 <section id="contact-force-debug-visualization">
 <h3>Contact force debug visualization</h3>
@@ -1928,7 +1974,7 @@ policy가 얼마나 달라졌는지를 측정한다. 기존 TensorBoard event �
 <p>Gamepad의 left stick 위/아래는 x 선속도를 명령한다. Left stick 오른쪽은 음의 y 선속도, 왼쪽은 양의 y
 선속도이며, right stick 오른쪽은 음의 yaw, 왼쪽은 양의 yaw를 명령하므로 스틱 방향과 로봇의 이동/회전
 방향이 일치한다. 정규화된 입력은 <span class="docutils literal"><span class="pre">[-1,</span> 1]</span> 로 clip한 뒤 학습 범위
-<span class="docutils literal"><span class="pre">vx=(-0.1,</span> 0.85) m/s</span>, <span class="docutils literal"><span class="pre">vy=(-0.3,</span> 0.3) m/s</span>, <span class="docutils literal"><span class="pre">wz=(-0.6,</span> 0.6) rad/s</span> 로 scale한다.</p>
+<span class="docutils literal"><span class="pre">vx=(-0.3,</span> 0.85) m/s</span>, <span class="docutils literal"><span class="pre">vy=(-0.3,</span> 0.3) m/s</span>, <span class="docutils literal"><span class="pre">wz=(-0.6,</span> 0.6) rad/s</span> 로 scale한다.</p>
 <p>Keyboard 실행:</p>
 <pre class="code bash literal-block"><code>./isaaclab.sh -p /home/rclab/rok4_lab/scripts/rsl_rl/play_teleop.py <span class="literal string escape">\
 </span>  --task RoK4-Isaac-Velocity-Flat-Teleop-v0 <span class="literal string escape">\
@@ -1946,6 +1992,8 @@ play loop의 <span class="docutils literal">env.step()</span> 에서 inference t
 직전 environment step에서 이미 생성되어 있으므로 현재 action에는 직전 command observation이 사용된다. 새
 command는 이어지는 step 후 observation을 통해 다음 policy loop에서 보이며, 수동 입력부터 policy 반영까지 최대
 한 policy period인 약 <span class="docutils literal">10 ms</span> 가 걸린다.</p>
+<p>Teleop에서도 같은 <span class="docutils literal">RoK4 Push Test</span> frame이 표시된다. 조이스틱/키보드로 이동 command를 유지한 상태에서
+마우스로 방향 버튼을 눌러 command tracking과 외란 복원을 동시에 확인할 수 있다.</p>
 </section>
 </section>
 <section id="id4">
@@ -1961,7 +2009,9 @@ command는 이어지는 step 후 observation을 통해 다음 policy loop에서 
 <p>새 Flat RL Task 섹션을 추가했다. task 이름, observation/action 구조, smoke test, normal training,
 play 명령어, DR 관리 파일, self-collision 설정을 문서화했다.
 Teleop task, gamepad/keyboard 입력, command scale과 한 policy-step 입력 지연도 함께 문서화했다.
-Contact Forces debug toggle로 환경 0의 좌우 발 접촉력 화살표와 실시간 newton 값을 확인하는 방법도 문서화했다.</p>
+Contact Forces debug toggle로 환경 0의 좌우 발 접촉력 화살표와 실시간 newton 값을 확인하는 방법도 문서화했다.
+Play/Teleop의 <span class="docutils literal">RoK4 Push Test</span> 버튼, world-frame <span class="docutils literal">Delta v</span> 의미, 선택 environment 및 queue 적용 흐름도
+문서화했다.</p>
 </section>
 <section id="changelog-md">
 <h3><span class="docutils literal">CHANGELOG.md</span></h3>
@@ -2014,10 +2064,13 @@ Contact Forces debug toggle로 환경 0의 좌우 발 접촉력 화살표와 실
 <td><p><span class="docutils literal">13</span></p></td>
 </tr>
 <tr><td><p>observation shape</p></td>
-<td><p><span class="docutils literal">240</span></p></td>
+<td><p><span class="docutils literal">policy=240</span>, <span class="docutils literal">privileged=3</span></p></td>
 </tr>
 <tr><td><p>actor input</p></td>
 <td><p>5-step history 기반 240차원</p></td>
+</tr>
+<tr><td><p>critic input</p></td>
+<td><p>actor history와 현재 <span class="docutils literal">base_lin_vel_b</span> 를 합친 243차원</p></td>
 </tr>
 <tr><td><p>actor output</p></td>
 <td><p>13차원 normalized actuator action</p></td>
@@ -2041,7 +2094,7 @@ height scanner
 camera observation
 explicit estimator / MLP encoder
 teacher-student distillation
-asymmetric privileged critic</code></pre>
+추가 privileged terrain/contact state</code></pre>
 <p>추후 권장 순서는 다음과 같다.</p>
 <pre class="code text literal-block"><code>1. Flat smoke test 확인
 2. Flat 학습으로 서기/걷기 안정화
@@ -2090,6 +2143,8 @@ rendering으로 인해 GPU·학습시간·저장공간 overhead가 추가된다.
 </span>  --task RoK4-Isaac-Velocity-Flat-Play-v0 <span class="literal string escape">\
 </span>  --num_envs <span class="literal number">16</span> <span class="literal string escape">\
 </span>  --checkpoint /path/to/model.pt</code></pre>
+<p>실행 후 <span class="docutils literal">RoK4 Push Test</span> frame에서 <span class="docutils literal">Delta velocity [m/s]</span> 를 정하고 방향 버튼을 누른다. 여러 env를
+띄운 경우 <span class="docutils literal">Viewer Settings &gt; Environment Index</span> 로 push 대상 env를 먼저 선택한다.</p>
 <p>Teleop with gamepad:</p>
 <pre class="code bash literal-block"><code>./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4LAB_DIR</span><span class="literal string interpol">}</span>/scripts/rsl_rl/play_teleop.py <span class="literal string escape">\
 </span>  --task RoK4-Isaac-Velocity-Flat-Teleop-v0 <span class="literal string escape">\

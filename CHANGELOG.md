@@ -4,7 +4,11 @@
 
 ### Changed
 
-- Restored the Isaac Gym ankle actuator gains after the reduced-gain experiment did not improve foot-edge contact.
+- Changed the exact-zero standing pose penalty from squared joint error at `-1.0` to absolute joint error at `-0.2`,
+  retaining the role-based standing mask while reducing the foot-dragging observed with the `-1.0` L1 experiment.
+- Disabled the world-flat contact-foot orientation reward and reduced the terminal ADAPT actuator-pair gains from
+  `Kp=120, Kd=9` to `Kp=80, Kd=7.5` to test passive toe-off and terrain compliance without changing the standing or
+  feet-air-time rewards.
 - Removed the unused nominal actuator limits and split the actuator limit scaling into independent torque and velocity
   factors.
 - Restored the PhysX joint-effort safety limits to the unscaled mechanical maxima while retaining the 90% actuator
@@ -23,18 +27,18 @@
 - Restored the feet-air-time threshold from `0.55 s` to the G1 Flat value of `0.4 s`.
 - Changed the independently sampled exact-zero standing-command environment ratio from 2% to 5%.
 - Changed training commands from G1-style world-heading tracking to direct base velocity `[vx, vy, wz]` sampling.
-- Increased the standing-pose penalty weight from `-0.5` to `-1.0` after the first standing test retained small
-  stepping motions.
 - Changed the experimental reference policy from the joint-space Yunho v1 run to the actuator-space
   `2026-07-19_18-32-43_adapt_raw_action_relaxed_rewards` run.
 
 ### Added
 
+- Added a Play/Teleop `RoK4 Push Test` UI with directional and random world-frame root-velocity disturbances applied
+  safely at policy-step boundaries.
 - Added a RoK4-local velocity command term that forces every training environment to an exact-zero command for a
   uniformly sampled `1.5-3.0 s` every `10 s`, then resamples all commands for walking-to-standing transition training.
-- Added a contact-gated foot-flatness penalty and an optional yaw-frame stance-width penalty function. The
-  stance-width reward term is currently disabled while its command-mode behavior is evaluated.
-- Added an Isaac Lab standing-environment-mask-gated L2 pose penalty over all 13 RoK4 joints to prevent zero-velocity
+- Added contact-gated foot-flatness and yaw-frame stance-width penalty functions. Both reward terms are currently
+  disabled while passive foot compliance and command-mode behavior are evaluated.
+- Added an Isaac Lab standing-environment-mask-gated pose penalty over all 13 RoK4 joints to prevent zero-velocity
   stepping without suppressing small non-zero velocity commands.
 - Added a keyboard `R` callback that safely clears the teleoperation command, resets the simulated environment under
   inference mode, and resets the policy state. The existing `L` binding continues to clear only the command.

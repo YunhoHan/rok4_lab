@@ -28,6 +28,9 @@ from rok4_tasks.manager_based.locomotion.velocity.config.rok4.contact_force_visu
 from rok4_tasks.manager_based.locomotion.velocity.config.rok4.domain_randomization_cfg import (
     apply_rok4_domain_randomization,
 )
+from rok4_tasks.manager_based.locomotion.velocity.config.rok4.push_test_window import (
+    RoK4PushTestWindow,
+)
 
 ROK4_ILLEGAL_CONTACT_BODY_NAMES = [
     "Base_Link",
@@ -41,7 +44,7 @@ ROK4_ILLEGAL_CONTACT_BODY_NAMES = [
 ]
 """RoK4 body names that must not make contact during flat walking."""
 
-ROK4_LIN_VEL_X_RANGE = (-0.1, 0.85)
+ROK4_LIN_VEL_X_RANGE = (-0.3, 0.85)
 """RoK4 base-frame forward velocity command range [m/s]."""
 
 ROK4_LIN_VEL_Y_RANGE = (-0.3, 0.3)
@@ -69,7 +72,7 @@ class RoK4ActionsCfg:
 
 @configclass
 class RoK4ObservationsCfg:
-    """Blind actuator-space observations for RoK4."""
+    """Blind actor and privileged critic observations for RoK4."""
 
     @configclass
     class PolicyCfg(ObsGroup):
@@ -108,6 +111,19 @@ class RoK4ObservationsCfg:
 
     policy: PolicyCfg = PolicyCfg()
 
+    @configclass
+    class PrivilegedCfg(ObsGroup):
+        """Current simulator state available only to the training critic."""
+
+        base_lin_vel = ObsTerm(func=mdp.base_lin_vel)
+
+        def __post_init__(self):
+            """Configure the uncorrupted current-state observation."""
+            self.enable_corruption = False
+            self.concatenate_terms = True
+
+    privileged: PrivilegedCfg = PrivilegedCfg()
+
 
 @configclass
 class RoK4CommandsCfg(CommandsCfg):
@@ -116,13 +132,17 @@ class RoK4CommandsCfg(CommandsCfg):
     base_velocity = mdp.RoK4PeriodicFreezeVelocityCommandCfg(
         asset_name="robot",
         resampling_time_range=(10.0, 10.0),
-        rel_standing_envs=0.05,
+        rel_standing_envs=0.0,
         rel_heading_envs=0.0,
         heading_command=False,
         debug_vis=True,
         periodic_freeze_enabled=True,
+        mixed_env_ratio=0.90,
+        standing_env_ratio=0.05,
+        walking_env_ratio=0.05,
         periodic_freeze_interval_s=10.0,
         periodic_freeze_duration_range_s=(1.5, 3.0),
+        always_walking_min_lin_vel=0.15,
         ranges=mdp.RoK4PeriodicFreezeVelocityCommandCfg.Ranges(
             lin_vel_x=ROK4_LIN_VEL_X_RANGE,
             lin_vel_y=ROK4_LIN_VEL_Y_RANGE,
@@ -164,22 +184,11 @@ class RoK4RewardsCfg(RewardsCfg):
             "asset_cfg": SceneEntityCfg("robot", body_names=["L_Foot_Link", "R_Foot_Link"]),
         },
     )
-    feet_flat_orientation_l2 = RewTerm(
-        func=mdp.feet_flat_orientation_l2,
-        weight=-1.0,
-        params={
-            "asset_cfg": SceneEntityCfg(
-                "robot", body_names=["L_Foot_Link", "R_Foot_Link"], preserve_order=True
-            ),
-            "sensor_cfg": SceneEntityCfg(
-                "contact_forces", body_names=["L_Foot_Link", "R_Foot_Link"], preserve_order=True
-            ),
-        },
-    )
+    feet_flat_orientation_l2 = None
     feet_stance_width_l2 = None
-    stand_still_joint_deviation_l2 = RewTerm(
-        func=mdp.stand_still_joint_deviation_l2,
-        weight=-1.0,
+    stand_still_joint_deviation_l1 = RewTerm(
+        func=mdp.stand_still_joint_deviation_l1,
+        weight=-0.2,
         params={
             "command_name": "base_velocity",
             "asset_cfg": SceneEntityCfg("robot", joint_names=ROK4_JOINT_ORDER, preserve_order=True),
@@ -297,8 +306,8 @@ class RoK4FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.scene.height_scanner = None
         self.curriculum.terrain_levels = None
 
-        # Actions and observations are actuator-space terms configured above. The single-frame observation remains
-        # 48 values and history remains 5 frames, so actor/critic input dimensions stay unchanged at 240.
+        # The actor retains the 48-value, five-frame actuator-space history (240 values). The critic receives that
+        # same history plus the current three-value base linear velocity from the privileged observation group.
 
         # Events/randomization. The DR values live in domain_randomization_cfg.py for easier tuning.
         apply_rok4_domain_randomization(self)
@@ -314,7 +323,7 @@ class RoK4FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.commands.base_velocity.ranges.lin_vel_x = ROK4_LIN_VEL_X_RANGE
         self.commands.base_velocity.ranges.lin_vel_y = ROK4_LIN_VEL_Y_RANGE
         self.commands.base_velocity.ranges.ang_vel_z = ROK4_ANG_VEL_Z_RANGE
-        self.commands.base_velocity.rel_standing_envs = 0.05
+        self.commands.base_velocity.rel_standing_envs = 0.0
 
 
 @configclass
@@ -326,6 +335,7 @@ class RoK4FlatEnvCfg_PLAY(RoK4FlatEnvCfg):
         super().__post_init__()
 
         self.scene.robot = ROK4_TEST_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+        self.ui_window_class_type = RoK4PushTestWindow
         self.scene.num_envs = 16
         self.scene.env_spacing = 2.5
         self.episode_length_s = 40.0

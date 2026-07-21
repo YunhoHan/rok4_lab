@@ -3,4 +3,4 @@
 from _run_isaaclab_rsl import run_isaaclab_rsl_script
 
 
-run_isaaclab_rsl_script("play.py")
+run_isaaclab_rsl_script("play.py", use_push_ui=True)

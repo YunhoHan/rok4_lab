@@ -659,9 +659,9 @@ Isaac Lab 원본 source를 수정하지 않는다. Isaac Lab의 부모 class와 
                        ├─ track_ang_vel_z_exp
                        ├─ feet_air_time
                        ├─ feet_slide
-                       ├─ feet_flat_orientation_l2
+                       ├─ feet_flat_orientation_l2 (현재 None: 비활성)
                        ├─ feet_stance_width_l2 (현재 None: 비활성)
-                       ├─ stand_still_joint_deviation_l2
+                       ├─ stand_still_joint_deviation_l1
                        ├─ dof_pos_limits
                        ├─ joint_action_target_pos_limits
                        ├─ joint_deviation_hip
@@ -874,9 +874,9 @@ TensorBoard의 <span class="docutils literal"><span class="pre">Loss/kl``(iterat
 </tr>
 <tr><td><p><span class="docutils literal">feet_flat_orientation_l2</span></p></td>
 <td><p><span class="docutils literal">mdp.feet_flat_orientation_l2</span></p></td>
-<td><p><span class="docutils literal"><span class="pre">-1.0</span></span></p></td>
+<td><p><span class="docutils literal">None</span> (현재 비활성)</p></td>
 <td><p>좌우 Foot body quaternion과 contact sensor</p></td>
-<td><p>접촉 중인 발의 local <span class="docutils literal">+Z</span> 축을 world frame으로 회전한 뒤 X/Y 성분 제곱합을 계산한다. 접촉한 발 수로 평균하여 single/double stance의 penalty scale을 일정하게 유지한다.</p></td>
+<td><p>함수는 접촉 중인 발의 local <span class="docutils literal">+Z</span> 축을 world frame으로 회전한 뒤 X/Y 성분 제곱합을 계산한다. 현재는 world-up 수평 제약이 toe-off와 향후 경사면 적응을 방해하지 않도록 Reward Manager에 등록하지 않는다.</p></td>
 </tr>
 <tr><td><p><span class="docutils literal">feet_stance_width_l2</span></p></td>
 <td><p><span class="docutils literal">mdp.feet_stance_width_l2</span></p></td>
@@ -884,11 +884,11 @@ TensorBoard의 <span class="docutils literal"><span class="pre">Loss/kl``(iterat
 <td><p>목표 <span class="docutils literal">0.21 m</span>, hard minimum <span class="docutils literal">0.18 m</span>; 직진 이동 command에서만 활성화</p></td>
 <td><p>함수는 좌우 Foot 위치 차이를 base yaw frame으로 회전해 lateral width를 계산한다. <span class="docutils literal">0.21 m</span> 초과 폭은 coefficient <span class="docutils literal">0.5</span> 로 억제하고, <span class="docutils literal">0.18 m</span> 미만 또는 발 교차는 coefficient <span class="docutils literal">5.0</span> 으로 강하게 억제한다. 현재 <span class="docutils literal">RoK4RewardsCfg</span> 에서는 term을 <span class="docutils literal">None</span> 으로 두어 Reward Manager에 등록하지 않는다.</p></td>
 </tr>
-<tr><td><p><span class="docutils literal">stand_still_joint_deviation_l2</span></p></td>
-<td><p><span class="docutils literal">mdp.stand_still_joint_deviation_l2</span></p></td>
-<td><p><span class="docutils literal"><span class="pre">-1.0</span></span></p></td>
+<tr><td><p><span class="docutils literal">stand_still_joint_deviation_l1</span></p></td>
+<td><p><span class="docutils literal">mdp.stand_still_joint_deviation_l1</span></p></td>
+<td><p><span class="docutils literal"><span class="pre">-0.2</span></span></p></td>
 <td><p><span class="docutils literal">ROK4_JOINT_ORDER</span> 전체 13관절, <span class="docutils literal">base_velocity.is_standing_env</span> mask</p></td>
-<td><p>Isaac Lab command generator가 standing으로 지정한 환경에서만 실제 joint position과 default joint position 차이의 제곱합을 penalty로 반환한다. 기존 Gym의 <span class="docutils literal">defaultPosStanding</span> 에 대응한다.</p></td>
+<td><p>RoK4 command generator가 standing으로 지정한 환경에서만 실제 joint position과 default joint position 차이의 절댓값 합을 penalty로 반환한다. 기존 Gym의 <span class="docutils literal">defaultPosStanding</span> 에 대응한다.</p></td>
 </tr>
 <tr><td><p><span class="docutils literal">dof_pos_limits</span></p></td>
 <td><p><span class="docutils literal">mdp.joint_pos_limits</span></p></td>
@@ -1100,9 +1100,9 @@ reset 직후 첫 두 policy step은 history가 부족하므로 0으로 처리한
 <td><p>Isaac Lab 공통</p></td>
 <td><p>현재 joint position과 default joint position 차이의 absolute sum.</p></td>
 </tr>
-<tr><td><p><span class="docutils literal">stand_still_joint_deviation_l2</span></p></td>
+<tr><td><p><span class="docutils literal">stand_still_joint_deviation_l1</span></p></td>
 <td><p>RoK4 로컬 mdp</p></td>
-<td><p><span class="docutils literal">base_velocity.is_standing_env</span> 가 true일 때 전체 13관절의 default-pose squared error sum.</p></td>
+<td><p><span class="docutils literal">base_velocity.is_standing_env</span> 가 true일 때 전체 13관절의 default-pose absolute error sum.</p></td>
 </tr>
 <tr><td><p><span class="docutils literal">joint_pos_limits</span></p></td>
 <td><p>Isaac Lab 공통</p></td>
@@ -1122,20 +1122,23 @@ reset 직후 첫 두 policy step은 history가 부족하므로 0으로 처리한
 <section id="command-reward">
 <h2>Command와 Reward의 연결</h2>
 <p>현재 RoK4 flat command range는 다음과 같다.</p>
-<pre class="code python literal-block"><code><span class="name">lin_vel_x</span> <span class="operator">=</span> <span class="punctuation">(</span><span class="operator">-</span><span class="literal number float">0.1</span><span class="punctuation">,</span> <span class="literal number float">0.85</span><span class="punctuation">)</span>
+<pre class="code python literal-block"><code><span class="name">lin_vel_x</span> <span class="operator">=</span> <span class="punctuation">(</span><span class="operator">-</span><span class="literal number float">0.3</span><span class="punctuation">,</span> <span class="literal number float">0.85</span><span class="punctuation">)</span>
 <span class="name">lin_vel_y</span> <span class="operator">=</span> <span class="punctuation">(</span><span class="operator">-</span><span class="literal number float">0.3</span><span class="punctuation">,</span> <span class="literal number float">0.3</span><span class="punctuation">)</span>
 <span class="name">ang_vel_z</span> <span class="operator">=</span> <span class="punctuation">(</span><span class="operator">-</span><span class="literal number float">0.6</span><span class="punctuation">,</span> <span class="literal number float">0.6</span><span class="punctuation">)</span></code></pre>
-<p><span class="docutils literal">RoK4PeriodicFreezeVelocityCommand</span> 는 두 경로로 exact-zero standing command를 만든다.</p>
+<p><span class="docutils literal">RoK4PeriodicFreezeVelocityCommand</span> 는 episode reset마다 환경 역할을 다음 확률로 표본화한다.</p>
 <ol class="arabic simple">
-<li><p>일반 고정 <span class="docutils literal">10 s</span> command 재표본화에서 <span class="docutils literal">rel_standing_envs=0.05</span> 에 의해 환경의 약 5%를 독립적으로 정지시킨다.</p></li>
-<li><p>10초마다 모든 환경을 동시에 <span class="docutils literal">Uniform(1.5, 3.0) s</span> 동안 정지시킨다.</p></li>
+<li><p>90% mixed: 각 환경이 독립 phase로 moving과 standing을 전환한다.</p></li>
+<li><p>5% always-standing: episode 동안 exact-zero command를 유지한다.</p></li>
+<li><p>5% always-walking: planar command norm <span class="docutils literal">0.15 m/s</span> 이상만 사용한다.</p></li>
 </ol>
-<p>전 환경 periodic freeze가 시작되면 command를 <span class="docutils literal">[0, 0, 0]</span> 으로 만들고 모든 <span class="docutils literal">is_standing_env</span> mask를
-true로 강제한다. 구간이 끝나면 모든 환경의 command를 다시 표본화하므로 policy는 이동 중 정지와 정지 후
-재출발을 반복해서 경험한다. <span class="docutils literal">stand_still_joint_deviation_l2</span> 는 command 크기를 다시 판정하지 않고 같은
-command term의 <span class="docutils literal">is_standing_env</span> mask를 직접 사용한다. 따라서 위 두 exact-zero standing 경로에서 전체
-13관절을 default pose 근처로 유지하며, <span class="docutils literal"><span class="pre">-0.03</span> m/s</span> 같은 작은 non-zero 이동 명령에는 정지 penalty가 걸리지
-않는다. 현재 weight는 <span class="docutils literal"><span class="pre">-1.0</span></span> 이다.</p>
+<p>Mixed 환경의 standing은 <span class="docutils literal">10.0 s</span> cycle과 환경별 <span class="docutils literal">Uniform(1.5, 3.0) s</span> duration을 사용한다. Random initial
+phase와 독립 duration 때문에 같은 PPO batch에서 moving, standing, transition을 동시에 관측한다. 부모의 별도
+standing 확률은 <span class="docutils literal">rel_standing_envs=0.0</span> 으로 비활성화한다. 작은 non-zero mixed moving command는
+standing으로 변환하지 않고 연속적인 저속 이동 목표로 유지한다.</p>
+<p>Mixed standing과 always-standing은 command를 <span class="docutils literal">[0, 0, 0]</span> 으로 만드는 동시에 <span class="docutils literal">is_standing_env=True</span> 를
+설정한다. <span class="docutils literal">stand_still_joint_deviation_l1</span> 은 command 크기를 다시 판정하지 않고 이 mask를 직접 사용하여
+전체 13관절을 default pose 근처로 유지한다. 현재 weight는 <span class="docutils literal"><span class="pre">-0.2</span></span> 이다. <span class="docutils literal"><span class="pre">-1.0</span></span> 실험은 안정적인 양발
+standing을 만들었지만 feet-air-time 감소와 foot-slide 증가가 관측되어 보행 자유도를 회복하도록 완화했다.</p>
 <p>이 command는 <span class="docutils literal">track_lin_vel_xy_exp</span>, <span class="docutils literal">track_ang_vel_z_exp</span>, <span class="docutils literal">feet_air_time</span> 에 직접 영향을 준다. 특히
 <span class="docutils literal">feet_air_time_positive_biped</span> 는 x/y command norm이 <span class="docutils literal">0.1</span> 이하이면 reward를 0으로 만든다. 즉 거의 정지
 명령에서는 stepping reward가 강하게 작동하지 않는다.</p>
@@ -1160,7 +1163,7 @@ reward는 <span class="docutils literal">0.4</span> 이고, 최대 pre-<span cla
 <p>Play 환경은 현재 standing 검증을 위해 <span class="docutils literal">lin_vel_x=0.0 m/s</span> 를 사용하고 lateral/yaw command도 0으로 고정한다. 별도의 Teleop 환경은
 긴 resampling interval을 사용하고, gamepad 또는 keyboard의
 <span class="docutils literal">[lin_vel_x, lin_vel_y, ang_vel_z]</span> 를 동일한 base-frame command buffer에 직접 기록한다. 입력은 학습 범위
-<span class="docutils literal"><span class="pre">(-0.1,</span> 0.85) m/s</span>, <span class="docutils literal"><span class="pre">(-0.3,</span> 0.3) m/s</span>, <span class="docutils literal"><span class="pre">(-0.6,</span> 0.6) rad/s</span> 안으로 scale된다. 이는 inference command
+<span class="docutils literal"><span class="pre">(-0.3,</span> 0.85) m/s</span>, <span class="docutils literal"><span class="pre">(-0.3,</span> 0.3) m/s</span>, <span class="docutils literal"><span class="pre">(-0.6,</span> 0.6) rad/s</span> 안으로 scale된다. 이는 inference command
 source만 바꾸며 reward 정의나 학습 checkpoint 자체를 변경하지 않는다. Play와 Teleop에서는 학습 전용 periodic
 freeze를 비활성화한다.</p>
 </section>
@@ -1195,7 +1198,7 @@ freeze를 비활성화한다.</p>
 <pre class="code text literal-block"><code>1. command velocity를 따라간다.
 2. upright 자세를 유지한다.
 3. 한 발씩 드는 biped stepping pattern을 만든다.
-4. 접촉 중 발바닥을 수평으로 유지한다. stance-width 함수는 구현되어 있지만 현재 비활성이다.
+4. foot-flat orientation과 stance-width 함수는 구현되어 있지만 현재 비활성이다. 발 접촉 자세는 actuator compliance와 물리 접촉에 맡긴다.
 5. 발 미끄러짐을 줄인다.
 6. torque, joint acceleration, action rate, second action rate를 줄여 움직임을 부드럽게 한다.
 7. ankle limit, hip/torso deviation을 제한한다.
@@ -1225,7 +1228,7 @@ freeze를 비활성화한다.</p>
 <td><p><span class="docutils literal">feet_slide</span>, foot collision, friction, contact sensor</p></td>
 </tr>
 <tr><td><p>발날 또는 발끝으로 착지한다</p></td>
-<td><p><span class="docutils literal">feet_flat_orientation_l2</span>, Foot body frame, contact sensor, ankle actuator gain/target</p></td>
+<td><p>ankle actuator gain/target, Foot body frame, contact sensor를 먼저 확인한다. <span class="docutils literal">feet_flat_orientation_l2</span> 는 world-up 기준 함수이므로 평지 진단 실험에서만 선택적으로 활성화한다.</p></td>
 </tr>
 <tr><td><p>다리를 과도하게 벌리거나 교차한다</p></td>
 <td><p><span class="docutils literal">joint_deviation_hip</span>, yaw-frame Foot 위치를 먼저 확인한다. <span class="docutils literal">feet_stance_width_l2</span> 는 command 모드별 적용 방식을 다시 설계한 뒤 활성화한다.</p></td>

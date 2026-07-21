@@ -55,6 +55,7 @@ RoK4 local MDP
 
 Debug and verification
   ├─ ContactSensor -> RoK4ContactForceVisualizer
+  ├─ ManagerBasedRLEnvWindow -> RoK4PushTestWindow
   ├─ check_rok4_zero.py
   ├─ check_rok4_random.py
   └─ check_rok4_joint_monkey.py
@@ -68,7 +69,9 @@ link lengths, gains, and limits, and stores that config object in `ROK4_TRAIN_CF
 the inherited observation-config object as a whole. The resulting frame has 48 values and its five-frame flattened
 history produces the 240-value policy input. Its actuator state terms use `J^-1 (q - q_default)` position and
 `J^-1 (q_dot - q_dot_default)` velocity without a manual observation scale, matching the parent task's relative-state
-naming and centering convention in actuator coordinates.
+naming and centering convention in actuator coordinates. The actor remains blind at 240 values. During training, the
+critic additionally receives the current simulator `base_lin_vel_b=[vx, vy, vz]` through a three-value uncorrupted
+`privileged` group, producing a 243-value asymmetric critic input.
 
 ## Documentation
 
@@ -247,6 +250,10 @@ to the explicit actuator model. It is not sent directly to a PhysX position driv
 `RoK4AdaptActuator.compute()` reads `q_target` and the current joint state, converts them to actuator coordinates,
 computes and clips `tau_psi`, maps it to `tau_q`, clears the position target, and returns only joint effort to PhysX.
 
+The current compliance experiment keeps the first four actuator gains of each leg at `Kp=250, Kd=12.5` and lowers
+the final coupled actuator pair to `Kp=80, Kd=7.5`. The torso-yaw gain remains `Kp=100, Kd=5`. These are
+actuator-space gains applied to `psi`, not direct joint-space gains.
+
 Self-collision is enabled in the RoK4 articulation config through `enabled_self_collisions=True`.
 
 ## Flat RL Task
@@ -276,6 +283,21 @@ PhysX. Arrow direction follows this total `[Fx, Fy, Fz]` vector, while arrow len
 `sqrt(Fx^2 + Fy^2 + Fz^2)`. The arrow origin is shifted along the force direction so its tail starts just above the foot
 instead of clipping into the ground. This is one resultant GRF arrow per foot, not separate arrows for each axis and not
 a six-axis ankle force/torque sensor. The visualizer is disabled by default and does not run in normal headless training.
+
+### Manual Push Test
+
+The local Play and Teleop launchers add a `RoK4 Push Test` frame to the standard Isaac Lab window. It provides
+`+X`, `-X`, `+Y`, `-Y`, and `Random XY` buttons plus a configurable `Delta velocity [m/s]` value. A click queues one
+world-frame root linear-velocity change and applies it at the next policy-step boundary. This avoids changing simulation
+state from inside an asynchronous UI callback.
+
+The push is applied to the environment selected by `Viewer Settings > Environment Index`; Teleop has one environment,
+so it naturally targets environment 0. `Random XY` samples independent x/y changes from `[-magnitude, magnitude]`, which
+matches the shape of the inherited training-time `push_robot` disturbance. The default magnitude is `0.5 m/s`.
+
+This control reproduces an impulse-like disturbance by changing root velocity. It is not a sustained force in newtons,
+does not alter the policy command, and is available only through the local `play.py` and `play_teleop.py` wrappers. It
+does not run during training or headless playback. The implementation is entirely inside `rok4_lab`.
 
 The actor observation is proprioceptive and history-based. It does not use camera images, terrain height scans, or
 base linear velocity:
@@ -333,9 +355,10 @@ The torque, velocity, and acceleration penalties now operate in actuator coordin
 RoK4 basis. All 13 actuators contribute; hip-pitch and knee indices `[2, 3, 8, 9]` use a `0.5` multiplier.
 `actuator_torques_l2`, `actuator_vel_l2`, and `actuator_acc_l2` use weights `-2.0e-6`, `-1.0e-4`, and `-1.0e-8`.
 
-> **Checkpoint compatibility:** The tensor sizes remain 13 actions and 240 observations, but their semantics changed
-> from joint coordinates to actuator coordinates. Do not resume or play a joint-space checkpoint, including the
-> `2026-07-15_17-28-41` Yunho v1 baseline, with this actuator-interface branch. Start a new training run.
+> **Checkpoint compatibility:** The actor remains 13 actions and 240 observations, but their semantics changed from
+> joint coordinates to actuator coordinates. The critic now receives 243 values after adding privileged base linear
+> velocity. Do not resume or play a joint-space checkpoint, including the `2026-07-15_17-28-41` Yunho v1 baseline,
+> or a pre-privileged-critic checkpoint with this configuration. Start a new training run.
 Acceleration remains the physical Isaac Lab acceleration transformed by `inverse(J)`, not Gym's undivided velocity
 difference.
 
@@ -379,23 +402,31 @@ one contact sample from each 2 ms physics step in a 10 ms policy interval for co
 terminations. This sensor buffer is separate from `observations.policy.history_length`, which stacks policy
 observations for the actor.
 
-The flat training command ranges are `lin_vel_x=(-0.1, 0.85) m/s`, `lin_vel_y=(-0.3, 0.3) m/s`, and
-`ang_vel_z=(-0.6, 0.6) rad/s`. The limited backward range is an intermediate curriculum step before expanding toward
-the previous Isaac Gym RoK4 range of `(-0.3, 0.85) m/s`.
+The flat training command ranges are `lin_vel_x=(-0.3, 0.85) m/s`, `lin_vel_y=(-0.3, 0.3) m/s`, and
+`ang_vel_z=(-0.6, 0.6) rad/s`. This restores the previous Isaac Gym RoK4 backward command limit without separating a
+dedicated backward-only environment population.
 
 Training uses the RoK4-local `RoK4PeriodicFreezeVelocityCommand`. Normal command sampling uses the parent-compatible
 fixed `10 s` interval and directly samples base-frame `[lin_vel_x, lin_vel_y, ang_vel_z]`; world-heading control is
-disabled so training, Teleop, ROS `cmd_vel`, and the previous Gym task share the same command meaning. Each normal
-resampling independently assigns about 5% of environments an exact-zero standing command. Every 10 seconds the
-command term then forces all environments to `[0, 0, 0]` for one globally sampled `1.5-3.0 s` window. During that
-window it also sets the command term's standing mask, so the `stand_still_joint_deviation_l2` penalty with weight
-`-1.0` is active. When the window ends, all environment commands are resampled. This explicitly trains
-walking-to-standing and standing-to-walking transitions; the periodic freeze is disabled in Play and Teleop
-configurations.
+disabled so training, Teleop, ROS `cmd_vel`, and the previous Gym task share the same command meaning. At every
+episode reset, environments receive one role: 90% alternate asynchronously between walking and standing, 5% remain
+standing, and 5% receive only moving commands. Mixed environments use independent random phases and independently
+sampled `1.5-3.0 s` standing windows in a `10 s` cycle, so a PPO batch contains walking, standing, and transition
+samples at the same time. Always-walking environments reject commands whose planar speed is below `0.15 m/s`.
+
+Exact-zero commands come only from mixed standing windows and the always-standing role. Both paths set the command
+term's standing mask, activating `stand_still_joint_deviation_l1` with weight `-0.2`; `rel_standing_envs` is disabled
+to avoid duplicate standing assignment. Small non-zero commands remain continuous low-speed commands. The
+episode-role scheduler is disabled in Play and Teleop configurations.
 
 The positive biped feet-air-time reward uses `threshold=0.4 s` and `weight=0.75`, matching the G1 flat baseline. The
 threshold caps the rewarded single-stance duration; it is not an exact gait-period target. Its maximum pre-`dt`
 contribution is `0.4 * 0.75 = 0.30`.
+
+The contact-gated `feet_flat_orientation_l2` function remains available for diagnostics, but its reward term is
+currently `None`. It measures foot tilt against world up, which is useful for a flat-ground experiment but can oppose
+toe-off and terrain-normal alignment. The current experiment instead relies on the reduced ankle-side actuator gains
+for passive contact adaptation and on `stand_still_joint_deviation_l1` for exact-zero-command posture stability.
 
 The `dof_pos_limits` reward applies to all 13 joints in `ROK4_JOINT_ORDER`. It uses each joint's
 `soft_joint_pos_limits`, derived from the USD hard limits with `soft_joint_pos_limit_factor=0.95`, and penalizes only
@@ -410,6 +441,8 @@ actual simulated joint positions. Both Gym and the current Lab task therefore ev
 The Play task currently uses an exact-zero velocity command to check whether the policy can stand still. The separate
 Teleop task accepts a manual base-frame `[lin_vel_x, lin_vel_y, ang_vel_z]` command, disables heading control and
 automatic command resampling, uses one visual test-asset environment, and extends the episode timeout to 600 seconds.
+Both local launchers expose the same `RoK4 Push Test` UI, so disturbance recovery can be checked with either fixed or
+manually controlled velocity commands.
 
 RoK4 also owns its termination configuration without modifying Isaac Lab. `RoK4TerminationsCfg` inherits the parent
 `time_out`, disables the parent `base_contact`, and adds `illegal_body_contact`. Contact force above `1.0 N` on any
@@ -426,7 +459,7 @@ source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/rok4/
 source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/mdp/
   __init__.py                     Re-exports Isaac Lab locomotion mdp plus RoK4 local mdp
   actions.py                      Converts raw actuator actions to mapped joint targets
-  commands.py                     Adds periodic all-environment exact-zero command windows
+  commands.py                     Adds 90/5/5 episode roles and asynchronous standing windows
   observations.py                 Converts joint state to actuator-space observations
   rewards.py                      Owns actuator-space reward calculations and action smoothness terms
 ```
@@ -451,6 +484,8 @@ algorithm parameters. These values are starting points for flat walking, not fin
 | max iterations | `5000` |
 | actor/critic hidden dims | `[512, 256, 128]` |
 | actor/critic obs normalization | `True` |
+| actor input | `policy` history, `240` values |
+| critic input | `policy + privileged base_lin_vel_b`, `243` values |
 | action clipping | `clip_actions = 1.0` |
 | learning rate | `1.0e-3` |
 | entropy coef | `0.002` |
@@ -543,6 +578,9 @@ Play a checkpoint:
   --checkpoint /path/to/model.pt
 ```
 
+In the Isaac Lab window, expand `RoK4 Push Test`, choose the velocity-change magnitude, and click a direction. For a
+multi-environment Play run, first choose the target using `Viewer Settings > Environment Index`.
+
 Teleoperate a checkpoint with a connected gamepad, including a DualShock 4 detected by Isaac Sim:
 
 ```bash
@@ -556,7 +594,7 @@ Teleoperate a checkpoint with a connected gamepad, including a DualShock 4 detec
 
 The left stick controls forward/backward and lateral velocity, and the right stick controls yaw velocity. Moving either
 stick to the right produces negative lateral/yaw commands, so the robot moves or turns to its right. The normalized
-stick command is clamped to `[-1, 1]` and scaled to the training limits: `vx=(-0.1, 0.85) m/s`,
+stick command is clamped to `[-1, 1]` and scaled to the training limits: `vx=(-0.3, 0.85) m/s`,
 `vy=(-0.3, 0.3) m/s`, and `wz=(-0.6, 0.6) rad/s`. No ROS 2 bridge, `/joy` subscriber, or IPC process is required for
 this native Isaac Lab input path.
 

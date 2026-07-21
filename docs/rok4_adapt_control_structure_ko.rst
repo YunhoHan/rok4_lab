@@ -355,15 +355,16 @@ Actuator PD의 실제 수식과 output
    tau_psi_applied   = clip(tau_psi_requested, -tau_limit, +tau_limit)
    tau_q_applied     = J^-T tau_psi_applied
 
-현재 gain은 기존 Isaac Gym RoK4의 canonical actuator 순서를 그대로 사용한다. 같은 숫자를 joint-space에 직접
-적용하는 것이 아니라 위 수식의 ``Kp`` 와 ``Kd`` 로 사용한다.
+현재 gain은 Isaac Gym RoK4의 canonical actuator 순서를 사용하되, 수동적인 toe-off와 지형 적응성을 시험하기
+위해 각 다리의 마지막 coupled actuator pair를 낮춘다. 같은 숫자를 joint-space에 직접 적용하는 것이 아니라
+위 수식의 ``Kp`` 와 ``Kd`` 로 사용한다.
 
 .. code-block:: text
 
-   Left leg actuator Kp:  [250, 250, 250, 250, 120, 120]
-   Left leg actuator Kd:  [12.5, 12.5, 12.5, 12.5, 9, 9]
-   Right leg actuator Kp: [250, 250, 250, 250, 120, 120]
-   Right leg actuator Kd: [12.5, 12.5, 12.5, 12.5, 9, 9]
+   Left leg actuator Kp:  [250, 250, 250, 250, 80, 80]
+   Left leg actuator Kd:  [12.5, 12.5, 12.5, 12.5, 7.5, 7.5]
+   Right leg actuator Kp: [250, 250, 250, 250, 80, 80]
+   Right leg actuator Kd: [12.5, 12.5, 12.5, 12.5, 7.5, 7.5]
    Torso yaw actuator:    Kp=100, Kd=5
 
 Custom actuator는 두 종류의 torque를 별도로 보관한다.
