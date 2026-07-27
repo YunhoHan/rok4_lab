@@ -2,10 +2,13 @@
 
 Current project version: `0.2.0`
 
-Flat walking baseline: `Yunho ADAPT v1` (experimental)
+Flat walking baseline: `Yunho Symmetry ADAPT v1` (experimental)
 
-Current actuator-space reference policy: run `2026-07-19_18-32-43_adapt_raw_action_relaxed_rewards`, checkpoint
-`model_4999.pt`
+Current actuator-space reference policy: run
+`2026-07-24_19-34-26_symmetry_aug_nojumps2_swing_roll100_fresh`, checkpoint `model_9999.pt`
+
+This checkpoint is the pre-DR/noise-tuning reference. The next experiments modify domain randomization and policy
+observation noise while preserving this baseline for behavior comparison.
 
 Previous joint-space reference policy: run `2026-07-15_17-28-41`, checkpoint `model_4999.pt`
 
@@ -51,7 +54,8 @@ RoK4 local MDP
   ├─ actions.py       raw actuator action -> psi_target -> q_target
   ├─ commands.py      direct velocity command + periodic standing windows
   ├─ observations.py  joint state -> actuator-space observation
-  └─ rewards.py       actuator-space penalties and action smoothness
+  ├─ rewards.py       actuator-space penalties and action smoothness
+  └─ symmetry.py      left-right actor/critic/action batch augmentation
 
 Debug and verification
   ├─ ContactSensor -> RoK4ContactForceVisualizer
@@ -79,7 +83,7 @@ Project notes are kept in `docs/` as editable RST/HTML files and generated PDFs:
 
 | Document | Purpose |
 | --- | --- |
-| `docs/_build/pdf/rok4_flat_task_structure_ko.pdf` | RoK4 flat task file structure, task registration flow, DR module, and config relationships. |
+| `docs/_build/pdf/rok4_flat_task_structure_ko.pdf` | RoK4 flat task structure, task registration, DR, and actor/critic/action symmetry augmentation. |
 | `docs/_build/pdf/rok4_reward_structure_ko.pdf` | RoK4 reward terms, inherited reward settings, reward/DR separation, and reward function meanings. |
 | `docs/_build/pdf/rok4_adapt_control_structure_ko.pdf` | ADAPT matrices, action/actuator object relationships, target/state origins, explicit PD call flow, and torque limits. |
 
@@ -256,6 +260,22 @@ actuator-space gains applied to `psi`, not direct joint-space gains.
 
 Self-collision is enabled in the RoK4 articulation config through `enabled_self_collisions=True`.
 
+## Symmetry Augmentation
+
+The `yunho/symmetry-augmentation` experiment uses RSL-RL's symmetry data-augmentation path, following the corrected
+on-policy PPO formulation from *Symmetry Considerations for Learning Task Symmetric Robot Policies* (Mittal et al.,
+2024). Each PPO mini-batch keeps its original samples and appends one left-right mirrored copy. It does not create a
+second network, change the 240D actor or 243D critic input sizes, or add a weighted mirror loss.
+
+RoK4's mirror callback transforms all five history samples in the term-major Isaac Lab layout, the current privileged
+base linear velocity, and the 13D raw actuator action. For each ADAPT leg block, exchanging the final two actuator
+coordinates preserves joint ankle pitch and reverses joint ankle roll. Unit tests verify this relationship through
+`J P_psi = P_q J`, verify that mirroring twice recovers the original sample, and verify the doubled TensorDict batch.
+
+Start this experiment as a fresh run rather than resuming the pre-symmetry checkpoint. The regular training command
+uses augmentation automatically on this branch because `RoK4FlatPPORunnerCfg.algorithm.symmetry_cfg` enables data
+augmentation and explicitly disables mirror loss.
+
 ## Flat RL Task
 
 The first RoK4 learning task is a flat-ground, blind velocity-tracking task based on the Isaac Lab/G1-style
@@ -286,7 +306,14 @@ a six-axis ankle force/torque sensor. The visualizer is disabled by default and 
 
 ### Manual Push Test
 
-The local Play and Teleop launchers add a `RoK4 Push Test` frame to the standard Isaac Lab window. It provides
+The local Play and Teleop launchers add a `RoK4 Velocity Monitor` frame to the standard Isaac Lab window. It displays
+the selected environment's final command and measured robot velocity together. Command `vx`, `vy`, `wz`, and planar
+speed `|vxy|` are shown after gamepad/keyboard scaling. Measured world linear velocity is rotated into the same
+gravity-aligned yaw frame used by the tracking reward, while measured `wz_world` is the root angular velocity about
+the world vertical axis. The actual display also includes `vz` and measured planar speed. It refreshes at 20 Hz to
+avoid a GPU synchronization on every physics step.
+
+The same window also adds a `RoK4 Push Test` frame. It provides
 `+X`, `-X`, `+Y`, `-Y`, and `Random XY` buttons plus a configurable `Delta velocity [m/s]` value. A click queues one
 world-frame root linear-velocity change and applies it at the next policy-step boundary. This avoids changing simulation
 state from inside an asynchronous UI callback.
@@ -403,30 +430,70 @@ terminations. This sensor buffer is separate from `observations.policy.history_l
 observations for the actor.
 
 The flat training command ranges are `lin_vel_x=(-0.3, 0.85) m/s`, `lin_vel_y=(-0.3, 0.3) m/s`, and
-`ang_vel_z=(-0.6, 0.6) rad/s`. This restores the previous Isaac Gym RoK4 backward command limit without separating a
-dedicated backward-only environment population.
+`ang_vel_z=(-0.6, 0.6) rad/s`. This restores the previous Isaac Gym RoK4 backward command limit and supplements the
+continuous mixed distribution with dedicated command-axis roles.
 
 Training uses the RoK4-local `RoK4PeriodicFreezeVelocityCommand`. Normal command sampling uses the parent-compatible
 fixed `10 s` interval and directly samples base-frame `[lin_vel_x, lin_vel_y, ang_vel_z]`; world-heading control is
 disabled so training, Teleop, ROS `cmd_vel`, and the previous Gym task share the same command meaning. At every
-episode reset, environments receive one role: 90% alternate asynchronously between walking and standing, 5% remain
-standing, and 5% receive only moving commands. Mixed environments use independent random phases and independently
-sampled `1.5-3.0 s` standing windows in a `10 s` cycle, so a PPO batch contains walking, standing, and transition
-samples at the same time. Always-walking environments reject commands whose planar speed is below `0.15 m/s`.
+episode reset, each environment independently receives one role for that episode:
 
-Exact-zero commands come only from mixed standing windows and the always-standing role. Both paths set the command
-term's standing mask, activating `stand_still_joint_deviation_l1` with weight `-0.2`; `rel_standing_envs` is disabled
-to avoid duplicate standing assignment. Small non-zero commands remain continuous low-speed commands. The
-episode-role scheduler is disabled in Play and Teleop configurations.
+| Code role | Motion meaning | Ratio |
+| --- | --- | ---: |
+| `mixed` | unconstrained `vx`, `vy`, and `wz` | 50% |
+| `standing` | exact-zero command for the full episode | 5% |
+| `walking` | continuously moving mixed command without periodic freeze | 5% |
+| `x` | sagittal forward/backward motion with only `vx` active | 10% |
+| `y` | lateral left/right motion with only `vy` active | 10% |
+| `yaw` | clockwise/counter-clockwise turning with only `wz` active | 10% |
+| `x_yaw` | sagittal motion and turning with `vy=0` | 10% |
+
+The signs inside the `x`, `y`, and `yaw` roles are sampled with equal probability. The two signs of `vx` and `wz`
+are sampled independently in `x_yaw`, giving the four forward/backward and clockwise/counter-clockwise combinations.
+Dedicated commands use minimum absolute magnitudes of `0.15 m/s` for `vx` and `vy`, and `0.15 rad/s` for `wz`.
+
+The `mixed`, `x`, `y`, `yaw`, and `x_yaw` roles use independent random phases and independently sampled `1.5-3.0 s`
+standing windows in a `10 s` cycle. Thus 90% of environments train asynchronous moving-to-standing transitions,
+while `standing` remains zero and `walking` never freezes. A normal `10 s` command resampling retains the episode
+role and samples a new command within that role; the next environment reset samples a new role. Exact-zero commands
+set the command term's standing mask, activating `stand_still_joint_deviation_l1` with weight `-0.2`.
+`rel_standing_envs` is disabled to avoid duplicate standing assignment, and the episode-role scheduler is disabled
+in Play and Teleop configurations.
 
 The positive biped feet-air-time reward uses `threshold=0.4 s` and `weight=0.75`, matching the G1 flat baseline. The
-threshold caps the rewarded single-stance duration; it is not an exact gait-period target. Its maximum pre-`dt`
-contribution is `0.4 * 0.75 = 0.30`.
+threshold saturates the raw per-step value at `0.4`; it is not a gait-period target or a cutoff that stops reward
+after `0.4 s`. A longer uninterrupted single stance continues to return `0.4` on every policy step. The maximum
+pre-`dt` contribution per step is `0.4 * 0.75 = 0.30`.
+
+The `no_jumps` penalty uses Isaac Lab's `mdp.desired_contacts` with weight `-2.0` and a `1.0 N` force threshold. It
+checks the recent contact-force history of both feet and returns a penalty only when neither foot has a qualifying
+contact. This preserves normal one-foot support and toe-off while discouraging a true flight phase. It does not
+enforce left/right alternation or limit how long one foot may remain the support foot.
+
+The root `flat_orientation_l2` penalty uses weight `-5.0`. This intentionally large step from the previous `-2.0`
+experiment tests whether excessive body roll is the cause of one-foot lateral hopping and also exposes any loss of
+natural weight transfer, velocity tracking, or step length. Feet-air-time, actuator gains, and command-role ratios
+remain unchanged for an isolated comparison.
+
+The combined hip-yaw/hip-roll deviation penalty is relaxed from `-0.1` to `-0.05`. RoK4's rotated hip joint frames
+make lateral foot placement depend on both named axes, so this paired experiment keeps the torso more upright while
+allowing the legs to generate lateral steps. The signed anti-cross reward remains active, but it does not impose a
+maximum stance width; excessive widening must therefore be checked during playback.
 
 The contact-gated `feet_flat_orientation_l2` function remains available for diagnostics, but its reward term is
 currently `None`. It measures foot tilt against world up, which is useful for a flat-ground experiment but can oppose
 toe-off and terrain-normal alignment. The current experiment instead relies on the reduced ankle-side actuator gains
 for passive contact adaptation and on `stand_still_joint_deviation_l1` for exact-zero-command posture stability.
+
+The active `feet_swing_roll_l2` term uses weight `-1.0` to discourage inward or outward sole roll only while a foot
+is airborne. It rotates each foot's local `+Z` sole normal into that foot's yaw frame and penalizes only its lateral
+component. Swing-foot pitch and yaw remain unconstrained, so toe-off and fore-aft foot recovery are still available;
+feet in contact receive no contribution from this term.
+
+The `feet_lateral_separation_l2` anti-cross reward is active with `minimum_width=0.16 m` and `weight=-2.0`. It rotates
+the left-minus-right foot position into the base yaw frame and preserves the lateral sign, so a narrow stance receives
+a soft quadratic penalty and a left/right foot swap receives a larger one. It has no maximum-width term and applies in
+both standing and moving states; the normal `0.21 m` standing width therefore receives no penalty.
 
 The `dof_pos_limits` reward applies to all 13 joints in `ROK4_JOINT_ORDER`. It uses each joint's
 `soft_joint_pos_limits`, derived from the USD hard limits with `soft_joint_pos_limit_factor=0.95`, and penalizes only
@@ -547,7 +614,7 @@ Train normally:
   --num_envs 4096 \
   --max_iterations 5000 \
   --headless \
-  --run_name adapt_raw_action_relaxed_rewards
+  --run_name symmetry_aug_fresh
 ```
 
 Record periodic training videos by adding `--video`. The interval and length count policy/environment steps rather
@@ -563,7 +630,7 @@ seconds and writes it under the run directory's `videos/train/` folder:
   --video \
   --video_length 500 \
   --video_interval 10000 \
-  --run_name adapt_raw_action_relaxed_rewards_video
+  --run_name symmetry_aug_fresh_video
 ```
 
 Headless recording uses the configured fixed camera, so it cannot be interactively zoomed or rotated while training.

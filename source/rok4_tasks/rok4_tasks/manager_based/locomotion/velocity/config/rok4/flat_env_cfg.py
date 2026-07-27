@@ -137,12 +137,19 @@ class RoK4CommandsCfg(CommandsCfg):
         heading_command=False,
         debug_vis=True,
         periodic_freeze_enabled=True,
-        mixed_env_ratio=0.90,
+        mixed_env_ratio=0.50,
         standing_env_ratio=0.05,
         walking_env_ratio=0.05,
+        x_env_ratio=0.10,
+        y_env_ratio=0.10,
+        yaw_env_ratio=0.10,
+        x_yaw_env_ratio=0.10,
         periodic_freeze_interval_s=10.0,
         periodic_freeze_duration_range_s=(1.5, 3.0),
         always_walking_min_lin_vel=0.15,
+        dedicated_x_min_abs_vel=0.15,
+        dedicated_y_min_abs_vel=0.15,
+        dedicated_yaw_min_abs_vel=0.15,
         ranges=mdp.RoK4PeriodicFreezeVelocityCommandCfg.Ranges(
             lin_vel_x=ROK4_LIN_VEL_X_RANGE,
             lin_vel_y=ROK4_LIN_VEL_Y_RANGE,
@@ -176,6 +183,17 @@ class RoK4RewardsCfg(RewardsCfg):
             "threshold": 0.4,
         },
     )
+    no_jumps = RewTerm(
+        func=mdp.desired_contacts,
+        weight=-2.0,
+        params={
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces",
+                body_names=["L_Foot_Link", "R_Foot_Link"],
+            ),
+            "threshold": 1.0,
+        },
+    )
     feet_slide = RewTerm(
         func=mdp.feet_slide,
         weight=-0.2,
@@ -185,7 +203,26 @@ class RoK4RewardsCfg(RewardsCfg):
         },
     )
     feet_flat_orientation_l2 = None
+    feet_swing_roll_l2 = RewTerm(
+        func=mdp.feet_swing_roll_l2,
+        weight=-1.0,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=["L_Foot_Link", "R_Foot_Link"]),
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces",
+                body_names=["L_Foot_Link", "R_Foot_Link"],
+            ),
+        },
+    )
     feet_stance_width_l2 = None
+    feet_lateral_separation_l2 = RewTerm(
+        func=mdp.feet_lateral_separation_l2,
+        weight=-2.0,
+        params={
+            "minimum_width": 0.16,
+            "asset_cfg": SceneEntityCfg("robot", body_names=["L_Foot_Link", "R_Foot_Link"]),
+        },
+    )
     stand_still_joint_deviation_l1 = RewTerm(
         func=mdp.stand_still_joint_deviation_l1,
         weight=-0.2,
@@ -209,7 +246,7 @@ class RoK4RewardsCfg(RewardsCfg):
     )
     joint_deviation_hip = RewTerm(
         func=mdp.joint_deviation_l1,
-        weight=-0.1,
+        weight=-0.05,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Hip_Yaw_Joint", ".*_Hip_Roll_Joint"])},
     )
     joint_deviation_torso = RewTerm(
@@ -315,7 +352,7 @@ class RoK4FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         # Rewards. These weights adapt the inherited velocity-locomotion penalties to RoK4's body and joint names.
         self.rewards.lin_vel_z_l2.weight = -0.2
         self.rewards.ang_vel_xy_l2.weight = -0.05
-        self.rewards.flat_orientation_l2.weight = -1.0
+        self.rewards.flat_orientation_l2.weight = -5.0
         self.rewards.undesired_contacts.weight = -1.0
         self.rewards.undesired_contacts.params["sensor_cfg"].body_names = ["Base_Link", "Upper_Body_Link"]
 

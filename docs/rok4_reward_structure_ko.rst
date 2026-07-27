@@ -2,13 +2,14 @@ RoK4 Reward Structure
 =============================================================
 
 작성일: 2026-07-15
-최종 업데이트: 2026-07-19
+최종 업데이트: 2026-07-27
 
 이 문서는 ``RoK4-Isaac-Velocity-Flat-v0`` task의 현재 reward 구조와 reward function 설정을 정리한다.
 현재 reward는 Isaac Lab G1 velocity task 구조를 출발점으로 RoK4 ADAPT actuator 좌표, direct velocity
 command, standing transition에 맞게 조정한 flat walking baseline이다. 현재 reference는
-``2026-07-19_18-32-43_adapt_raw_action_relaxed_rewards/model_4999.pt`` 이며 experimental
-``Yunho ADAPT v1`` 으로 기록한다. 여전히 최종 튜닝값이 아니라 다음 실험을 위한 기준점으로 봐야 한다.
+``2026-07-24_19-34-26_symmetry_aug_nojumps2_swing_roll100_fresh/model_9999.pt`` 이며 experimental
+``Yunho Symmetry ADAPT v1`` 으로 기록한다. 이 checkpoint는 domain randomization과 policy observation
+noise를 조정하기 전의 비교 기준이며, 이후 실험에서도 보존한다.
 
 아래 경로에서 ``RoK4:`` 는 ``/home/rclab/rok4_lab`` 을, ``Isaac Lab:`` 은
 ``/home/rclab/IsaacLab`` 을 기준으로 한 상대경로를 뜻한다.
@@ -104,9 +105,12 @@ Isaac Lab 원본 source를 수정하지 않는다. Isaac Lab의 부모 class와 
                           ├─ track_lin_vel_xy_exp
                           ├─ track_ang_vel_z_exp
                           ├─ feet_air_time
+                          ├─ no_jumps
                           ├─ feet_slide
                           ├─ feet_flat_orientation_l2 (현재 None: 비활성)
+                          ├─ feet_swing_roll_l2 (swing 중 roll만 억제)
                           ├─ feet_stance_width_l2 (현재 None: 비활성)
+                          ├─ feet_lateral_separation_l2 (signed lateral anti-cross)
                           ├─ stand_still_joint_deviation_l1
                           ├─ dof_pos_limits
                           ├─ joint_action_target_pos_limits
@@ -314,7 +318,12 @@ RoK4 전용 Reward Terms
      - ``mdp.feet_air_time_positive_biped``
      - ``0.75``
      - feet: ``L_Foot_Link``, ``R_Foot_Link``; ``threshold=0.4``
-     - 양발 보행에서 한 발씩 공중에 있는 step pattern을 유도한다. Threshold는 정확한 주기 목표가 아니라 single-stance reward의 시간 상한이다.
+     - 양발 보행에서 한 발씩 공중에 있는 step pattern을 유도한다. Threshold는 single-stance를 종료하는 시간 제한이 아니라 매 step raw reward가 ``0.4`` 에서 포화되는 기준이다.
+   * - ``no_jumps``
+     - ``mdp.desired_contacts``
+     - ``-2.0``
+     - feet: ``L_Foot_Link``, ``R_Foot_Link``; force ``threshold=1.0 N``
+     - 최근 contact-force history에서 양발 모두 threshold를 넘는 접촉이 없을 때만 raw penalty ``1`` 을 반환한다. 정상 single stance와 toe-off는 허용하지만 양발 동시 flight phase를 억제한다.
    * - ``feet_slide``
      - ``mdp.feet_slide``
      - ``-0.2``
@@ -325,11 +334,21 @@ RoK4 전용 Reward Terms
      - ``None`` (현재 비활성)
      - 좌우 Foot body quaternion과 contact sensor
      - 함수는 접촉 중인 발의 local ``+Z`` 축을 world frame으로 회전한 뒤 X/Y 성분 제곱합을 계산한다. 현재는 world-up 수평 제약이 toe-off와 향후 경사면 적응을 방해하지 않도록 Reward Manager에 등록하지 않는다.
+   * - ``feet_swing_roll_l2``
+     - ``mdp.feet_swing_roll_l2``
+     - ``-1.0``
+     - 좌우 Foot body quaternion과 contact sensor
+     - 공중에 있는 발의 local ``+Z`` 법선을 각 Foot 자체의 yaw frame으로 변환하고 lateral 성분의 제곱만 계산한다. 따라서 swing-foot의 안쪽/바깥쪽 roll은 억제하지만 pitch, yaw, toe-off와 지지 발 자세는 제한하지 않는다.
    * - ``feet_stance_width_l2``
      - ``mdp.feet_stance_width_l2``
      - ``None`` (현재 비활성)
      - 목표 ``0.21 m``, hard minimum ``0.18 m``; 직진 이동 command에서만 활성화
      - 함수는 좌우 Foot 위치 차이를 base yaw frame으로 회전해 lateral width를 계산한다. ``0.21 m`` 초과 폭은 coefficient ``0.5`` 로 억제하고, ``0.18 m`` 미만 또는 발 교차는 coefficient ``5.0`` 으로 강하게 억제한다. 현재 ``RoK4RewardsCfg`` 에서는 term을 ``None`` 으로 두어 Reward Manager에 등록하지 않는다.
+   * - ``feet_lateral_separation_l2``
+     - ``mdp.feet_lateral_separation_l2``
+     - ``-2.0``
+     - minimum width ``0.16 m``; feet 순서는 Left, Right
+     - 좌우 Foot 위치 차이를 base yaw frame으로 회전한 뒤 signed lateral width ``y_left - y_right`` 를 유지한다. ``relu(0.16 - signed_width)^2`` 만 반환하므로 정상 ``0.21 m`` 폭과 넓은 폭은 제한하지 않고, 좁아질수록 penalty가 증가하며 좌우 Foot이 교차해 부호가 바뀌면 더 크게 작동한다. Command mask 없이 standing과 moving 모두에 적용된다.
    * - ``stand_still_joint_deviation_l1``
      - ``mdp.stand_still_joint_deviation_l1``
      - ``-0.2``
@@ -348,9 +367,9 @@ RoK4 전용 Reward Terms
 
    * - ``joint_deviation_hip``
      - ``mdp.joint_deviation_l1``
-     - ``-0.1``
+     - ``-0.05``
      - ``.*_Hip_Yaw_Joint``, ``.*_Hip_Roll_Joint``
-     - hip yaw/roll이 default pose에서 과도하게 벗어나지 않게 한다.
+     - RoK4의 회전된 hip joint frame에서는 lateral foot placement가 이름상 yaw/roll 두 축의 조합으로 생성된다. ``-0.1`` 에서 절반으로 완화하여 ``flat_orientation_l2=-5.0`` 으로 상체 기울임은 억제하면서 다리가 옆으로 내딛을 자유를 준다. 완전히 끄지는 않아 과도한 hip 편차와 넓은 stance를 계속 억제한다.
    * - ``joint_deviation_torso``
      - ``mdp.joint_deviation_l1``
      - ``-0.1``
@@ -435,9 +454,9 @@ Gym과 Lab의 torque/velocity 신호 차이
      - roll/pitch angular velocity를 줄인다.
    * - ``flat_orientation_l2``
      - ``mdp.flat_orientation_l2``
-     - ``-1.0``
+     - ``-5.0``
      - 기본 robot root
-     - 몸이 기울어지는 것을 줄이고 upright 자세를 유도한다.
+     - projected gravity의 X/Y 성분 제곱합으로 몸이 기울어지는 것을 줄인다. ``-1.0`` 과 ``-2.0`` 실험 뒤 ``-5.0`` 으로 크게 강화하여 lateral hopping이 과도한 body roll 전략인지 확인하고, 자연스러운 체중 이동과 속도 추종을 과도하게 제한하는지도 함께 관찰한다.
    * - ``undesired_contacts``
      - ``mdp.undesired_contacts``
      - ``-1.0``
@@ -466,6 +485,9 @@ Reward Function 요약
    * - ``feet_air_time_positive_biped``
      - locomotion mdp
      - 한 발 지지 상태의 air/contact time을 보상하며, command 크기가 작으면 0이 된다.
+   * - ``desired_contacts``
+     - Isaac Lab 공통
+     - 지정 body 중 하나라도 최근 force history에서 threshold를 넘으면 0, 모두 접촉하지 않으면 1을 반환한다. Negative weight와 함께 양발 flight penalty로 사용한다.
    * - ``feet_slide``
      - locomotion mdp
      - 접촉 중인 foot의 horizontal linear velocity norm을 penalty로 계산한다.
@@ -528,16 +550,26 @@ Command와 Reward의 연결
 
 ``RoK4PeriodicFreezeVelocityCommand`` 는 episode reset마다 환경 역할을 다음 확률로 표본화한다.
 
-1. 90% mixed: 각 환경이 독립 phase로 moving과 standing을 전환한다.
-2. 5% always-standing: episode 동안 exact-zero command를 유지한다.
-3. 5% always-walking: planar command norm ``0.15 m/s`` 이상만 사용한다.
+1. 50% ``mixed``: ``vx``, ``vy``, ``wz`` 를 모두 표본화한다.
+2. 5% ``standing``: episode 동안 exact-zero command를 유지한다.
+3. 5% ``walking``: planar command norm ``0.15 m/s`` 이상만 사용하고 freeze하지 않는다.
+4. 10% ``x``: sagittal 전진/후진 command만 표본화한다.
+5. 10% ``y``: lateral 좌/우 command만 표본화한다.
+6. 10% ``yaw``: 시계/반시계 yaw-rate command만 표본화한다.
+7. 10% ``x_yaw``: ``vy=0`` 인 전후진+회전 command를 표본화한다.
 
-Mixed 환경의 standing은 ``10.0 s`` cycle과 환경별 ``Uniform(1.5, 3.0) s`` duration을 사용한다. Random initial
-phase와 독립 duration 때문에 같은 PPO batch에서 moving, standing, transition을 동시에 관측한다. 부모의 별도
-standing 확률은 ``rel_standing_envs=0.0`` 으로 비활성화한다. 작은 non-zero mixed moving command는
-standing으로 변환하지 않고 연속적인 저속 이동 목표로 유지한다.
+코드에서는 command 축과 직접 대응하는 ``x/y/yaw/x_yaw`` 이름을 사용한다. 각 단일 축 역할은 양/음 부호를
+50:50 확률로 표본화하며 ``x_yaw`` 의 두 부호는 독립적으로 표본화한다. 전용 역할의 최소 절댓값은 ``vx/vy``
+``0.15 m/s``, ``wz`` ``0.15 rad/s`` 이다. 4096개 환경에서 각 10% 단일 축 역할은 평균 약 410개이고, 각
+부호는 평균 약 205개이므로 이전 Gym의 방향별 200개 population과 비슷한 표본 규모다.
 
-Mixed standing과 always-standing은 command를 ``[0, 0, 0]`` 으로 만드는 동시에 ``is_standing_env=True`` 를
+``mixed/x/y/yaw/x_yaw`` 의 비율 합 90%는 ``10.0 s`` cycle과 환경별 ``Uniform(1.5, 3.0) s`` freeze duration을
+사용한다. Random initial phase와 독립 duration 때문에 같은 PPO batch에서 moving, standing, transition을
+동시에 관측한다. Episode 중 command를 다시 표본화할 때는 역할을 유지하며, reset 때 역할 자체를 다시 무작위로
+뽑는다. 부모의 별도 standing 확률은 ``rel_standing_envs=0.0`` 으로 비활성화한다. 작은 non-zero mixed command는
+standing으로 바꾸지 않고 연속적인 저속 이동 목표로 유지한다.
+
+Periodic freeze와 ``standing`` 역할은 command를 ``[0, 0, 0]`` 으로 만드는 동시에 ``is_standing_env=True`` 를
 설정한다. ``stand_still_joint_deviation_l1`` 은 command 크기를 다시 판정하지 않고 이 mask를 직접 사용하여
 전체 13관절을 default pose 근처로 유지한다. 현재 weight는 ``-0.2`` 이다. ``-1.0`` 실험은 안정적인 양발
 standing을 만들었지만 feet-air-time 감소와 foot-slide 증가가 관측되어 보행 자유도를 회복하도록 완화했다.
@@ -560,10 +592,26 @@ yaw angular velocity다. Navigation에서 목표 world heading이 필요하면 p
 heading error를 ``wz`` 로 변환해 이 동일한 velocity interface에 전달한다.
 
 현재 ``feet_air_time`` 은 G1 Flat과 같은 ``threshold=0.4 s``, ``weight=0.75`` 를 사용한다. 따라서 최대 raw
-reward는 ``0.4`` 이고, 최대 pre-``dt`` 항목 크기는 ``0.4 * 0.75 = 0.30`` 이다.
+reward는 ``0.4`` 이고, 최대 pre-``dt`` 항목 크기는 policy step당 ``0.4 * 0.75 = 0.30`` 이다. 이 threshold는
+single-stance 보상을 중단하는 cutoff가 아니다. 한발 지지가 ``0.4 s`` 를 넘으면 raw reward가 계속 ``0.4`` 로
+포화되어 매 policy step 지급된다.
+
+``no_jumps`` 는 ``mdp.desired_contacts`` 를 ``weight=-2.0`` 과 force ``threshold=1.0 N`` 으로 사용한다.
+최근 contact-force history에서 좌우 Foot 모두 threshold를 넘지 못한 경우에만 raw value ``1`` 을 반환하므로,
+Reward Manager에서는 해당 양발 flight interval에 음의 점수가 적용된다. 한 발이라도 접촉 중이면 0이므로 정상
+single stance와 toe-off는 직접 억제하지 않는다. 또한 이 term만으로 좌우 교대나 최대 single-stance 시간을
+강제하지는 않는다. 두 velocity-tracking term의 최대 pre-``dt`` 합 ``+2.0`` 을 flight 구간에서 상쇄하도록
+``-2.0`` 을 첫 실험값으로 사용한다.
+
+``feet_swing_roll_l2`` 는 ``weight=-1.0`` 로 활성화되어 swing 중 발바닥이 안쪽 또는 바깥쪽으로 말리는
+현상을 억제한다. 각 Foot의 local ``+Z`` 법선을 world frame으로 회전한 뒤 그 Foot 자체의 yaw frame으로 옮기고,
+lateral 성분 ``n_y^2 = sin^2(roll)`` 만 penalty로 반환한다. 따라서 foot yaw나 pitch가 변해도 roll 성분만 분리한다. Contact sensor의
+``current_contact_time`` 이 0인 발에만 적용하고 swing 발 수로 평균하므로, 지지 발은 0이며 pitch와 yaw도
+직접 제한하지 않는다. 따라서 기존의 비활성 ``feet_flat_orientation_l2`` 와 달리 toe-off나 fore-aft swing
+각도를 평평하게 만들지 않는다.
 
 Contact sensor는 ``update_period=0.002 s`` 와 ``history_length=self.decimation=5`` 를 사용한다. 따라서
-``feet_slide``, ``undesired_contacts``, ``illegal_body_contact`` 처럼 ``net_forces_w_history`` 를 검사하는
+``no_jumps``, ``feet_slide``, ``undesired_contacts``, ``illegal_body_contact`` 처럼 ``net_forces_w_history`` 를 검사하는
 항목은 최근 policy interval의 5개 physics contact sample을 확인한다. 반면 ``feet_air_time_positive_biped`` 는
 이 force history가 아니라 sensor의 현재 ``current_air_time`` 과 ``current_contact_time`` 을 사용한다.
 이 contact-force history는 policy observation history와 별개의 buffer이다.
@@ -616,12 +664,14 @@ RoK4 flat task는 Isaac Lab의 ``TerminationsCfg`` 를 수정하지 않고 로�
    1. command velocity를 따라간다.
    2. upright 자세를 유지한다.
    3. 한 발씩 드는 biped stepping pattern을 만든다.
-   4. foot-flat orientation과 stance-width 함수는 구현되어 있지만 현재 비활성이다. 발 접촉 자세는 actuator compliance와 물리 접촉에 맡긴다.
-   5. 발 미끄러짐을 줄인다.
-   6. torque, joint acceleration, action rate, second action rate를 줄여 움직임을 부드럽게 한다.
-   7. ankle limit, hip/torso deviation을 제한한다.
-   8. zero command에서 전체 13관절을 default standing pose 근처로 유지한다.
-   9. Foot를 제외한 body 접촉을 실패 종료로 처리한다.
+   4. 양발이 동시에 공중에 뜨는 flight phase를 줄이되 정상 single stance는 허용한다.
+   5. standing과 moving 모두에서 좌우 Foot의 signed lateral separation 하한만 두어 다리 교차를 억제한다.
+   6. foot-flat orientation과 목표 stance-width 함수는 구현되어 있지만 현재 비활성이다.
+   7. 발 미끄러짐을 줄인다.
+   8. torque, joint acceleration, action rate, second action rate를 줄여 움직임을 부드럽게 한다.
+   9. ankle limit, hip/torso deviation을 제한한다.
+   10. zero command에서 전체 13관절을 default standing pose 근처로 유지한다.
+   11. Foot를 제외한 body 접촉을 실패 종료로 처리한다.
 
 튜닝 시 우선 확인할 항목
 ---------------------------------------------------------------
@@ -637,10 +687,12 @@ RoK4 flat task는 Isaac Lab의 ``TerminationsCfg`` 를 수정하지 않고 로�
      - ``track_lin_vel_xy_exp``, command range, ``feet_air_time``
    * - 발이 많이 미끄러진다
      - ``feet_slide``, foot collision, friction, contact sensor
+   * - 양발이 동시에 공중에 뜨는 점프가 반복된다
+     - ``no_jumps``, contact-force threshold/history, ``feet_air_time`` 의 single-stance 보상 크기
    * - 발날 또는 발끝으로 착지한다
      - ankle actuator gain/target, Foot body frame, contact sensor를 먼저 확인한다. ``feet_flat_orientation_l2`` 는 world-up 기준 함수이므로 평지 진단 실험에서만 선택적으로 활성화한다.
    * - 다리를 과도하게 벌리거나 교차한다
-     - ``joint_deviation_hip``, yaw-frame Foot 위치를 먼저 확인한다. ``feet_stance_width_l2`` 는 command 모드별 적용 방식을 다시 설계한 뒤 활성화한다.
+     - ``feet_lateral_separation_l2`` 의 signed width와 penalty를 먼저 확인한다. 이 term은 교차/최소 폭만 다루며 넓은 stance는 제한하지 않는다. 넓은 stance 문제에는 ``joint_deviation_hip`` 와 비활성 ``feet_stance_width_l2`` 를 별도로 검토한다.
    * - 관절이 떨린다
      - ``action_rate_l2``, ``second_action_rate_l2``, ``actuator_acc_l2``, actuator PD gain, action scale
    * - 토크가 과도하다

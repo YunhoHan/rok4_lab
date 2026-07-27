@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 ROK4_RELAXED_ACTION_IDS = (2, 3, 8, 9)
 """Actuator indices with reduced physical effort and state penalties."""
 
+
 def feet_flat_orientation_l2(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg,
@@ -39,6 +40,37 @@ def feet_flat_orientation_l2(
     in_contact = contact_sensor.data.current_contact_time[:, sensor_cfg.body_ids] > 0.0
     contact_count = torch.sum(in_contact, dim=1).clamp(min=1)
     return torch.sum(tilt_error * in_contact, dim=1) / contact_count
+
+
+def feet_swing_roll_l2(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg,
+    sensor_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Penalize lateral sole tilt only while each foot is in swing."""
+    asset = env.scene[asset_cfg.name]
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+
+    foot_quat_w = asset.data.body_quat_w[:, asset_cfg.body_ids]
+    foot_up_local = torch.zeros_like(foot_quat_w[..., :3])
+    foot_up_local[..., 2] = 1.0
+    foot_up_w = quat_apply(foot_quat_w, foot_up_local)
+    foot_up_yaw = quat_apply_inverse(
+        yaw_quat(foot_quat_w),
+        foot_up_w,
+    )
+    roll_error = torch.square(foot_up_yaw[..., 1])
+
+    in_contact = contact_sensor.data.current_contact_time[:, sensor_cfg.body_ids] > 0.0
+    if in_contact.shape[1] != roll_error.shape[1]:
+        raise ValueError(
+            f"Selected {roll_error.shape[1]} foot bodies but received "
+            f"{in_contact.shape[1]} contact bodies."
+        )
+
+    in_swing = ~in_contact
+    swing_count = torch.sum(in_swing, dim=1).clamp(min=1)
+    return torch.sum(roll_error * in_swing, dim=1) / swing_count
 
 
 def feet_stance_width_l2(
@@ -74,6 +106,24 @@ def feet_stance_width_l2(
     )
     moving_command = torch.linalg.vector_norm(command, dim=1) > moving_command_threshold
     return penalty * straight_command * moving_command
+
+
+def feet_lateral_separation_l2(
+    env: ManagerBasedRLEnv,
+    minimum_width: float,
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Penalize insufficient signed lateral foot separation [m^2]."""
+    asset = env.scene[asset_cfg.name]
+    foot_pos_w = asset.data.body_pos_w[:, asset_cfg.body_ids]
+    if foot_pos_w.shape[1] != 2:
+        raise ValueError(f"Expected exactly two feet, received {foot_pos_w.shape[1]} bodies.")
+
+    left_to_right_w = foot_pos_w[:, 0] - foot_pos_w[:, 1]
+    left_to_right_yaw = quat_apply_inverse(yaw_quat(asset.data.root_quat_w), left_to_right_w)
+    signed_width = left_to_right_yaw[:, 1]
+    width_deficit = torch.relu(minimum_width - signed_width)
+    return torch.square(width_deficit)
 
 
 def stand_still_joint_deviation_l1(

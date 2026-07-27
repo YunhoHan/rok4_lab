@@ -70,6 +70,9 @@ def _prepare_isaaclab_rsl_source(
         push_update = '''        if push_test_window is not None:
             push_test_window.apply_pending_push()
 '''
+        if not use_teleop:
+            push_update += '''            push_test_window.update_command_display()
+'''
         source = _replace_once(
             source,
             inference_marker,
@@ -200,6 +203,9 @@ def _scale_teleop_command(raw_command: torch.Tensor, invert_lateral_and_yaw: boo
     if args_cli.teleop_device == "keyboard":
         teleop_interface.add_callback("R", teleop_reset_request.request)
     base_velocity_command = env.unwrapped.command_manager.get_term("base_velocity")
+    command_display_window = getattr(env.unwrapped, "_window", None)
+    if command_display_window is not None and not hasattr(command_display_window, "update_command_display"):
+        command_display_window = None
     print(teleop_interface)
     if args_cli.teleop_device == "keyboard":
         print("\tReset environment: R")
@@ -226,6 +232,8 @@ def _scale_teleop_command(raw_command: torch.Tensor, invert_lateral_and_yaw: boo
             invert_lateral_and_yaw=args_cli.teleop_device == "gamepad",
         )
         base_velocity_command.vel_command_b[:] = teleop_command
+        if command_display_window is not None:
+            command_display_window.update_command_display()
 '''
         source = _replace_once(
             source,

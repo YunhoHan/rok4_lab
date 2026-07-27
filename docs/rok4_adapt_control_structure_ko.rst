@@ -2,7 +2,7 @@ RoK4 ADAPT Action/Actuator 제어 구조 문서
 ================================================================================
 
 :작성일: 2026-07-16
-:최종 업데이트: 2026-07-19
+:최종 업데이트: 2026-07-27
 :대상 저장소: ``/home/rclab/rok4_lab``
 :기준 환경: Isaac Lab v2.3.2, Isaac Sim 5.1.0, ``env_isaaclab``
 
@@ -13,8 +13,9 @@ RoK4 ADAPT Action/Actuator 제어 구조 문서
 제어 경로를 설명한다. 특히 다음처럼 코드만 보면 혼동하기 쉬운 부분을 구분한다.
 
 현재 actuator-space reference policy는
-``2026-07-19_18-32-43_adapt_raw_action_relaxed_rewards/model_4999.pt`` 이며 experimental
-``Yunho ADAPT v1`` baseline으로 기록한다.
+``2026-07-24_19-34-26_symmetry_aug_nojumps2_swing_roll100_fresh/model_9999.pt`` 이며 experimental
+``Yunho Symmetry ADAPT v1`` baseline으로 기록한다. 이 policy는 현재 ADAPT action/observation interface의
+pre-domain-randomization 및 pre-observation-noise-tuning reference다.
 
 * ``actions.py`` 와 ``rok4_adapt.py`` 의 관계는 상속이 아니라 runtime 객체 참조다.
 * policy는 actuator torque가 아니라 normalized actuator position offset을 출력한다.
