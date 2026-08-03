@@ -1,0 +1,1386 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+<title>RoK4 Observation Noise, Reset, Domain Randomization 문서</title>
+<style type="text/css">
+
+/* Minimal style sheet for the HTML output of Docutils.                    */
+/*                                                                         */
+/* :Author: Günter Milde, based on html4css1.css by David Goodger          */
+/* :Id: $Id: minimal.css 8642 2021-03-26 13:51:14Z milde $               */
+/* :Copyright: © 2015 Günter Milde.                                        */
+/* :License: Released under the terms of the `2-Clause BSD license`_,      */
+/*    in short:                                                            */
+/*                                                                         */
+/*    Copying and distribution of this file, with or without modification, */
+/*    are permitted in any medium without royalty provided the copyright   */
+/*    notice and this notice are preserved.                                */
+/*                                                                         */
+/*    This file is offered as-is, without any warranty.                    */
+/*                                                                         */
+/* .. _2-Clause BSD license: http://www.spdx.org/licenses/BSD-2-Clause     */
+
+/* This CSS2.1_ stylesheet defines rules for Docutils elements without    */
+/* HTML equivalent. It is required to make the document semantic visible. */
+/*                                                                        */
+/* .. _CSS2.1: http://www.w3.org/TR/CSS2                                  */
+/* .. _validates: http://jigsaw.w3.org/css-validator/validator$link       */
+
+/* titles */
+p.topic-title,
+p.admonition-title,
+p.system-message-title {
+  font-weight: bold;
+}
+p.sidebar-title,
+p.rubric {
+  font-weight: bold;
+  font-size: larger;
+}
+p.rubric {
+  color: maroon;
+}
+p.subtitle,
+p.section-subtitle,
+p.sidebar-subtitle {
+  font-weight: bold;
+  margin-top: -0.5em;
+}
+h1 + p.subtitle {
+  font-size: 1.6em;
+}
+h2 + p.section-subtitle, a.toc-backref {
+  color: black;
+  text-decoration: none;
+}
+
+/* Warnings, Errors */
+.system-messages h2,
+.system-message-title,
+span.problematic {
+  color: red;
+}
+
+/* Inline Literals */
+.docutils.literal {
+  font-family: monospace;
+  white-space: pre-wrap;
+}
+/* do not wrap at hyphens and similar: */
+.literal > span.pre { white-space: nowrap; }
+
+/* Lists */
+
+/* compact and simple lists: no margin between items */
+.simple  li, .simple  ul, .simple  ol,
+.compact li, .compact ul, .compact ol,
+.simple  > li p, dl.simple  > dd,
+.compact > li p, dl.compact > dd {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+/* Nested Paragraphs */
+p:first-child { margin-top: 0; }
+p:last-child { margin-bottom: 0; }
+td > p, th > p { margin-bottom: 0; }
+
+/* Table of Contents */
+.topic.contents { margin: 0.5em 0; }
+.topic.contents ul.auto-toc {
+  list-style-type: none;
+  padding-left: 1.5em;
+}
+
+/* Enumerated Lists */
+ol.arabic     { list-style: decimal }
+ol.loweralpha { list-style: lower-alpha }
+ol.upperalpha { list-style: upper-alpha }
+ol.lowerroman { list-style: lower-roman }
+ol.upperroman { list-style: upper-roman }
+
+/* Definition Lists and Derivatives */
+dt .classifier { font-style: italic }
+dt .classifier:before {
+  font-style: normal;
+  margin: 0.5em;
+  content: ":";
+}
+/* Field Lists and similar */
+/* bold field name, content starts on the same line */
+dl.field-list > dt,
+dl.option-list > dt,
+dl.docinfo > dt,
+dl.footnote > dt,
+dl.citation > dt {
+  font-weight: bold;
+  clear: left;
+  float: left;
+  margin: 0;
+  padding: 0;
+  padding-right: 0.5em;
+}
+/* Offset for field content (corresponds to the --field-name-limit option) */
+dl.field-list > dd,
+dl.option-list > dd,
+dl.docinfo > dd {
+  margin-left:  9em; /* ca. 14 chars in the test examples, fit all Docinfo fields */
+}
+/* start field-body on a new line after long field names */
+dl.field-list > dd > *:first-child,
+dl.option-list > dd > *:first-child
+{
+  display: inline-block;
+  width: 100%;
+  margin: 0;
+}
+/* field names followed by a colon */
+dl.field-list > dt:after,
+dl.docinfo > dt:after {
+  content: ":";
+}
+
+/* Bibliographic Fields (docinfo) */
+dl.docinfo pre.address {
+  font: inherit;
+  margin: 0.5em 0;
+}
+dl.docinfo > dd.authors > p { margin: 0; }
+
+/* Option Lists */
+dl.option-list > dt { font-weight: normal; }
+span.option { white-space: nowrap; }
+
+/* Footnotes and Citations  */
+dl.footnote.superscript > dd { margin-left: 1em; }
+dl.footnote.brackets > dd { margin-left: 2em; }
+dl.footnote > dt { font-weight: normal; }
+a.footnote-reference.brackets:before,
+dt.label > span.brackets:before { content: "["; }
+a.footnote-reference.brackets:after,
+dt.label > span.brackets:after { content: "]"; }
+a.footnote-reference.superscript,
+dl.footnote.superscript > dt.label {
+  vertical-align: super;
+  font-size: small;
+}
+dt.label > span.fn-backref {
+  margin-left: 0.2em;
+  font-weight: normal;
+}
+dt.label > span.fn-backref > a { font-style: italic; }
+
+/* Alignment */
+.align-left   {
+  text-align: left;
+  margin-right: auto;
+}
+.align-center {
+  clear: both;
+  text-align: center;
+  margin-left: auto;
+  margin-right: auto;
+}
+.align-right  {
+  text-align: right;
+  margin-left: auto;
+}
+.align-top    { vertical-align: top; }
+.align-middle { vertical-align: middle; }
+.align-bottom { vertical-align: bottom; }
+
+/* reset inner alignment in figures and tables */
+figure.align-left, figure.align-right,
+table.align-left, table.align-center, table.align-right {
+  text-align: inherit;
+}
+
+/* Text Blocks */
+blockquote,
+div.topic,
+aside.topic {
+  margin: 1em 2em;
+}
+.sidebar,
+.admonition,
+.system-message {
+  border: thin solid;
+  margin: 1em 2em;
+  padding: 0.5em 1em;
+}
+.sidebar {
+  width: 30%;
+  max-width: 26em;
+  float: right;
+  clear: right;
+}
+div.line-block { display: block; }
+div.line-block div.line-block, pre { margin-left: 2em; }
+
+/* Code line numbers: dropped when copying text from the page */
+pre.code .ln { display: none; }
+pre.code code:before {
+  content: attr(data-lineno); /* …, none) fallback not supported by any browser */
+  color: gray;
+}
+
+/* Tables */
+table {
+  border-collapse: collapse;
+}
+td, th {
+  border: thin solid silver;
+  padding: 0 1ex;
+}
+.borderless td, .borderless th {
+  border: 0;
+  padding: 0;
+  padding-right: 0.5em /* separate table cells */
+}
+
+table > caption {
+  text-align: left;
+  margin-top: 0.2em;
+  margin-bottom: 0.2em;
+}
+table.captionbelow {
+  caption-side: bottom;
+}
+
+/* Document Header and Footer */
+header { border-bottom: 1px solid black; }
+footer { border-top: 1px solid black; }
+
+/* Images are block-level by default in Docutils */
+/* New HTML5 block elements: set display for older browsers */
+img, header, section, footer, aside, nav, main, article, figure, video {
+  display: block;
+}
+/* inline images */
+p img, p video, figure img, figure video {
+  display: inline;
+}
+
+</style>
+<style type="text/css">
+
+/* CSS31_ style sheet for the output of Docutils HTML writers.             */
+/* Rules for easy reading and pre-defined style variants.                  */
+/*                                                                         */
+/* :Author: Günter Milde, based on html4css1.css by David Goodger          */
+/* :Id: $Id: plain.css 8636 2021-03-19 00:23:33Z milde $                                                               */
+/* :Copyright: © 2015 Günter Milde.                                        */
+/* :License: Released under the terms of the `2-Clause BSD license`_,      */
+/*    in short:                                                            */
+/*                                                                         */
+/*    Copying and distribution of this file, with or without modification, */
+/*    are permitted in any medium without royalty provided the copyright   */
+/*    notice and this notice are preserved.                                */
+/*                                                                         */
+/*    This file is offered as-is, without any warranty.                    */
+/*                                                                         */
+/* .. _2-Clause BSD license: http://www.spdx.org/licenses/BSD-2-Clause     */
+/* .. _CSS3: http://www.w3.org/TR/CSS3                                     */
+
+
+/* Document Structure */
+/* ****************** */
+
+/* "page layout" */
+body {
+  margin: 0;
+  background-color: #dbdbdb;
+}
+main, footer, header {
+  line-height:1.3;
+  /* avoid long lines --> better reading */
+  /* optimum is 45…75 characters/line <http://webtypography.net/2.1.2> */
+  /* OTOH: lines should not be too short because of missing hyphenation, */
+  max-width: 50rem;
+  padding: 1px 2%; /* 1px on top avoids grey bar above title (mozilla) */
+  margin: auto;
+}
+main {
+  counter-reset: table figure;
+  background-color: white;
+}
+footer, header {
+  font-size: smaller;
+  padding: 0.5em 2%;
+  border: none;
+}
+
+/* Transitions */
+hr.docutils {
+  width: 80%;
+  margin-top: 1em;
+  margin-bottom: 1em;
+  clear: both;
+}
+
+/* Paragraphs */
+
+/* vertical space (parskip) */
+p, ol, ul, dl, li, dd,
+div.line-block,
+div.topic,
+table {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+p:first-child { margin-top: 0; }
+/* (:last-child is new in CSS 3) */
+p:last-child  { margin-bottom: 0; }
+
+h1, h2, h3, h4, h5, h6,
+dl > dd {
+  margin-bottom: 0.5em;
+}
+
+/* Lists */
+/* ===== */
+
+/* Separate list entries in compound lists */
+dl > dd, ol > li,
+
+/* Definition Lists */
+/* Indent lists nested in definition lists */
+/* (:only-child is new in CSS 3)           */
+dd > ul:only-child, dd > ol:only-child { padding-left: 1em; }
+
+/* Description Lists */
+/* styled like in most dictionaries, encyclopedias etc. */
+dl.description > dt {
+  font-weight: bold;
+  clear: left;
+  float: left;
+  margin: 0;
+  padding: 0;
+  padding-right: 0.5em;
+}
+
+/* Field Lists */
+
+/* example for custom field-name width */
+dl.field-list.narrow > dd {
+  margin-left: 5em;
+}
+/* run-in: start field-body on same line after long field names */
+dl.field-list.run-in > dd p {
+  display: block;
+}
+
+/* Bibliographic Fields */
+
+/* generally, bibliographic fields use special definition list dl.docinfo */
+/* but dedication and abstract are placed into "topic" divs */
+div.abstract p.topic-title {
+  text-align: center;
+}
+div.dedication {
+  margin: 2em 5em;
+  text-align: center;
+  font-style: italic;
+}
+div.dedication p.topic-title {
+  font-style: normal;
+}
+
+/* Text Blocks */
+/* =========== */
+
+/* Literal Blocks */
+pre.literal-block, pre.doctest-block,
+pre.math, pre.code {
+  font-family: monospace;
+}
+
+/* Block Quotes */
+blockquote > table,
+div.topic > table {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+blockquote p.attribution,
+div.topic p.attribution {
+  text-align: right;
+  margin-left: 20%;
+}
+
+/* Tables */
+/* ====== */
+
+/* th { vertical-align: bottom; } */
+
+table tr { text-align: left; }
+
+/* "booktabs" style (no vertical lines) */
+table.booktabs {
+  border: 0;
+  border-top: 2px solid;
+  border-bottom: 2px solid;
+  border-collapse: collapse;
+}
+table.booktabs * {
+  border: 0;
+}
+table.booktabs th {
+  border-bottom: thin solid;
+}
+
+/* numbered tables (counter defined in div.document) */
+table.numbered > caption:before {
+  counter-increment: table;
+  content: "Table " counter(table) ": ";
+  font-weight: bold;
+}
+
+/* Explicit Markup Blocks */
+/* ====================== */
+
+/* Footnotes and Citations */
+/* ----------------------- */
+
+/* line on the left */
+dl.footnote {
+  padding-left: 1ex;
+  border-left: solid;
+  border-left-width: thin;
+}
+
+/* Directives */
+/* ---------- */
+
+/* Body Elements */
+/* ~~~~~~~~~~~~~ */
+
+/* Images and Figures */
+
+/* let content flow to the side of aligned images and figures */
+figure.align-left,
+img.align-left,
+video.align-left,
+object.align-left {
+  clear: left;
+  float: left;
+  margin-right: 1em;
+}
+figure.align-right,
+img.align-right,
+video.align-right,
+object.align-right {
+  clear: right;
+  float: right;
+  margin-left: 1em;
+}
+/* Stop floating sidebars, images and figures */
+h1, h2, h3, h4, footer, header { clear: both; }
+
+/* Numbered figures */
+figure.numbered > figcaption > p:before {
+  counter-increment: figure;
+  content: "Figure " counter(figure) ": ";
+  font-weight: bold;
+}
+
+/* Admonitions and System Messages */
+.caution p.admonition-title,
+.attention p.admonition-title,
+.danger p.admonition-title,
+.error p.admonition-title,
+.warning p.admonition-title,
+div.error {
+  color: red;
+}
+
+/* Sidebar */
+/* Move right. In a layout with fixed margins, */
+/* it can be moved into the margin.            */
+aside.sidebar {
+  width: 30%;
+  max-width: 26em;
+  margin-left: 1em;
+  margin-right: -2%;
+  background-color: #ffffee;
+}
+
+/* Code */
+pre.code { padding: 0.7ex }
+pre.code, code { background-color: #eeeeee }
+/* basic highlighting: for a complete scheme, see */
+/* http://docutils.sourceforge.net/sandbox/stylesheets/ */
+pre.code .comment, code .comment { color: #5C6576 }
+pre.code .keyword, code .keyword { color: #3B0D06; font-weight: bold }
+pre.code .literal.string, code .literal.string { color: #0C5404 }
+pre.code .name.builtin, code .name.builtin { color: #352B84 }
+pre.code .deleted, code .deleted { background-color: #DEB0A1}
+pre.code .inserted, code .inserted { background-color: #A3D289}
+
+/* Math */
+/* styled separately (see math.css for math-output=HTML) */
+
+/* Epigraph           */
+/* Highlights         */
+/* Pull-Quote         */
+/* Compound Paragraph */
+/* Container          */
+
+/* Inline Markup */
+/* ============= */
+
+/* Inline Literals                                          */
+/* possible values: normal, nowrap, pre, pre-wrap, pre-line */
+/*   span.docutils.literal { white-space: pre-wrap; }       */
+
+/* Hyperlink References */
+a { text-decoration: none; }
+
+/* External Targets       */
+/*   span.target.external */
+/* Internal Targets       */
+/*   span.target.internal */
+/* Footnote References    */
+/*   a.footnote-reference */
+/* Citation References    */
+/*   a.citation-reference */
+
+</style>
+<style type="text/css">
+
+/*
+*   math2html: convert LaTeX equations to HTML output.
+*
+*   Copyright (C) 2009,2010 Alex Fernández
+*
+*   Released under the terms of the `2-Clause BSD license'_, in short:
+*   Copying and distribution of this file, with or without modification,
+*   are permitted in any medium without royalty provided the copyright
+*   notice and this notice are preserved.
+*   This file is offered as-is, without any warranty.
+*
+* .. _2-Clause BSD license: http://www.spdx.org/licenses/BSD-2-Clause
+*
+*   Based on eLyXer: convert LyX source files to HTML output.
+*   http://elyxer.nongnu.org/
+*/
+/* --end--
+* CSS file for LaTeX formulas.
+*/
+
+/* Formulas */
+.formula {
+	text-align: center;
+	font-family: "Droid Serif", "DejaVu Serif", "STIX", serif;
+	margin: 1.2em 0;
+}
+span.formula {
+	white-space: nowrap;
+}
+div.formula {
+	padding: 0.5ex;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+/* Basic features */
+a.eqnumber {
+	display: inline-block;
+	float: right;
+	clear: right;
+	font-weight: bold;
+}
+span.unknown {
+	color: #800000;
+}
+span.ignored, span.arraydef {
+	display: none;
+}
+.formula i {
+	letter-spacing: 0.1ex;
+}
+
+/* Alignment */
+.align-left, .align-l {
+	text-align: left;
+}
+.align-right, .align-r {
+	text-align: right;
+}
+.align-center, .align-c {
+	text-align: center;
+}
+
+/* Structures */
+span.overline, span.bar {
+	text-decoration: overline;
+}
+.fraction, .fullfraction {
+	display: inline-block;
+	vertical-align: middle;
+	text-align: center;
+}
+.fraction .fraction {
+	font-size: 80%;
+	line-height: 100%;
+}
+span.numerator {
+	display: block;
+}
+span.denominator {
+	display: block;
+	padding: 0ex;
+	border-top: thin solid;
+}
+sup.numerator, sup.unit {
+	font-size: 70%;
+	vertical-align: 80%;
+}
+sub.denominator, sub.unit {
+	font-size: 70%;
+	vertical-align: -20%;
+}
+span.sqrt {
+	display: inline-block;
+	vertical-align: middle;
+	padding: 0.1ex;
+}
+sup.root {
+	font-size: 70%;
+	position: relative;
+	left: 1.4ex;
+}
+span.radical {
+	display: inline-block;
+	padding: 0ex;
+	font-size: 150%;
+	vertical-align: top;
+}
+span.root {
+	display: inline-block;
+	border-top: thin solid;
+	padding: 0ex;
+	vertical-align: middle;
+}
+span.symbol {
+	line-height: 125%;
+	font-size: 125%;
+}
+span.bigsymbol {
+	line-height: 150%;
+	font-size: 150%;
+}
+span.largesymbol {
+	font-size: 175%;
+}
+span.hugesymbol {
+	font-size: 200%;
+}
+span.scripts {
+	display: inline-table;
+	vertical-align: middle;
+}
+.script {
+	display: table-row;
+	text-align: left;
+	line-height: 150%;
+}
+span.limits {
+	display: inline-table;
+	vertical-align: middle;
+}
+.limit {
+	display: table-row;
+	line-height: 99%;
+}
+sup.limit, sub.limit {
+	line-height: 100%;
+}
+span.symbolover {
+	display: inline-block;
+	text-align: center;
+	position: relative;
+	float: right;
+	right: 100%;
+	bottom: 0.5em;
+	width: 0px;
+}
+span.withsymbol {
+	display: inline-block;
+}
+span.symbolunder {
+	display: inline-block;
+	text-align: center;
+	position: relative;
+	float: right;
+	right: 80%;
+	top: 0.3em;
+	width: 0px;
+}
+
+/* Environments */
+span.array, span.bracketcases, span.binomial, span.environment {
+	display: inline-table;
+	text-align: center;
+	border-collapse: collapse;
+	margin: 0em;
+	vertical-align: middle;
+}
+span.arrayrow, span.binomrow {
+	display: table-row;
+	padding: 0ex;
+	border: 0ex;
+}
+span.arraycell, span.bracket, span.case, span.binomcell, span.environmentcell {
+	display: table-cell;
+	padding: 0ex 0.2ex;
+	line-height: 99%;
+	border: 0ex;
+}
+/*
+* CSS file for LaTeX formulas, extra stuff:
+* binomials, vertical braces, stackrel, fonts and colors.
+*/
+
+/* Inline binomials */
+span.binom {
+	display: inline-block;
+	vertical-align: middle;
+	text-align: center;
+	font-size: 80%;
+}
+span.binomstack {
+	display: block;
+	padding: 0em;
+}
+
+/* Over- and underbraces */
+span.overbrace {
+	border-top: 2pt solid;
+}
+span.underbrace {
+	border-bottom: 2pt solid;
+}
+
+/* Stackrel */
+span.stackrel {
+	display: inline-block;
+	text-align: center;
+}
+span.upstackrel {
+	display: block;
+	padding: 0em;
+	font-size: 80%;
+	line-height: 64%;
+	position: relative;
+	top: 0.15em;
+
+}
+span.downstackrel {
+	display: block;
+	vertical-align: bottom;
+	padding: 0em;
+}
+
+/* Fonts */
+span.mathsf, span.textsf {
+	font-style: normal;
+	font-family: sans-serif;
+}
+span.mathrm, span.textrm {
+	font-style: normal;
+	font-family: serif;
+}
+span.text, span.textnormal {
+	font-style: normal;
+}
+span.textipa {
+	color: #008080;
+}
+span.fraktur {
+	font-family: "Lucida Blackletter", eufm10, blackletter;
+}
+span.blackboard {
+	font-family: Blackboard, msbm10, serif;
+}
+span.scriptfont {
+	font-family: "Monotype Corsiva", "Apple Chancery", "URW Chancery L", cursive;
+	font-style: italic;
+}
+
+/* Colors */
+span.colorbox {
+	display: inline-block;
+	padding: 5px;
+}
+span.fbox {
+	display: inline-block;
+	border: thin solid black;
+	padding: 2px;
+}
+span.boxed, span.framebox {
+	display: inline-block;
+	border: thin solid black;
+	padding: 5px;
+}
+
+
+</style>
+</head>
+<body>
+<main id="rok4-observation-noise-reset-domain-randomization">
+<h1 class="title">RoK4 Observation Noise, Reset, Domain Randomization 문서</h1>
+<dl class="docinfo simple">
+<dt>작성일</dt>
+<dd><p>2026-07-30</p>
+</dd>
+<dt>최종 업데이트</dt>
+<dd><p>2026-07-30</p>
+</dd>
+<dt>대상 저장소</dt>
+<dd><p>RoK4 repository root (<span class="docutils literal">${ROK4_LAB_ROOT}</span>)</p>
+</dd>
+<dt>기준 환경</dt>
+<dd><p>Isaac Lab v2.3.2, Isaac Sim 5.1.0, <span class="docutils literal">env_isaaclab</span></p>
+</dd>
+</dl>
+<style>
+@media print {
+  body, main {
+    background-color: white;
+  }
+  pre.code {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+</style><section id="id1">
+<h2>문서 경로 표기</h2>
+<p>이 문서의 <span class="docutils literal">${ROK4_LAB_ROOT}</span> 와 <span class="docutils literal">${ISAACLAB_ROOT}</span> 는 특정 사용자의 홈 디렉터리가 아니라 각 저장소의
+root를 뜻한다. 저장소를 설치한 실제 위치에 맞춰 한 번만 설정한다.</p>
+<pre class="code bash literal-block"><code><span class="name builtin">export</span> <span class="name variable">ROK4_LAB_ROOT</span><span class="operator">=</span><span class="literal string double">&quot;</span><span class="literal string interpol">${</span><span class="name variable">HOME</span><span class="literal string interpol">}</span><span class="literal string double">/rok4_lab&quot;</span>
+<span class="name builtin">export</span> <span class="name variable">ISAACLAB_ROOT</span><span class="operator">=</span><span class="literal string double">&quot;</span><span class="literal string interpol">${</span><span class="name variable">HOME</span><span class="literal string interpol">}</span><span class="literal string double">/IsaacLab&quot;</span>
+<span class="name builtin">cd</span> <span class="literal string double">&quot;</span><span class="literal string interpol">${</span><span class="name variable">ISAACLAB_ROOT</span><span class="literal string interpol">}</span><span class="literal string double">&quot;</span></code></pre>
+<p>다른 위치에 clone했다면 오른쪽 경로만 바꾸면 된다. 이후 명령은 다음처럼 사용자 이름과 무관하게 실행한다.</p>
+<pre class="code bash literal-block"><code>./isaaclab.sh -p <span class="literal string double">&quot;</span><span class="literal string interpol">${</span><span class="name variable">ROK4_LAB_ROOT</span><span class="literal string interpol">}</span><span class="literal string double">/scripts/rsl_rl/train.py&quot;</span> <span class="literal string escape">\
+</span>  --task RoK4-Isaac-Velocity-Flat-v0 <span class="literal string escape">\
+</span>  --num_envs <span class="literal number">4096</span> <span class="literal string escape">\
+</span>  --max_iterations <span class="literal number">5000</span> <span class="literal string escape">\
+</span>  --headless</code></pre>
+</section>
+<section id="id2">
+<h2>개요</h2>
+<p>RoK4의 robustness 설정은 서로 목적과 적용 시점이 다른 세 층으로 나뉜다.</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>구분</p></th>
+<th class="head"><p>바꾸는 대상</p></th>
+<th class="head"><p>표본화 시점</p></th>
+<th class="head"><p>episode 중 변경</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p>Observation noise</p></td>
+<td><p>policy가 받는 측정값</p></td>
+<td><p>매 policy observation 계산</p></td>
+<td><p>예</p></td>
+</tr>
+<tr><td><p>Reset randomization</p></td>
+<td><p>episode 시작 상태</p></td>
+<td><p>각 environment의 episode reset</p></td>
+<td><p>reset 전까지 아니요</p></td>
+</tr>
+<tr><td><p>Physics domain randomization</p></td>
+<td><p>접촉 재질, 질량, COM, joint 물성</p></td>
+<td><p>현재 대부분 scene startup</p></td>
+<td><p>아니요</p></td>
+</tr>
+<tr><td><p>Training push</p></td>
+<td><p>root XY velocity</p></td>
+<td><p>환경별 <span class="docutils literal">10~15 s</span> interval</p></td>
+<td><p>예</p></td>
+</tr>
+</tbody>
+</table>
+<p>Observation noise는 센서 오차를 흉내 내고, reset randomization은 다양한 초기 상태에서 회복하게 하며,
+physics DR은 simulator와 다른 물성에서도 동작하는 policy를 유도한다. 세 항목은 서로 대체 관계가 아니다.</p>
+</section>
+<section id="id3">
+<h2>구현 위치</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>파일</p></th>
+<th class="head"><p>역할</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p><span class="docutils literal">source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/rok4/flat_env_cfg.py</span></p></td>
+<td><p>policy/critic observation term과 noise, Train/Play/Teleop 차이 정의</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/rok4/domain_randomization_cfg.py</span></p></td>
+<td><p>물성 및 reset 범위와 event mode 정의</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/mdp/events.py</span></p></td>
+<td><p>correlated Foot material과 joint reset 표본화 구현</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/rok4/agents/rsl_rl_ppo_cfg.py</span></p></td>
+<td><p>actor/critic running observation normalization 설정</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="observation-noise">
+<h2>Observation noise</h2>
+<p>현재 1-frame policy observation은 48차원이고 5-frame term-major history를 flatten하여 actor에 240차원으로
+전달한다. Noise는 각 observation term을 계산할 때 additive uniform 값으로 새로 표본화되고, 그 결과가 history에
+들어간다.</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>Policy term</p></th>
+<th class="head"><p>차원/frame</p></th>
+<th class="head"><p>현재 noise</p></th>
+<th class="head"><p>단위</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p><span class="docutils literal">base_ang_vel</span></p></td>
+<td><p>3</p></td>
+<td><p><span class="docutils literal"><span class="pre">Uniform(-0.2,</span> 0.2)</span></p></td>
+<td><p>rad/s</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">projected_gravity</span></p></td>
+<td><p>3</p></td>
+<td><p><span class="docutils literal"><span class="pre">Uniform(-0.05,</span> 0.05)</span></p></td>
+<td><p>dimensionless</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">velocity_commands</span></p></td>
+<td><p>3</p></td>
+<td><p>없음</p></td>
+<td><p>m/s, m/s, rad/s</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">actuator_pos_rel</span></p></td>
+<td><p>13</p></td>
+<td><p><span class="docutils literal"><span class="pre">Uniform(-0.01,</span> 0.01)</span></p></td>
+<td><p>rad</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">actuator_vel_rel</span></p></td>
+<td><p>13</p></td>
+<td><p><span class="docutils literal"><span class="pre">Uniform(-1.5,</span> 1.5)</span></p></td>
+<td><p>rad/s</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">last_action</span></p></td>
+<td><p>13</p></td>
+<td><p>없음</p></td>
+<td><p>normalized raw action</p></td>
+</tr>
+</tbody>
+</table>
+<p>Actor observation의 <span class="docutils literal">enable_corruption=True</span> 때문에 위 noise는 Train에서 활성화된다. Critic은 같은 policy
+observation 240개와 현재 simulator <span class="docutils literal">base_lin_vel_b</span> 3개를 함께 사용한다. Privileged term은
+<span class="docutils literal">enable_corruption=False</span> 이므로 base linear velocity 자체에는 noise를 추가하지 않는다.</p>
+<p>Play와 Teleop은 <span class="docutils literal">self.observations.policy.enable_corruption=False</span> 로 설정하므로 policy observation noise를
+사용하지 않는다. 이는 checkpoint를 같은 simulator 조건에서 재현하고 동작을 눈으로 평가하기 위한 설정이다.</p>
+<section id="noise-normalization">
+<h3>Noise와 normalization은 다르다</h3>
+<p>Additive observation noise는 입력값에 실제 perturbation을 더한다.</p>
+<div class="formula">
+<i>õ</i><sub><i>t</i></sub> = <i>o</i><sub><i>t</i></sub> + <i>ϵ</i><sub><i>t</i></sub>,   <i>ϵ</i><sub><i>t</i></sub> ~ <i>U</i>(<i>ϵ</i><sub><i>min</i></sub>, <i>ϵ</i><sub><i>max</i></sub>)
+</div>
+<p>RSL-RL의 <span class="docutils literal">actor_obs_normalization=True</span> 와 <span class="docutils literal">critic_obs_normalization=True</span> 는 running mean과 variance로
+network 입력의 통계적 scale을 조정한다. Noise를 제거하거나 물리 단위의 오차를 대신하지 않는다. 처리 순서는
+개념적으로 다음과 같다.</p>
+<pre class="code text literal-block"><code>simulator state
+  -&gt; observation term
+  -&gt; additive observation noise
+  -&gt; 5-frame history
+  -&gt; RSL-RL running normalization
+  -&gt; Actor/Critic</code></pre>
+<p>Baseline <span class="docutils literal">d949d40</span> 이후 observation noise 범위는 변경하지 않았다. Actuator position noise를 <span class="docutils literal">0.02</span>, <span class="docutils literal">0.05</span>
+또는 <span class="docutils literal">0.1 rad</span> 로 올리는 실험은 transmission 오차와 센서 오차를 분리하기 어려워 현재 보류한다.</p>
+</section>
+</section>
+<section id="reset-randomization">
+<h2>Reset randomization</h2>
+<p>Reset event는 environment마다 episode가 끝나는 시점에 독립적으로 실행된다. 4096개 environment의 episode
+progress가 서로 다르므로 모든 로봇이 동시에 reset되지 않는다.</p>
+<section id="joint-state-reset">
+<h3>Joint state reset</h3>
+<p><span class="docutils literal">reset_joints_by_position_scale_and_velocity</span> 는 position과 velocity를 서로 다른 방식으로 표본화한다.</p>
+<div class="formula">
+<span class="environment"><span class="arrayrow">
+<span class="arraycell align-r">
+<i>q</i><sub>0, <i>e</i>, <i>j</i></sub>
+</span>
+<span class="arraycell align-l">
+ = <span class="mathrm">clamp</span><span class="symbol">(</span><i>q</i><sub><i>default</i>, <i>e</i>, <i>j</i></sub><i>U</i><sub><i>e</i>, <i>j</i></sub>(0.9, 1.1)<span class="symbol">)</span>
+</span>
+
+</span>
+<span class="arrayrow">
+<span class="arraycell align-r">
+ 
+</span>
+<span class="arraycell align-l">
+ 
+</span>
+
+</span>
+<span class="arrayrow">
+<span class="arraycell align-r">
+<i>q̇</i><sub>0, <i>e</i>, <i>j</i></sub>
+</span>
+<span class="arraycell align-l">
+ = <span class="mathrm">clamp</span><span class="symbol">(</span><i>U</i><sub><i>e</i>, <i>j</i></sub>( − 0.1, 0.1)<span class="symbol">)</span> <span class="mathrm"> rad ⁄ s</span>
+</span>
+
+</span>
+</span>
+</div>
+<p>각 environment <span class="docutils literal">e</span> 와 joint <span class="docutils literal">j</span> 에 독립적인 random sample을 사용한다. Default position이 0인 관절은
+multiplicative position scale을 적용해도 0이다. Velocity는 default velocity에 scale을 곱하지 않고 절대값을
+직접 표본화한다. Default velocity가 0이므로 기존 <span class="docutils literal">reset_joints_by_scale</span> 방식으로는 velocity DR이 생기지
+않기 때문이다. 최종 값은 soft joint position/velocity limit 안으로 clamp된다.</p>
+</section>
+<section id="root-state-reset">
+<h3>Root state reset</h3>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>Root 항목</p></th>
+<th class="head"><p>현재 범위</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p>position x/y</p></td>
+<td><p>각각 <span class="docutils literal"><span class="pre">Uniform(-0.25,</span> 0.25) m</span> offset</p></td>
+</tr>
+<tr><td><p>yaw</p></td>
+<td><p><span class="docutils literal"><span class="pre">Uniform(-3.14,</span> 3.14) rad</span></p></td>
+</tr>
+<tr><td><p>linear velocity x/y</p></td>
+<td><p>각각 <span class="docutils literal"><span class="pre">Uniform(-0.1,</span> 0.1) m/s</span></p></td>
+</tr>
+<tr><td><p>linear velocity z</p></td>
+<td><p>0</p></td>
+</tr>
+<tr><td><p>angular velocity roll/pitch</p></td>
+<td><p>0</p></td>
+</tr>
+<tr><td><p>angular velocity yaw</p></td>
+<td><p><span class="docutils literal"><span class="pre">Uniform(-0.1,</span> 0.1) rad/s</span></p></td>
+</tr>
+</tbody>
+</table>
+<p>Episode length는 <span class="docutils literal">20 s</span> 다. Timeout 자체와 illegal-contact termination은 baseline <span class="docutils literal">d949d40</span> 이후 변경하지
+않았다. Reset randomization은 termination 조건이 아니라 termination 또는 timeout 뒤의 다음 초기 상태를
+결정한다.</p>
+</section>
+</section>
+<section id="physics-domain-randomization">
+<h2>Physics domain randomization</h2>
+<p>현재 physics DR은 large-vectorized training의 CPU 비용을 줄이기 위해 대부분 <span class="docutils literal">startup</span> mode다. Scene을 만들
+때 environment별로 표본화되며, 같은 training process 안에서는 episode가 reset되어도 해당 물성이 유지된다.</p>
+<section id="contact-material">
+<h3>Contact material</h3>
+<p>먼저 모든 robot collision shape를 nominal static/dynamic friction <span class="docutils literal">0.8/0.6</span> 으로 설정한다. 이후 각 training
+environment가 64개 material bucket 중 하나를 선택하고, 그 bucket을 좌우 Foot의 모든 collision shape에 함께
+적용한다.</p>
+<div class="formula">
+<span class="environment"><span class="arrayrow">
+<span class="arraycell align-r">
+<i>μ</i><sub><i>s</i></sub>
+</span>
+<span class="arraycell align-l">
+ ~ <i>U</i>(0.5, 0.9)
+</span>
+
+</span>
+<span class="arrayrow">
+<span class="arraycell align-r">
+ 
+</span>
+<span class="arraycell align-l">
+ 
+</span>
+
+</span>
+<span class="arrayrow">
+<span class="arraycell align-r">
+<i>μ</i><sub><i>d</i></sub>
+</span>
+<span class="arraycell align-l">
+ = 0.75<i>μ</i><sub><i>s</i></sub> ∈ [0.375, 0.675]
+</span>
+
+</span>
+<span class="arrayrow">
+<span class="arraycell align-r">
+ 
+</span>
+<span class="arraycell align-l">
+ 
+</span>
+
+</span>
+<span class="arrayrow">
+<span class="arraycell align-r">
+<i>e</i>
+</span>
+<span class="arraycell align-l">
+ ~ <i>U</i>(0.1, 0.3)
+</span>
+
+</span>
+</span>
+</div>
+<p><span class="docutils literal">mu_dynamic &lt;= mu_static</span> 을 항상 만족하고, 한 environment의 좌우 발이 같은 material을 사용하므로 material
+DR 자체가 좌우 gait 비대칭을 만들지 않는다. Foot 이외 robot shape는 nominal friction <span class="docutils literal">0.8/0.6</span> 을 유지한다.</p>
+</section>
+<section id="joint-physics">
+<h3>Joint physics</h3>
+<p>Isaac Lab의 <span class="docutils literal">randomize_joint_parameters</span> startup event가 nominal RoK4 joint property를 scale한다.</p>
+<div class="formula">
+<span class="environment"><span class="arrayrow">
+<span class="arraycell align-r">
+<i>μ</i><sub><i>s</i>, <i>e</i>, <i>j</i></sub>
+</span>
+<span class="arraycell align-l">
+ = <i>μ</i><span class="scripts"><sup class="script"><i>nominal</i></sup><sub class="script"><i>s</i>, <i>j</i></sub></span><i>U</i><sub><i>s</i>, <i>e</i>, <i>j</i></sub>(0.8, 1.2)
+</span>
+
+</span>
+<span class="arrayrow">
+<span class="arraycell align-r">
+ 
+</span>
+<span class="arraycell align-l">
+ 
+</span>
+
+</span>
+<span class="arrayrow">
+<span class="arraycell align-r">
+<i>c</i><sub><i>v</i>, <i>e</i>, <i>j</i></sub>
+</span>
+<span class="arraycell align-l">
+ = <i>c</i><span class="scripts"><sup class="script"><i>nominal</i></sup><sub class="script"><i>v</i>, <i>j</i></sub></span><i>U</i><sub><i>v</i>, <i>e</i>, <i>j</i></sub>(0.8, 1.2)
+</span>
+
+</span>
+<span class="arrayrow">
+<span class="arraycell align-r">
+ 
+</span>
+<span class="arraycell align-l">
+ 
+</span>
+
+</span>
+<span class="arrayrow">
+<span class="arraycell align-r">
+<i>I</i><sub><i>a</i>, <i>e</i>, <i>j</i></sub>
+</span>
+<span class="arraycell align-l">
+ = <i>I</i><span class="scripts"><sup class="script"><i>nominal</i></sup><sub class="script"><i>a</i>, <i>j</i></sub></span><i>U</i><sub><i>a</i>, <i>e</i>, <i>j</i></sub>(0.8, 1.2)
+</span>
+
+</span>
+</span>
+</div>
+<p>Static friction, viscous friction, armature sample은 environment와 joint별로 서로 독립적이다. Nominal 값이 0인
+property는 multiplicative scale을 적용해도 0으로 유지된다. 이 event는 PhysX joint property만 바꾸며
+<span class="docutils literal">ROK4_ACTUATOR_KP</span>, <span class="docutils literal">ROK4_ACTUATOR_KD</span>, ADAPT matrix와 action scale은 변경하지 않는다.</p>
+</section>
+<section id="mass-com">
+<h3>Mass와 COM</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>Body group</p></th>
+<th class="head"><p>Mass scale</p></th>
+<th class="head"><p>COM offset range</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p>Base</p></td>
+<td><p><span class="docutils literal">Uniform(0.9,1.1)</span></p></td>
+<td><p>x/y/z 각각 <span class="docutils literal"><span class="pre">+-0.01</span> m</span></p></td>
+</tr>
+<tr><td><p>Upper body</p></td>
+<td><p><span class="docutils literal">Uniform(0.9,1.25)</span></p></td>
+<td><p>x/y/z 각각 <span class="docutils literal"><span class="pre">+-0.03</span> m</span></p></td>
+</tr>
+<tr><td><p>Lower body와 feet</p></td>
+<td><p><span class="docutils literal">Uniform(0.9,1.25)</span></p></td>
+<td><p>x/y/z 각각 <span class="docutils literal"><span class="pre">+-0.005</span> m</span></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="training-push-external-wrench">
+<h3>Training push와 external wrench</h3>
+<p>상속한 <span class="docutils literal">push_robot</span> interval event는 environment별 독립 timer를 사용한다. <span class="docutils literal">10~15 s</span> 후 root world-frame
+XY velocity를 각각 <span class="docutils literal"><span class="pre">Uniform(-0.5,0.5)</span> m/s</span> 로 바꾸고 다음 interval을 다시 표본화한다. 이 event는 지속적인
+force가 아니라 순간적인 root velocity disturbance다.</p>
+<p><span class="docutils literal">base_external_force_torque</span> reset event는 남아 있지만 현재 force와 torque 범위가 모두 0이므로 실제 외력을
+추가하지 않는다.</p>
+</section>
+</section>
+<section id="train-play-teleop">
+<h2>Train, Play, Teleop 차이</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>항목</p></th>
+<th class="head"><p>Train</p></th>
+<th class="head"><p>Play/Teleop 현재 코드</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p>Policy observation noise</p></td>
+<td><p>활성</p></td>
+<td><p>비활성</p></td>
+</tr>
+<tr><td><p>Foot friction</p></td>
+<td><p>static <span class="docutils literal">0.5~0.9</span>, dynamic <span class="docutils literal">0.75 * static</span></p></td>
+<td><p>nominal <span class="docutils literal">0.8/0.6</span></p></td>
+</tr>
+<tr><td><p>Foot restitution</p></td>
+<td><p><span class="docutils literal">0.1~0.3</span></p></td>
+<td><p>현재 material event에 의해 <span class="docutils literal">0.1~0.3</span> 유지</p></td>
+</tr>
+<tr><td><p>Joint physics DR</p></td>
+<td><p>활성</p></td>
+<td><p><span class="docutils literal">joint_physics=None</span> 으로 비활성</p></td>
+</tr>
+<tr><td><p>Mass/COM startup DR</p></td>
+<td><p>활성</p></td>
+<td><p>현재 상속되어 활성</p></td>
+</tr>
+<tr><td><p>Joint/root reset DR</p></td>
+<td><p>활성</p></td>
+<td><p>현재 상속되어 활성</p></td>
+</tr>
+<tr><td><p>Automatic push</p></td>
+<td><p>활성</p></td>
+<td><p>비활성, UI 수동 push만 사용</p></td>
+</tr>
+<tr><td><p>External reset wrench</p></td>
+<td><p>범위 0</p></td>
+<td><p>event 제거</p></td>
+</tr>
+</tbody>
+</table>
+<p>따라서 현재 Play/Teleop은 observation noise, Foot friction, joint physics, automatic push에 대해서는 평가용으로
+단순화되어 있지만 mass/COM, reset state, Foot restitution까지 완전히 deterministic한 구성은 아니다. 완전한
+deterministic evaluation이 필요하면 이 표의 남은 startup/reset event를 별도 실험에서 명시적으로 제거해야 한다.</p>
+</section>
+<section id="id4">
+<h2>시간축과 비동기 동작</h2>
+<p>Episode timer, velocity-command freeze timer, training-push timer는 서로 다른 상태다.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>Timer</p></th>
+<th class="head"><p>기준</p></th>
+<th class="head"><p>Reset 시 동작</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p>Episode</p></td>
+<td><p>environment별 progress, 최대 <span class="docutils literal">20 s</span></p></td>
+<td><p>0으로 돌아감</p></td>
+</tr>
+<tr><td><p>Periodic freeze</p></td>
+<td><p>command term의 환경별 phase</p></td>
+<td><p>환경별 새 phase/duration 표본화</p></td>
+</tr>
+<tr><td><p>Training push</p></td>
+<td><p>event manager의 환경별 <span class="docutils literal">10~15 s</span> time-left</p></td>
+<td><p>다음 interval 표본화</p></td>
+</tr>
+</tbody>
+</table>
+<p>따라서 어떤 environment는 걷는 중에 push를 받고, 다른 environment는 standing 전환 직전이나 직후에 push를
+받을 수 있다. 이 비동기성은 같은 학습 step에 모든 environment가 같은 사건을 겪는 것을 막는다.</p>
+</section>
+<section id="id5">
+<h2>현재 보류한 실험</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>항목</p></th>
+<th class="head"><p>현재 상태</p></th>
+<th class="head"><p>보류 이유</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p>Gravity DR</p></td>
+<td><p>없음</p></td>
+<td><p>기본 physics/reset DR 효과를 먼저 분리해 확인</p></td>
+</tr>
+<tr><td><p>Joint-limit DR</p></td>
+<td><p>없음</p></td>
+<td><p>action feasibility와 reward 해석이 함께 바뀜</p></td>
+</tr>
+<tr><td><p>ADAPT transmission ratio/topology DR</p></td>
+<td><p>없음</p></td>
+<td><p>actuator state/action/torque mapping이 동시에 바뀌므로 별도 검증 필요</p></td>
+</tr>
+<tr><td><p>Larger actuator-position observation noise</p></td>
+<td><p>없음</p></td>
+<td><p>센서 오차와 transmission model mismatch를 구분한 뒤 조정</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="id6">
+<h2>권장 실험 순서</h2>
+<p>한 번에 여러 범위를 바꾸면 gait 변화의 원인을 찾기 어렵다. 현재 baseline을 보존하고 다음 순서로 하나씩 비교한다.</p>
+<pre class="code text literal-block"><code>1. Current noise + current reset + current physics DR
+2. Sim2Sim에서 동일 checkpoint의 물성 민감도 확인
+3. Reset/recovery 범위 조정
+4. Contact와 joint physics DR 범위 조정
+5. 실제 sensor 특성에 맞춘 observation noise 조정
+6. 마지막으로 transmission 또는 gravity/joint-limit DR 검토</code></pre>
+<p>각 실험은 config diff, random seed, checkpoint, command 범위와 Play/Teleop 조건을 함께 기록해야 비교가 가능하다.</p>
+</section>
+</main>
+</body>
+</html>

@@ -86,6 +86,15 @@ Project notes are kept in `docs/` as editable RST/HTML files and generated PDFs:
 | `docs/_build/pdf/rok4_flat_task_structure_ko.pdf` | RoK4 flat task structure, task registration, DR, and actor/critic/action symmetry augmentation. |
 | `docs/_build/pdf/rok4_reward_structure_ko.pdf` | RoK4 reward terms, inherited reward settings, reward/DR separation, and reward function meanings. |
 | `docs/_build/pdf/rok4_adapt_control_structure_ko.pdf` | ADAPT matrices, action/actuator object relationships, target/state origins, explicit PD call flow, and torque limits. |
+| `docs/_build/pdf/rok4_randomization_and_noise_ko.pdf` | Observation noise, reset randomization, physics DR, sampling cadence, and Train/Play/Teleop differences. |
+
+Documentation uses `${ROK4_LAB_ROOT}` for this repository root and `${ISAACLAB_ROOT}` for the Isaac Lab repository
+root. Set them to the actual clone locations instead of copying a machine-specific `/home/<user>/...` path:
+
+```bash
+export ROK4_LAB_ROOT="${HOME}/rok4_lab"
+export ISAACLAB_ROOT="${HOME}/IsaacLab"
+```
 
 After downloading the assets, the expected local layout is:
 
@@ -460,10 +469,29 @@ set the command term's standing mask, activating `stand_still_joint_deviation_l1
 `rel_standing_envs` is disabled to avoid duplicate standing assignment, and the episode-role scheduler is disabled
 in Play and Teleop configurations.
 
-The positive biped feet-air-time reward uses `threshold=0.4 s` and `weight=0.75`, matching the G1 flat baseline. The
-threshold saturates the raw per-step value at `0.4`; it is not a gait-period target or a cutoff that stops reward
-after `0.4 s`. A longer uninterrupted single stance continues to return `0.4` on every policy step. The maximum
-pre-`dt` contribution per step is `0.4 * 0.75 = 0.30`.
+### Episode, Freeze, and Push Timers
+
+Training uses a `20 s` episode timeout. With a `0.01 s` policy period, each full episode contains 2,000 policy steps.
+The episode counter belongs to each environment: all environments start at counter zero, but an early termination resets
+only the affected environment. For example, an environment reset at global simulation time `3 s` times out near global
+time `23 s` if it survives the next full episode. Environments without early termination can remain synchronized at
+`20 s`, `40 s`, and so on; desynchronization is a natural consequence of per-environment early resets rather than an
+explicit random initial episode phase.
+
+The periodic-freeze schedule is a separate per-environment clock. Every episode reset samples a freeze phase uniformly
+from `[0, 10) s` and a freeze duration from `[1.5, 3.0] s`. Consequently, a reset environment does not always wait ten
+seconds before stopping and may begin inside a freeze window. Eligible command roles repeat this cycle every `10 s`.
+
+The inherited training push is a third independent per-environment timer. On every episode reset it samples the next
+push from `[10, 15] s`; the push adds world-frame root `vx` and `vy` in `[-0.5, 0.5] m/s`. A full `20 s` episode normally
+contains one push, while an environment that terminates before `10 s` may receive none. Because the push timer and
+freeze phase are sampled independently, a push can occur while moving, during exact-zero standing, or around a command
+transition. Play and Teleop disable this automatic push event and provide the manual `RoK4 Push Test` UI instead.
+
+The positive biped feet-air-time reward uses `threshold=0.65 s` and `weight=0.5` to encourage slower, longer steps.
+The threshold saturates the raw per-step value at `0.65`; it is not a gait-period target or a cutoff that stops reward
+after `0.65 s`. A longer uninterrupted single stance continues to return `0.65` on every policy step. The maximum
+pre-`dt` contribution per step is `0.65 * 0.5 = 0.325`, close to the previous `0.4 * 0.75 = 0.30` scale.
 
 The `no_jumps` penalty uses Isaac Lab's `mdp.desired_contacts` with weight `-2.0` and a `1.0 N` force threshold. It
 checks the recent contact-force history of both feet and returns a penalty only when neither foot has a qualifying
@@ -479,6 +507,10 @@ The combined hip-yaw/hip-roll deviation penalty is relaxed from `-0.1` to `-0.05
 make lateral foot placement depend on both named axes, so this paired experiment keeps the torso more upright while
 allowing the legs to generate lateral steps. The signed anti-cross reward remains active, but it does not impose a
 maximum stance width; excessive widening must therefore be checked during playback.
+
+A separate hip-pitch deviation term uses weight `-0.01`. Its weaker, independently logged penalty mildly limits
+excessive whole-leg sagittal swing without applying the `-0.05` hip-yaw/hip-roll constraint to the primary fore-aft
+gait joint. This is a global default-pose deviation penalty, not a swing-phase knee-flexion target.
 
 The contact-gated `feet_flat_orientation_l2` function remains available for diagnostics, but its reward term is
 currently `None`. It measures foot tilt against world up, which is useful for a flat-ground experiment but can oppose
@@ -526,21 +558,44 @@ source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/rok4/
 source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/mdp/
   __init__.py                     Re-exports Isaac Lab locomotion mdp plus RoK4 local mdp
   actions.py                      Converts raw actuator actions to mapped joint targets
-  commands.py                     Adds 90/5/5 episode roles and asynchronous standing windows
+  commands.py                     Adds role-based command sampling and asynchronous standing windows
+  events.py                       Owns correlated foot-friction and randomized joint-reset events
   observations.py                 Converts joint state to actuator-space observations
   rewards.py                      Owns actuator-space reward calculations and action smoothness terms
 ```
+
+Changes after baseline commit `d949d40`:
+
+| Area | Baseline delta | Current setting |
+| --- | --- | --- |
+| Policy observation noise | unchanged | `base_ang_vel +-0.2`, `projected_gravity +-0.05`, `actuator_pos +-0.01 rad`, `actuator_vel +-1.5 rad/s`; no noise on command or last action |
+| Physics DR | changed | correlated Foot material DR plus per-environment/joint static friction, viscous friction, and armature scaling |
+| Reset state | changed | default-pose scaling remains `0.9-1.1`; joint velocity changed from fixed zero to `U(-0.1,0.1) rad/s` |
+| Termination/timeout | unchanged | illegal-contact termination and the `20 s` episode timeout retain their baseline behavior |
 
 Current DR groups:
 
 | Group | Mode | Current setting |
 | --- | --- | --- |
-| Foot physics material | `startup` | static friction `0.8`, dynamic friction `0.6`, restitution `0.1-0.3` |
+| Robot/Foot physics material | `startup` | all robot shapes first use nominal `0.8/0.6`; each environment then overrides both Foot shapes with shared `mu_static=0.5-0.9`, `mu_dynamic=0.75*mu_static` (`0.375-0.675`), restitution `0.1-0.3` |
+| Joint physics | `startup` | independently scales each environment/joint's nominal `ROK4_STATIC_FRICTION`, `ROK4_VISCOUS_FRICTION`, and `ROK4_ARMATURE` by `U(0.8,1.2)` |
 | Body mass | `startup` | base scale `0.9-1.1`; upper/lower scale `0.9-1.25` |
 | Body COM | `startup` | base x/y/z `+-0.01 m`; upper x/y/z `+-0.03 m`; lower x/y/z `+-0.005 m` |
 | External base wrench | `reset` | currently zero force/torque |
-| Reset joint pose | `reset` | default joint positions scaled by `0.9-1.1` |
+| Reset joint pose | `reset` | each environment/joint independently scales its default position by `0.9-1.1`; a zero default remains zero |
+| Reset joint velocity | `reset` | each environment/joint independently samples `U(-0.1,0.1) rad/s` |
 | Reset base pose/velocity | `reset` | mild x/y/yaw pose and velocity perturbation |
+| Root XY velocity push | `interval` | per-environment `[10,15] s` timer; adds world-frame x/y velocity in `[-0.5,0.5] m/s` |
+
+The G1/Digit-style nominal robot material is static friction `0.8` and dynamic friction `0.6` for every collision
+shape. The Foot override range is active only in the training task. Play and Teleop also fix the Foot shapes at
+`0.8/0.6`, so repeated checkpoint comparisons do not change contact friction between launches.
+
+Joint-physics DR uses Isaac Lab's `randomize_joint_parameters` startup event. Static friction, viscous friction, and
+armature each receive independent uniform scale samples for every environment and joint. This event changes the PhysX
+joint properties initialized from `ROK4_STATIC_FRICTION`, `ROK4_VISCOUS_FRICTION`, and `ROK4_ARMATURE`; it does not
+change the actuator-space `ROK4_ACTUATOR_KP` or `ROK4_ACTUATOR_KD`. Play and Teleop remove this event and use the
+nominal joint properties.
 
 The initial PPO baseline uses RoK4-oriented network and observation-normalization settings with G1-style PPO
 algorithm parameters. These values are starting points for flat walking, not final tuned parameters:

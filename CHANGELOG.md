@@ -4,6 +4,23 @@
 
 ### Changed
 
+- Changed the feet-air-time reward from `weight=0.75, threshold=0.4 s` to `weight=0.5, threshold=0.65 s` to encourage
+  slower, longer steps while keeping its maximum pre-`dt` contribution close to the previous value.
+- Added a separate `-0.01` hip-pitch deviation penalty to mildly constrain excessive whole-leg swing without coupling
+  the primary sagittal gait joints to the stronger hip-yaw/hip-roll deviation penalty.
+- Replaced machine-specific `/home/rclab` paths in project documentation with portable `${ROK4_LAB_ROOT}` and
+  `${ISAACLAB_ROOT}` repository-root variables.
+- Changed robot collision materials to a G1/Digit-style nominal `0.8/0.6` static/dynamic friction baseline, then
+  overrode both feet per environment with correlated static friction in `[0.5, 0.9]` and dynamic friction fixed at
+  75% of static friction.
+- Added startup joint-physics randomization that independently scales each environment and joint's nominal static
+  friction, viscous friction, and armature by `U(0.8, 1.2)` while keeping actuator PD gains fixed.
+- Changed reset joint velocities from fixed zero to independently sampled `[-0.1, 0.1] rad/s` values while retaining
+  the existing default-pose position scaling.
+- Clarified the independent per-environment episode, periodic-freeze, and training-push timers in the README and
+  generated Korean task/reward documents, including reset behavior and their interaction during disturbances.
+- Documented that the post-`d949d40` changes affect physics DR and reset joint velocity while policy observation
+  noise and termination/timeout behavior remain unchanged.
 - Changed the training command population from three episode roles to balanced `mixed`, `standing`, `walking`, `x`,
   `y`, `yaw`, and `x_yaw` roles, with asynchronous standing transitions for every role except fixed standing and
   always-walking environments.
@@ -38,6 +55,8 @@
 
 ### Added
 
+- Added a dedicated Korean observation-noise, reset-randomization, and physics-DR document covering sampling cadence,
+  randomization granularity, normalization differences, Train/Play/Teleop behavior, and deferred experiments.
 - Added a Play/Teleop velocity monitor showing the selected environment's scaled command alongside measured yaw-frame
   linear velocity, world-Z angular velocity, and planar speed.
 - Recorded the `Yunho Symmetry ADAPT v1` flat-walking baseline with symmetry augmentation, asynchronous command roles,

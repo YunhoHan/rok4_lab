@@ -2,9 +2,33 @@ RoK4 ADAPT Action/Actuator 제어 구조 문서
 ================================================================================
 
 :작성일: 2026-07-16
-:최종 업데이트: 2026-07-27
-:대상 저장소: ``/home/rclab/rok4_lab``
+:최종 업데이트: 2026-07-30
+:대상 저장소: RoK4 repository root (``${ROK4_LAB_ROOT}``)
 :기준 환경: Isaac Lab v2.3.2, Isaac Sim 5.1.0, ``env_isaaclab``
+
+.. raw:: html
+
+   <style>
+   @media print {
+     body, main {
+       background-color: white;
+     }
+     pre.code {
+       break-inside: avoid;
+       page-break-inside: avoid;
+     }
+   }
+   </style>
+
+경로 표기
+--------------------------------------------------------------------------------
+
+``${ROK4_LAB_ROOT}`` 는 특정 사용자 홈 경로가 아니라 이 저장소를 clone한 실제 root를 뜻한다.
+
+.. code-block:: bash
+
+   export ROK4_LAB_ROOT="${HOME}/rok4_lab"
+   export ISAACLAB_ROOT="${HOME}/IsaacLab"
 
 문서 목적
 --------------------------------------------------------------------------------
@@ -468,4 +492,4 @@ Isaac Lab 원본과의 경계
 
 이 구현은 Isaac Lab 원본 source를 수정하지 않는다. RoK4 로컬 class가 Isaac Lab public actuator/action interface를
 상속하고, Isaac Lab ``Articulation`` 이 제공하는 target/state 전달 경로를 그대로 사용한다. 변경 대상은 모두
-``/home/rclab/rok4_lab`` 내부다.
+``${ROK4_LAB_ROOT}`` 내부다.

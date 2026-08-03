@@ -2,7 +2,38 @@ RoK4 Reward Structure
 =============================================================
 
 작성일: 2026-07-15
-최종 업데이트: 2026-07-27
+최종 업데이트: 2026-07-31
+
+.. raw:: html
+
+   <style>
+   @media print {
+     @page {
+       size: A4 landscape;
+       margin: 10mm;
+     }
+     body, main {
+       background-color: white;
+     }
+     table {
+       width: 100% !important;
+       table-layout: fixed;
+       font-size: 8px;
+     }
+     table td, table th {
+       overflow-wrap: anywhere;
+       word-break: break-word;
+     }
+     table .literal, table .pre {
+       white-space: normal;
+       overflow-wrap: anywhere;
+     }
+     pre.code {
+       break-inside: avoid;
+       page-break-inside: avoid;
+     }
+   }
+   </style>
 
 이 문서는 ``RoK4-Isaac-Velocity-Flat-v0`` task의 현재 reward 구조와 reward function 설정을 정리한다.
 현재 reward는 Isaac Lab G1 velocity task 구조를 출발점으로 RoK4 ADAPT actuator 좌표, direct velocity
@@ -11,8 +42,16 @@ command, standing transition에 맞게 조정한 flat walking baseline이다. �
 ``Yunho Symmetry ADAPT v1`` 으로 기록한다. 이 checkpoint는 domain randomization과 policy observation
 noise를 조정하기 전의 비교 기준이며, 이후 실험에서도 보존한다.
 
-아래 경로에서 ``RoK4:`` 는 ``/home/rclab/rok4_lab`` 을, ``Isaac Lab:`` 은
-``/home/rclab/IsaacLab`` 을 기준으로 한 상대경로를 뜻한다.
+아래 경로에서 ``RoK4:`` 는 ``${ROK4_LAB_ROOT}`` 를, ``Isaac Lab:`` 은
+``${ISAACLAB_ROOT}`` 를 기준으로 한 상대경로를 뜻한다. 두 변수는 각 사용자가 clone한 저장소 root를 가리킨다.
+
+.. code-block:: bash
+
+   export ROK4_LAB_ROOT="${HOME}/rok4_lab"
+   export ISAACLAB_ROOT="${HOME}/IsaacLab"
+
+Observation noise, reset state randomization, physics DR의 상세 범위와 적용 주기는
+``docs/rok4_randomization_and_noise_ko.rst`` 를 기준 문서로 사용한다.
 
 관련 파일
 -------------------------------------------------
@@ -115,6 +154,7 @@ Isaac Lab 원본 source를 수정하지 않는다. Isaac Lab의 부모 class와 
                           ├─ dof_pos_limits
                           ├─ joint_action_target_pos_limits
                           ├─ joint_deviation_hip
+                          ├─ joint_deviation_hip_pitch
                           ├─ joint_deviation_torso
                           ├─ actuator_acc_l2
                           ├─ actuator_torques_l2
@@ -240,8 +280,20 @@ base/upper/lower body mass, base/upper/lower COM, reset pose 같은 domain rando
      - 물성, 질량, COM, 초기상태 perturbation을 바꿔 다양한 상황에서 버티게 함
 
 예를 들어 발 미끄러짐은 ``feet_slide`` reward가 penalty로 줄이고, foot-ground 마찰 계수는
-``domain_randomization_cfg.py`` 의 ``ROK4_STATIC_FRICTION_RANGE`` 와 ``ROK4_DYNAMIC_FRICTION_RANGE`` 가 정한다.
+``domain_randomization_cfg.py`` 의 ``ROK4_STATIC_FRICTION_RANGE`` 와 ``ROK4_DYNAMIC_FRICTION_RATIO`` 가 정한다.
 따라서 미끄러짐 문제를 볼 때는 reward와 DR을 함께 확인해야 하지만, 코드상 관리 위치는 분리되어 있다.
+
+현재 material event는 모든 robot collision shape를 G1/Digit식 nominal ``mu_static=0.8``,
+``mu_dynamic=0.6`` 으로 먼저 고정한다. 그 뒤 Foot material DR이 환경마다
+``mu_static ~ Uniform(0.5, 0.9)`` 를 표본화하고
+``mu_dynamic = 0.75 * mu_static`` 으로 계산한다. 같은 환경의 좌우 Foot은 동일한 material bucket을 사용하므로
+마찰 DR 자체가 좌우 gait 비대칭을 만들지 않으며, dynamic friction은 항상 static friction 이하로 유지된다.
+Play와 Teleop에서는 이 범위를 사용하지 않고 nominal ``0.8/0.6`` 으로 고정해 checkpoint를 재현성 있게 비교한다.
+
+관절 물성은 학습 scene 생성 시 각 environment/joint에 대해 ``ROK4_STATIC_FRICTION``,
+``ROK4_VISCOUS_FRICTION``, ``ROK4_ARMATURE`` 의 nominal 값을 각각 독립적인 ``Uniform(0.8, 1.2)`` 배율로
+scale한다. 이는 PhysX joint property DR이며 actuator-space PD의 ``ROK4_ACTUATOR_KP/KD`` gain DR이 아니다.
+Play와 Teleop에서는 이 joint-physics DR event를 제거해 nominal 관절 물성을 사용한다.
 
 Reward와 PPO entropy/KL의 구분
 ----------------------------------------------------------------------
@@ -316,9 +368,9 @@ RoK4 전용 Reward Terms
      - world frame yaw angular velocity command를 추종하게 한다.
    * - ``feet_air_time``
      - ``mdp.feet_air_time_positive_biped``
-     - ``0.75``
-     - feet: ``L_Foot_Link``, ``R_Foot_Link``; ``threshold=0.4``
-     - 양발 보행에서 한 발씩 공중에 있는 step pattern을 유도한다. Threshold는 single-stance를 종료하는 시간 제한이 아니라 매 step raw reward가 ``0.4`` 에서 포화되는 기준이다.
+     - ``0.5``
+     - feet: ``L_Foot_Link``, ``R_Foot_Link``; ``threshold=0.65``
+     - 양발 보행에서 한 발씩 공중에 있는 느리고 긴 step pattern을 유도한다. Threshold는 single-stance를 종료하는 시간 제한이 아니라 매 step raw reward가 ``0.65`` 에서 포화되는 기준이다.
    * - ``no_jumps``
      - ``mdp.desired_contacts``
      - ``-2.0``
@@ -370,6 +422,11 @@ RoK4 전용 Reward Terms
      - ``-0.05``
      - ``.*_Hip_Yaw_Joint``, ``.*_Hip_Roll_Joint``
      - RoK4의 회전된 hip joint frame에서는 lateral foot placement가 이름상 yaw/roll 두 축의 조합으로 생성된다. ``-0.1`` 에서 절반으로 완화하여 ``flat_orientation_l2=-5.0`` 으로 상체 기울임은 억제하면서 다리가 옆으로 내딛을 자유를 준다. 완전히 끄지는 않아 과도한 hip 편차와 넓은 stance를 계속 억제한다.
+   * - ``joint_deviation_hip_pitch``
+     - ``mdp.joint_deviation_l1``
+     - ``-0.01``
+     - ``.*_Hip_Pitch_Joint``
+     - 전후진 보폭을 만드는 핵심 관절을 yaw/roll과 같은 강도로 묶지 않으면서, default pose에서 과도하게 벗어나 다리 전체를 크게 휘두르는 전략을 약하게 억제한다. Swing phase나 무릎 굽힘을 직접 판정하는 reward는 아니다.
    * - ``joint_deviation_torso``
      - ``mdp.joint_deviation_l1``
      - ``-0.1``
@@ -569,6 +626,21 @@ Command와 Reward의 연결
 뽑는다. 부모의 별도 standing 확률은 ``rel_standing_envs=0.0`` 으로 비활성화한다. 작은 non-zero mixed command는
 standing으로 바꾸지 않고 연속적인 저속 이동 목표로 유지한다.
 
+여기서 random initial phase는 global simulation 시작 시 한 번만 주는 값이 아니다. 각 environment가 reset될
+때마다 freeze phase를 ``Uniform(0, 10) s`` 로 다시 표본화하므로 reset 직후 freeze로 시작할 수도 있다. 학습
+episode timeout은 환경별 ``20 s`` 이며, early termination이 난 환경만 episode counter, episode role, freeze
+phase를 다시 시작한다. 예를 들어 global time ``3 s`` 에 reset된 환경은 이후 20초를 생존하면 약 ``23 s`` 에
+timeout된다. 초기에는 episode counter가 같지만 early reset이 누적되면서 환경별 episode phase가 자연스럽게
+달라진다.
+
+부모 task에서 상속한 training ``push_robot`` 은 freeze와 다른 환경별 ``interval`` timer다. Reset마다 다음
+push 시간을 ``Uniform(10, 15) s`` 로 표본화하고, world-frame root x/y velocity에 각각 ``-0.5~0.5 m/s`` 를
+추가한다. 따라서 push는 이동 command 중에도, exact-zero freeze 중에도, 전환 부근에도 발생할 수 있다. Freeze
+중 push가 들어와도 command와 ``is_standing_env`` 는 zero/true로 유지되므로 velocity-tracking reward와
+``stand_still_joint_deviation_l1`` 은 외란에서 정지 자세로 복원하는 행동을 평가한다. Contact reward와
+``no_jumps`` 는 같은 구간의 실제 발 접촉 상태를 그대로 평가한다. Play/Teleop에서는 이 자동 interval event를
+끄고 수동 Push Test UI를 사용한다.
+
 Periodic freeze와 ``standing`` 역할은 command를 ``[0, 0, 0]`` 으로 만드는 동시에 ``is_standing_env=True`` 를
 설정한다. ``stand_still_joint_deviation_l1`` 은 command 크기를 다시 판정하지 않고 이 mask를 직접 사용하여
 전체 13관절을 default pose 근처로 유지한다. 현재 weight는 ``-0.2`` 이다. ``-1.0`` 실험은 안정적인 양발
@@ -591,10 +663,11 @@ RoK4는 부모 G1-style heading mode를 사용하지 않는다. ``heading_comman
 yaw angular velocity다. Navigation에서 목표 world heading이 필요하면 policy 외부의 상위 controller가
 heading error를 ``wz`` 로 변환해 이 동일한 velocity interface에 전달한다.
 
-현재 ``feet_air_time`` 은 G1 Flat과 같은 ``threshold=0.4 s``, ``weight=0.75`` 를 사용한다. 따라서 최대 raw
-reward는 ``0.4`` 이고, 최대 pre-``dt`` 항목 크기는 policy step당 ``0.4 * 0.75 = 0.30`` 이다. 이 threshold는
-single-stance 보상을 중단하는 cutoff가 아니다. 한발 지지가 ``0.4 s`` 를 넘으면 raw reward가 계속 ``0.4`` 로
-포화되어 매 policy step 지급된다.
+현재 ``feet_air_time`` 은 느리고 긴 step을 유도하기 위해 ``threshold=0.65 s``, ``weight=0.5`` 를 사용한다.
+따라서 최대 raw reward는 ``0.65`` 이고, 최대 pre-``dt`` 항목 크기는 policy step당
+``0.65 * 0.5 = 0.325`` 다. 이는 이전 ``0.4 * 0.75 = 0.30`` 과 비슷하므로 reward 최대 규모를 크게 바꾸지
+않으면서 증가 구간만 늘린다. 이 threshold는 single-stance 보상을 중단하는 cutoff가 아니다. 한발 지지가
+``0.65 s`` 를 넘으면 raw reward가 계속 ``0.65`` 로 포화되어 매 policy step 지급된다.
 
 ``no_jumps`` 는 ``mdp.desired_contacts`` 를 ``weight=-2.0`` 과 force ``threshold=1.0 N`` 으로 사용한다.
 최근 contact-force history에서 좌우 Foot 모두 threshold를 넘지 못한 경우에만 raw value ``1`` 을 반환하므로,

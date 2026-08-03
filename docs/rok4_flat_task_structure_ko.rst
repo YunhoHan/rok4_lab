@@ -2,9 +2,34 @@ RoK4 Flat RSL-RL Task 구조 문서
 ========================================================================
 
 :작성일: 2026-07-15
-:최종 업데이트: 2026-07-27
-:대상 저장소: ``/home/rclab/rok4_lab``
+:최종 업데이트: 2026-07-31
+:대상 저장소: RoK4 repository root (``${ROK4_LAB_ROOT}``)
 :기준 환경: Isaac Lab v2.3.2, Isaac Sim 5.1.0, ``env_isaaclab``
+
+.. raw:: html
+
+   <style>
+   @media print {
+     body, main {
+       background-color: white;
+     }
+     pre.code {
+       break-inside: avoid;
+       page-break-inside: avoid;
+     }
+   }
+   </style>
+
+경로 표기
+--------------------------------------------
+
+문서의 저장소 경로는 개인 PC의 절대 경로 대신 다음 변수를 사용한다. 다른 위치에 clone했다면 오른쪽 경로만
+실제 위치에 맞게 바꾼다.
+
+.. code-block:: bash
+
+   export ROK4_LAB_ROOT="${HOME}/rok4_lab"
+   export ISAACLAB_ROOT="${HOME}/IsaacLab"
 
 개요
 --------------------------------------------
@@ -20,6 +45,10 @@ ADAPT 행렬, ``actions.py`` 와 actuator의 객체 관계, ``compute()`` 입력
 ``None`` 처리, torque limit을 포함한 상세 제어 흐름은 ``docs/rok4_adapt_control_structure_ko.rst`` 와 생성된
 ``docs/_build/pdf/rok4_adapt_control_structure_ko.pdf`` 에 별도로 정리한다. 이 문서는 전체 task 구조와 연결 관계를
 중심으로 설명한다.
+
+Observation noise, reset state randomization, physics DR의 정확한 범위와 표본화 시점, Train/Play/Teleop 차이는
+``docs/rok4_randomization_and_noise_ko.rst`` 와 생성된
+``docs/_build/pdf/rok4_randomization_and_noise_ko.pdf`` 를 기준 문서로 사용한다.
 
 현재 actuator-space 기준 정책은
 ``2026-07-24_19-34-26_symmetry_aug_nojumps2_swing_roll100_fresh/model_9999.pt`` 이며,
@@ -65,7 +94,8 @@ checkpoint 호환성이 없다.
                velocity/
                  mdp/
                    actions.py           # actuator action -> mapped joint target
-                   commands.py          # 90/5/5 role과 비동기 exact-zero 정지 command
+                   commands.py          # episode role과 비동기 exact-zero 정지 command
+                   events.py            # correlated foot friction과 joint reset DR
                    observations.py      # joint state -> actuator state
                    rewards.py           # RoK4 actuator-space reward 계산
                    symmetry.py          # 좌우 observation/action data augmentation
@@ -98,7 +128,7 @@ RoK4 구조 관계
 .. code-block:: text
 
    [사용자 실행]
-   ./isaaclab.sh -p /home/rclab/rok4_lab/scripts/rsl_rl/train.py
+   ./isaaclab.sh -p ${ROK4_LAB_ROOT}/scripts/rsl_rl/train.py
        |
        v
    scripts/rsl_rl/train.py
@@ -786,10 +816,69 @@ Exact-zero command는 periodic freeze window와 ``standing`` 역할에서 생성
 각 관절 오차의 절댓값을 합산하므로 작은 standing 자세 오차도 강하게 억제한다. 작은 non-zero 이동 command에는
 이 penalty를 적용하지 않는다.
 
-``feet_air_time_positive_biped`` 는 G1 Flat과 같은 ``threshold=0.4 s``, ``weight=0.75`` 를 사용한다. threshold는
-정확한 gait period 목표나 single-stance 종료 cutoff가 아니라 raw reward의 포화값이다. 한발 지지가 ``0.4 s``
-보다 길어져도 raw reward ``0.4`` 가 매 policy step 계속 반환되며, 최대 pre-``dt`` 항목 크기는 step당
-``0.4 * 0.75 = 0.30`` 이다.
+Episode timeout, periodic freeze, push timer 관계
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+학습 환경에는 서로 독립적인 세 종류의 시간이 있다.
+
+.. list-table::
+   :header-rows: 1
+
+   * - 시간 상태
+     - 환경별 여부
+     - reset 시 동작
+     - 현재 범위
+   * - Episode elapsed time
+     - 환경별
+     - 해당 환경만 0으로 초기화
+     - timeout ``20 s`` = policy step ``2,000`` 개
+   * - Periodic freeze phase
+     - 환경별
+     - ``Uniform(0, 10) s`` 로 새 phase 표본화
+     - cycle ``10 s``, duration ``Uniform(1.5, 3.0) s``
+   * - Training push time-left
+     - 환경별
+     - ``Uniform(10, 15) s`` 로 다음 push 시간 표본화
+     - world-frame ``vx/vy`` 에 각각 ``Uniform(-0.5, 0.5) m/s`` 추가
+
+Episode timeout은 ``ManagerBasedRLEnv`` 의 ``episode_length_buf`` 로 환경마다 관리한다. 학습 시작 직후에는
+모든 환경이 episode step 0에서 출발하므로, early termination이 전혀 없는 환경들은 global simulation time
+``20 s``, ``40 s`` 처럼 timeout이 서로 맞을 수 있다. 반면 환경 A가 global time ``3 s`` 에 illegal contact로
+종료되면 A의 episode counter만 0으로 돌아가며, 다음 episode를 끝까지 생존할 경우 global time 약 ``23 s`` 에
+timeout된다. 즉 초기 episode phase를 명시적으로 randomize하지는 않지만, 환경별 early termination과 reset이
+진행되면서 episode phase가 자연스럽게 비동기화된다.
+
+Periodic freeze는 episode elapsed time과 별도인 command-term phase다. 해당 환경이 reset될 때 phase를
+``[0, 10) s`` 에서 독립적으로 다시 뽑고, ``phase < duration`` 이면 exact-zero freeze를 적용한다. 따라서 reset
+후 반드시 10초를 기다렸다가 멈추는 구조가 아니며, 표본화된 phase가 duration보다 작으면 reset 직후부터 freeze
+상태일 수도 있다. Phase가 10초를 넘으면 0으로 wrap하고 새 duration을 표본화한다. Freeze를 빠져나오는 순간에는
+현재 episode role을 유지한 채 새 이동 command를 표본화한다.
+
+Training ``push_robot`` 은 Isaac Lab 부모 locomotion task에서 상속한 ``interval`` event다.
+``is_global_time=False`` 이므로 모든 환경에 동시에 push하는 global timer가 아니라 각 환경이 별도의 time-left를
+갖는다. Reset마다 그 환경의 다음 push 시간이 ``10~15 s`` 로 다시 표본화되고, push가 발생한 뒤에도 같은 범위로
+다음 interval을 뽑는다. Timeout이 ``20 s`` 이므로 끝까지 생존한 episode에는 보통 후반부에 push 한 번이 들어가고,
+10초 전에 종료된 episode에는 push가 없을 수 있다. 첫 push 뒤 다음 push까지 최소 10초가 필요하므로 정상적인
+20초 episode 안에서 두 번째 push가 발생하는 경우는 사실상 없다.
+
+Freeze phase와 push time-left는 서로 독립적으로 표본화된다. 따라서 push는 이동 command 중, exact-zero freeze
+중, 또는 freeze 진입/종료 부근 어느 시점에도 들어올 수 있다. 이 조합 덕분에 policy는 같은 외란을 다양한 command
+상태에서 복원하게 된다. Play와 Teleop은 자동 ``push_robot`` event를 끄며, 화면의 ``RoK4 Push Test`` 버튼이
+별도의 수동 외란 경로를 제공한다.
+
+.. code-block:: text
+
+   global t=0 s  : 모든 env episode counter=0
+                  env A freeze phase=8.7 s, next push=12.4 s
+                  env B freeze phase=1.0 s, next push=14.1 s
+   global t=3 s  : env A early termination -> A counter=0, freeze phase와 push timer 재표본화
+   global t=20 s : 생존한 env B timeout/reset
+   global t=23 s : env A가 3 s 이후 20 s 생존했다면 timeout/reset
+
+``feet_air_time_positive_biped`` 는 느리고 긴 step을 유도하기 위해 ``threshold=0.65 s``, ``weight=0.5`` 를
+사용한다. Threshold는 정확한 gait period 목표나 single-stance 종료 cutoff가 아니라 raw reward의 포화값이다.
+한발 지지가 ``0.65 s`` 보다 길어져도 raw reward ``0.65`` 가 매 policy step 계속 반환되며, 최대
+pre-``dt`` 항목 크기는 step당 ``0.65 * 0.5 = 0.325`` 다. 이는 이전 ``0.4 * 0.75 = 0.30`` 과 비슷한 크기다.
 
 ``no_jumps`` 는 Isaac Lab 공통 ``mdp.desired_contacts`` 를 ``weight=-2.0`` 과 force ``threshold=1.0 N`` 으로
 사용한다. 좌우 Foot의 최근 5개 contact-force sample 중 어느 쪽에도 threshold를 넘는 접촉이 없을 때만 raw
@@ -881,6 +970,27 @@ RoK4 flat task의 domain randomization 값을 따로 관리하는 파일이다. 
 이 분리의 목적은 reward, observation, action 설정과 DR 튜닝값을 섞지 않는 것이다. 앞으로 friction, restitution,
 mass, COM, reset perturbation을 조정할 때 이 파일을 먼저 보면 된다.
 
+Baseline commit ``d949d40`` 이후 변경 범위는 다음과 같다.
+
+.. list-table::
+   :header-rows: 1
+
+   * - 구분
+     - baseline 대비 변경 여부
+     - 현재 내용
+   * - Policy observation noise
+     - 변경 없음
+     - ``base_ang_vel +-0.2``, ``projected_gravity +-0.05``, ``actuator_pos +-0.01 rad``, ``actuator_vel +-1.5 rad/s`` 를 유지하며 command와 last action에는 noise가 없다.
+   * - Physics DR
+     - 변경
+     - correlated Foot material DR과 environment/joint별 static friction, viscous friction, armature scale DR 추가
+   * - Reset state
+     - 변경
+     - joint position ``0.9~1.1`` scale은 유지하고 joint velocity를 고정 0에서 ``Uniform(-0.1,0.1) rad/s`` 로 변경
+   * - Termination/timeout
+     - 변경 없음
+     - Foot 이외 illegal contact 종료와 episode timeout ``20 s`` 는 baseline 동작을 유지
+
 현재 DR 구조는 다음과 같다.
 
 .. list-table::
@@ -889,9 +999,12 @@ mass, COM, reset perturbation을 조정할 때 이 파일을 먼저 보면 된�
    * - 그룹
      - mode
      - 현재 설정
-   * - Foot physics material
+   * - Robot/Foot physics material
      - ``startup``
-     - ``L_Foot_Link``, ``R_Foot_Link`` 의 static friction ``0.8``, dynamic friction ``0.6``, restitution ``0.1~0.3``
+     - 모든 robot collision shape를 nominal ``0.8/0.6`` 으로 먼저 고정한 뒤, 환경별 좌우 Foot만 공통 static friction ``0.5~0.9``, dynamic ``0.75 * static`` (``0.375~0.675``), restitution ``0.1~0.3`` 으로 덮어쓴다.
+   * - Joint physics
+     - ``startup``
+     - 각 environment/joint의 nominal ``ROK4_STATIC_FRICTION``, ``ROK4_VISCOUS_FRICTION``, ``ROK4_ARMATURE`` 를 서로 독립적으로 ``Uniform(0.8, 1.2)`` 배 scale
    * - Body mass
      - ``startup``
      - base, upper, lower body group을 각각 ``0.9~1.25`` 배로 scale
@@ -903,14 +1016,53 @@ mass, COM, reset perturbation을 조정할 때 이 파일을 먼저 보면 된�
      - 현재 force/torque range는 0으로 두어 외력은 꺼진 상태
    * - Reset joint pose
      - ``reset``
-     - default joint position을 ``0.9~1.1`` scale
+     - 각 environment/joint가 default joint position을 독립적으로 ``0.9~1.1`` scale한다. Default가 0인 관절은 그대로 0이다.
+   * - Reset joint velocity
+     - ``reset``
+     - 각 environment/joint가 절대 속도 ``Uniform(-0.1, 0.1) rad/s`` 를 독립적으로 표본화
    * - Reset base pose/velocity
      - ``reset``
      - episode reset마다 base x/y/yaw pose와 base velocity를 약하게 randomize
+   * - Root XY velocity push
+     - ``interval``
+     - 환경별 ``10~15 s`` timer로 world-frame root x/y velocity에 각각 ``-0.5~0.5 m/s`` 를 추가
 
-``startup`` DR은 scene 생성 시 각 environment에 대해 샘플링된다. ``reset`` DR은 episode reset마다 다시
-샘플링된다. 4096개 environment 학습에서 CPU-heavy DR을 매 reset 수행하지 않기 위해 material, mass, COM은
+``startup`` DR은 scene 생성 시 각 environment에 대해 한 번 샘플링된다. ``reset`` DR은 해당 environment의
+episode reset마다 다시 샘플링된다. ``interval`` event는 환경별 남은 시간을 가지며 reset 때 timer도 다시
+표본화한다. 4096개 environment 학습에서 CPU-heavy DR을 매 reset 수행하지 않기 위해 material, mass, COM은
 현재 ``startup`` 으로 둔다.
+
+Material event는 먼저 G1/Digit 방식과 같은 nominal robot friction ``mu_static=0.8``, ``mu_dynamic=0.6`` 을
+모든 robot collision shape에 명시한다. 그 뒤 RoK4 로컬 ``randomize_rigid_body_material_correlated`` event가
+환경마다 Foot material bucket 하나를 선택해 좌우 Foot의 모든 collision shape에 공통 적용한다. Foot의
+``mu_static`` 은 ``Uniform(0.5, 0.9)`` 에서 표본화하고
+``mu_dynamic = 0.75 * mu_static`` 으로 계산하므로 dynamic friction은 ``0.375~0.675`` 이며 항상 static보다 작다.
+두 값을 독립 표본화하지 않아 비물리적인 ``mu_dynamic > mu_static`` 조합을 막고, 좌우 발 마찰 차이가 policy
+비대칭을 만드는 것도 피한다. 이 첫 범위는 nominal ``0.8/0.6`` 주변의 미끄러운 조건부터 먼저 확장하는 단계다.
+Foot friction DR 범위는 학습 task에만 적용한다. Play와 Teleop은 Foot까지 nominal
+``mu_static=0.8``, ``mu_dynamic=0.6`` 으로 고정한다. Foot 이외 shape의 restitution은 asset 원본값을 유지하고,
+Foot restitution만 학습에서 ``0.1~0.3`` 으로 덮어쓴다.
+
+Joint physics DR은 Isaac Lab의 ``randomize_joint_parameters`` startup event를 사용한다. Isaac Sim 5에서는
+``friction_distribution_params=(0.8, 1.2)`` 가 nominal static friction과 viscous friction에 각각 독립적인
+uniform scale을 적용한다. ``armature_distribution_params=(0.8, 1.2)`` 는 별도의 독립 표본으로 joint armature를
+scale한다. 따라서 environment ``e`` 와 joint ``j`` 에 대해 다음 관계가 성립한다.
+
+.. math::
+
+   \mu_{s,e,j} &= \mu_{s,j}^{nominal} U_{s,e,j}(0.8,1.2) \\
+   c_{v,e,j} &= c_{v,j}^{nominal} U_{v,e,j}(0.8,1.2) \\
+   I_{a,e,j} &= I_{a,j}^{nominal} U_{a,e,j}(0.8,1.2)
+
+세 random variable은 서로 독립이며 4096개 environment에도 독립적으로 생성된다. 이 event는 PhysX joint
+property만 바꾸며 actuator-space PD의 ``ROK4_ACTUATOR_KP`` 와 ``ROK4_ACTUATOR_KD`` 는 변경하지 않는다.
+Play와 Teleop에서는 ``joint_physics`` event를 ``None`` 으로 제거하여 세 물성을 nominal 값으로 유지한다.
+
+Joint reset은 RoK4 로컬 ``reset_joints_by_position_scale_and_velocity`` 를 사용한다. 기존 Isaac Lab
+``reset_joints_by_scale`` 에 ``velocity_range=(-0.1, 0.1)`` 만 넣으면 default joint velocity ``0`` 에 random
+scale을 곱하므로 결과가 계속 0이다. 로컬 함수는 position에는 기존처럼 default pose의 ``0.9~1.1`` scale을
+적용하지만, velocity에는 scale이 아닌 절대값 ``Uniform(-0.1, 0.1) rad/s`` 를 직접 표본화한다. 이 값은 episode
+reset마다 모든 environment와 13개 관절에 독립적으로 생성되고 joint velocity limit 안으로 clamp된다.
 
 Mass와 COM DR은 다음 세 body group으로 나누어 관리한다.
 
@@ -1162,7 +1314,7 @@ RoK4 task와 ``RoK4OnPolicyRunner`` 를 등록한 뒤 Isaac Lab 원본 RSL-RL tr
 
 .. code-block:: bash
 
-   ./isaaclab.sh -p /home/rclab/rok4_lab/scripts/rsl_rl/train.py \
+   ./isaaclab.sh -p ${ROK4_LAB_ROOT}/scripts/rsl_rl/train.py \
      --task RoK4-Isaac-Velocity-Flat-v0 \
      --num_envs 512 \
      --max_iterations 5000 \
@@ -1177,7 +1329,7 @@ RoK4 task를 등록한 뒤 Isaac Lab 원본 RSL-RL playback script를 실행한�
 
 .. code-block:: bash
 
-   ./isaaclab.sh -p /home/rclab/rok4_lab/scripts/rsl_rl/play.py \
+   ./isaaclab.sh -p ${ROK4_LAB_ROOT}/scripts/rsl_rl/play.py \
      --task RoK4-Isaac-Velocity-Flat-Play-v0 \
      --num_envs 16 \
      --checkpoint /path/to/model.pt
@@ -1263,7 +1415,7 @@ Gamepad 실행:
 
 .. code-block:: bash
 
-   ./isaaclab.sh -p /home/rclab/rok4_lab/scripts/rsl_rl/play_teleop.py \
+   ./isaaclab.sh -p ${ROK4_LAB_ROOT}/scripts/rsl_rl/play_teleop.py \
      --task RoK4-Isaac-Velocity-Flat-Teleop-v0 \
      --teleop_device gamepad \
      --teleop_dead_zone 0.05 \
@@ -1279,7 +1431,7 @@ Keyboard 실행:
 
 .. code-block:: bash
 
-   ./isaaclab.sh -p /home/rclab/rok4_lab/scripts/rsl_rl/play_teleop.py \
+   ./isaaclab.sh -p ${ROK4_LAB_ROOT}/scripts/rsl_rl/play_teleop.py \
      --task RoK4-Isaac-Velocity-Flat-Teleop-v0 \
      --teleop_device keyboard \
      --checkpoint /path/to/model.pt \
@@ -1339,7 +1491,7 @@ environment 및 queue 적용 흐름도 문서화했다.
 .. code-block:: text
 
    ./isaaclab.sh
-     -> /home/rclab/rok4_lab/scripts/rsl_rl/train.py
+     -> ${ROK4_LAB_ROOT}/scripts/rsl_rl/train.py
        -> _run_isaaclab_rsl.py
          -> sys.path에 rok4_tasks 추가
          -> Isaac Lab 원본 train.py 실행
@@ -1361,7 +1513,7 @@ environment 및 queue 적용 흐름도 문서화했다.
 
 .. code-block:: bash
 
-   ./isaaclab.sh -p /home/rclab/rok4_lab/scripts/rsl_rl/train.py \
+   ./isaaclab.sh -p ${ROK4_LAB_ROOT}/scripts/rsl_rl/train.py \
      --task RoK4-Isaac-Velocity-Flat-v0 \
      --num_envs 2 \
      --max_iterations 1 \
@@ -1389,7 +1541,7 @@ environment 및 queue 적용 흐름도 문서화했다.
    * - PPO 1 iteration
      - 성공
    * - 생성 checkpoint
-     - ``/home/rclab/IsaacLab/logs/rsl_rl/rok4_flat/2026-07-07_13-44-26/model_0.pt``
+     - ``${ISAACLAB_ROOT}/logs/rsl_rl/rok4_flat/2026-07-07_13-44-26/model_0.pt``
 
 현재 설계 의도
 ------------------------------------------------------
@@ -1426,13 +1578,12 @@ Smoke test:
 
 .. code-block:: bash
 
-   cd /home/rclab/rok4_lab
-   ROK4LAB_DIR=$(pwd)
-
-   cd /home/rclab/IsaacLab
+   export ROK4_LAB_ROOT="${HOME}/rok4_lab"
+   export ISAACLAB_ROOT="${HOME}/IsaacLab"
+   cd "${ISAACLAB_ROOT}"
    conda activate env_isaaclab
 
-   ./isaaclab.sh -p ${ROK4LAB_DIR}/scripts/rsl_rl/train.py \
+   ./isaaclab.sh -p ${ROK4_LAB_ROOT}/scripts/rsl_rl/train.py \
      --task RoK4-Isaac-Velocity-Flat-v0 \
      --num_envs 2 \
      --max_iterations 1 \
@@ -1442,7 +1593,7 @@ Normal training:
 
 .. code-block:: bash
 
-   ./isaaclab.sh -p ${ROK4LAB_DIR}/scripts/rsl_rl/train.py \
+   ./isaaclab.sh -p ${ROK4_LAB_ROOT}/scripts/rsl_rl/train.py \
      --task RoK4-Isaac-Velocity-Flat-v0 \
      --num_envs 4096 \
      --max_iterations 5000 \
@@ -1453,7 +1604,7 @@ Training with periodic video:
 
 .. code-block:: bash
 
-   ./isaaclab.sh -p ${ROK4LAB_DIR}/scripts/rsl_rl/train.py \
+   ./isaaclab.sh -p ${ROK4_LAB_ROOT}/scripts/rsl_rl/train.py \
      --task RoK4-Isaac-Velocity-Flat-v0 \
      --num_envs 4096 \
      --max_iterations 5000 \
@@ -1472,7 +1623,7 @@ Play:
 
 .. code-block:: bash
 
-   ./isaaclab.sh -p ${ROK4LAB_DIR}/scripts/rsl_rl/play.py \
+   ./isaaclab.sh -p ${ROK4_LAB_ROOT}/scripts/rsl_rl/play.py \
      --task RoK4-Isaac-Velocity-Flat-Play-v0 \
      --num_envs 16 \
      --checkpoint /path/to/model.pt
@@ -1484,7 +1635,7 @@ Teleop with gamepad:
 
 .. code-block:: bash
 
-   ./isaaclab.sh -p ${ROK4LAB_DIR}/scripts/rsl_rl/play_teleop.py \
+   ./isaaclab.sh -p ${ROK4_LAB_ROOT}/scripts/rsl_rl/play_teleop.py \
      --task RoK4-Isaac-Velocity-Flat-Teleop-v0 \
      --teleop_device gamepad \
      --teleop_dead_zone 0.05 \
@@ -1495,7 +1646,7 @@ Teleop with keyboard:
 
 .. code-block:: bash
 
-   ./isaaclab.sh -p ${ROK4LAB_DIR}/scripts/rsl_rl/play_teleop.py \
+   ./isaaclab.sh -p ${ROK4_LAB_ROOT}/scripts/rsl_rl/play_teleop.py \
      --task RoK4-Isaac-Velocity-Flat-Teleop-v0 \
      --teleop_device keyboard \
      --checkpoint /path/to/model.pt \

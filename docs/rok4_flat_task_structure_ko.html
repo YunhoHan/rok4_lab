@@ -836,16 +836,33 @@ span.boxed, span.framebox {
 <dd><p>2026-07-15</p>
 </dd>
 <dt>최종 업데이트</dt>
-<dd><p>2026-07-27</p>
+<dd><p>2026-07-31</p>
 </dd>
 <dt>대상 저장소</dt>
-<dd><p><span class="docutils literal">/home/rclab/rok4_lab</span></p>
+<dd><p>RoK4 repository root (<span class="docutils literal">${ROK4_LAB_ROOT}</span>)</p>
 </dd>
 <dt>기준 환경</dt>
 <dd><p>Isaac Lab v2.3.2, Isaac Sim 5.1.0, <span class="docutils literal">env_isaaclab</span></p>
 </dd>
 </dl>
-<section id="id1">
+<style>
+@media print {
+  body, main {
+    background-color: white;
+  }
+  pre.code {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+</style><section id="id1">
+<h2>경로 표기</h2>
+<p>문서의 저장소 경로는 개인 PC의 절대 경로 대신 다음 변수를 사용한다. 다른 위치에 clone했다면 오른쪽 경로만
+실제 위치에 맞게 바꾼다.</p>
+<pre class="code bash literal-block"><code><span class="name builtin">export</span> <span class="name variable">ROK4_LAB_ROOT</span><span class="operator">=</span><span class="literal string double">&quot;</span><span class="literal string interpol">${</span><span class="name variable">HOME</span><span class="literal string interpol">}</span><span class="literal string double">/rok4_lab&quot;</span>
+<span class="name builtin">export</span> <span class="name variable">ISAACLAB_ROOT</span><span class="operator">=</span><span class="literal string double">&quot;</span><span class="literal string interpol">${</span><span class="name variable">HOME</span><span class="literal string interpol">}</span><span class="literal string double">/IsaacLab&quot;</span></code></pre>
+</section>
+<section id="id2">
 <h2>개요</h2>
 <p>이번 작업의 목적은 RoK4를 위한 첫 강화학습 환경을 만드는 것이다. 바로 rough terrain으로 가지 않고,
 먼저 flat terrain에서 blind velocity walking을 학습할 수 있는 최소 구조를 만들었다.</p>
@@ -856,6 +873,9 @@ RoK4 기준으로 다시 작성했다.</p>
 <span class="docutils literal">None</span> 처리, torque limit을 포함한 상세 제어 흐름은 <span class="docutils literal">docs/rok4_adapt_control_structure_ko.rst</span> 와 생성된
 <span class="docutils literal">docs/_build/pdf/rok4_adapt_control_structure_ko.pdf</span> 에 별도로 정리한다. 이 문서는 전체 task 구조와 연결 관계를
 중심으로 설명한다.</p>
+<p>Observation noise, reset state randomization, physics DR의 정확한 범위와 표본화 시점, Train/Play/Teleop 차이는
+<span class="docutils literal">docs/rok4_randomization_and_noise_ko.rst</span> 와 생성된
+<span class="docutils literal">docs/_build/pdf/rok4_randomization_and_noise_ko.pdf</span> 를 기준 문서로 사용한다.</p>
 <p>현재 actuator-space 기준 정책은
 <span class="docutils literal"><span class="pre">2026-07-24_19-34-26_symmetry_aug_nojumps2_swing_roll100_fresh/model_9999.pt</span></span> 이며,
 이 문서에서는 이를 experimental <span class="docutils literal">Yunho Symmetry ADAPT v1</span> baseline으로 기록한다. 이 checkpoint를 보존한
@@ -886,7 +906,7 @@ checkpoint 호환성이 없다.</p>
 </tbody>
 </table>
 </section>
-<section id="id2">
+<section id="id3">
 <h2>전체 구조</h2>
 <p>현재 RoK4 Lab 저장소의 핵심 구조는 다음과 같다.</p>
 <pre class="code text literal-block"><code>rok4_lab/
@@ -905,7 +925,8 @@ checkpoint 호환성이 없다.</p>
             velocity/
               mdp/
                 actions.py           # actuator action -&gt; mapped joint target
-                commands.py          # 90/5/5 role과 비동기 exact-zero 정지 command
+                commands.py          # episode role과 비동기 exact-zero 정지 command
+                events.py            # correlated foot friction과 joint reset DR
                 observations.py      # joint state -&gt; actuator state
                 rewards.py           # RoK4 actuator-space reward 계산
                 symmetry.py          # 좌우 observation/action data augmentation
@@ -934,7 +955,7 @@ checkpoint 호환성이 없다.</p>
 <p>현재 RoK4 flat task는 <span class="docutils literal">flat_env_cfg.py</span> 를 중심으로 움직인다. 다만 실행 entry point는
 <span class="docutils literal">config/rok4/__init__.py</span> 의 Gym task 등록이고, <span class="docutils literal">flat_env_cfg.py</span> 는 환경 설정의 main config 역할을 한다.</p>
 <pre class="code text literal-block"><code>[사용자 실행]
-./isaaclab.sh -p /home/rclab/rok4_lab/scripts/rsl_rl/train.py
+./isaaclab.sh -p ${ROK4_LAB_ROOT}/scripts/rsl_rl/train.py
     |
     v
 scripts/rsl_rl/train.py
@@ -1400,7 +1421,7 @@ default state를 뺀 뒤 actuator 좌표로 변환한다. Position은 gait-ready
 등록하는 입구, <span class="docutils literal">rsl_rl_ppo_cfg.py</span> 는 학습기 설정, <span class="docutils literal">rok4.py</span> 는 로봇 asset 설정이다.</p>
 </section>
 </section>
-<section id="id3">
+<section id="id4">
 <h2>새로 생성된 파일</h2>
 <section id="source-rok4-tasks-rok4-tasks-manager-based-init-py">
 <h3><span class="docutils literal">source/rok4_tasks/rok4_tasks/manager_based/__init__.py</span></h3>
@@ -1604,10 +1625,73 @@ Exact-zero command는 periodic freeze window와 <span class="docutils literal">s
 <span class="docutils literal">is_standing_env</span> mask를 사용하여 전체 13관절의 실제 joint position을 default joint pose 근처로 유지한다.
 각 관절 오차의 절댓값을 합산하므로 작은 standing 자세 오차도 강하게 억제한다. 작은 non-zero 이동 command에는
 이 penalty를 적용하지 않는다.</p>
-<p><span class="docutils literal">feet_air_time_positive_biped</span> 는 G1 Flat과 같은 <span class="docutils literal">threshold=0.4 s</span>, <span class="docutils literal">weight=0.75</span> 를 사용한다. threshold는
-정확한 gait period 목표나 single-stance 종료 cutoff가 아니라 raw reward의 포화값이다. 한발 지지가 <span class="docutils literal">0.4 s</span>
-보다 길어져도 raw reward <span class="docutils literal">0.4</span> 가 매 policy step 계속 반환되며, 최대 pre-<span class="docutils literal">dt</span> 항목 크기는 step당
-<span class="docutils literal">0.4 * 0.75 = 0.30</span> 이다.</p>
+</section>
+<section id="episode-timeout-periodic-freeze-push-timer">
+<h3>Episode timeout, periodic freeze, push timer 관계</h3>
+<p>학습 환경에는 서로 독립적인 세 종류의 시간이 있다.</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>시간 상태</p></th>
+<th class="head"><p>환경별 여부</p></th>
+<th class="head"><p>reset 시 동작</p></th>
+<th class="head"><p>현재 범위</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p>Episode elapsed time</p></td>
+<td><p>환경별</p></td>
+<td><p>해당 환경만 0으로 초기화</p></td>
+<td><p>timeout <span class="docutils literal">20 s</span> = policy step <span class="docutils literal">2,000</span> 개</p></td>
+</tr>
+<tr><td><p>Periodic freeze phase</p></td>
+<td><p>환경별</p></td>
+<td><p><span class="docutils literal">Uniform(0, 10) s</span> 로 새 phase 표본화</p></td>
+<td><p>cycle <span class="docutils literal">10 s</span>, duration <span class="docutils literal">Uniform(1.5, 3.0) s</span></p></td>
+</tr>
+<tr><td><p>Training push time-left</p></td>
+<td><p>환경별</p></td>
+<td><p><span class="docutils literal">Uniform(10, 15) s</span> 로 다음 push 시간 표본화</p></td>
+<td><p>world-frame <span class="docutils literal">vx/vy</span> 에 각각 <span class="docutils literal"><span class="pre">Uniform(-0.5,</span> 0.5) m/s</span> 추가</p></td>
+</tr>
+</tbody>
+</table>
+<p>Episode timeout은 <span class="docutils literal">ManagerBasedRLEnv</span> 의 <span class="docutils literal">episode_length_buf</span> 로 환경마다 관리한다. 학습 시작 직후에는
+모든 환경이 episode step 0에서 출발하므로, early termination이 전혀 없는 환경들은 global simulation time
+<span class="docutils literal">20 s</span>, <span class="docutils literal">40 s</span> 처럼 timeout이 서로 맞을 수 있다. 반면 환경 A가 global time <span class="docutils literal">3 s</span> 에 illegal contact로
+종료되면 A의 episode counter만 0으로 돌아가며, 다음 episode를 끝까지 생존할 경우 global time 약 <span class="docutils literal">23 s</span> 에
+timeout된다. 즉 초기 episode phase를 명시적으로 randomize하지는 않지만, 환경별 early termination과 reset이
+진행되면서 episode phase가 자연스럽게 비동기화된다.</p>
+<p>Periodic freeze는 episode elapsed time과 별도인 command-term phase다. 해당 환경이 reset될 때 phase를
+<span class="docutils literal">[0, 10) s</span> 에서 독립적으로 다시 뽑고, <span class="docutils literal">phase &lt; duration</span> 이면 exact-zero freeze를 적용한다. 따라서 reset
+후 반드시 10초를 기다렸다가 멈추는 구조가 아니며, 표본화된 phase가 duration보다 작으면 reset 직후부터 freeze
+상태일 수도 있다. Phase가 10초를 넘으면 0으로 wrap하고 새 duration을 표본화한다. Freeze를 빠져나오는 순간에는
+현재 episode role을 유지한 채 새 이동 command를 표본화한다.</p>
+<p>Training <span class="docutils literal">push_robot</span> 은 Isaac Lab 부모 locomotion task에서 상속한 <span class="docutils literal">interval</span> event다.
+<span class="docutils literal">is_global_time=False</span> 이므로 모든 환경에 동시에 push하는 global timer가 아니라 각 환경이 별도의 time-left를
+갖는다. Reset마다 그 환경의 다음 push 시간이 <span class="docutils literal">10~15 s</span> 로 다시 표본화되고, push가 발생한 뒤에도 같은 범위로
+다음 interval을 뽑는다. Timeout이 <span class="docutils literal">20 s</span> 이므로 끝까지 생존한 episode에는 보통 후반부에 push 한 번이 들어가고,
+10초 전에 종료된 episode에는 push가 없을 수 있다. 첫 push 뒤 다음 push까지 최소 10초가 필요하므로 정상적인
+20초 episode 안에서 두 번째 push가 발생하는 경우는 사실상 없다.</p>
+<p>Freeze phase와 push time-left는 서로 독립적으로 표본화된다. 따라서 push는 이동 command 중, exact-zero freeze
+중, 또는 freeze 진입/종료 부근 어느 시점에도 들어올 수 있다. 이 조합 덕분에 policy는 같은 외란을 다양한 command
+상태에서 복원하게 된다. Play와 Teleop은 자동 <span class="docutils literal">push_robot</span> event를 끄며, 화면의 <span class="docutils literal">RoK4 Push Test</span> 버튼이
+별도의 수동 외란 경로를 제공한다.</p>
+<pre class="code text literal-block"><code>global t=0 s  : 모든 env episode counter=0
+               env A freeze phase=8.7 s, next push=12.4 s
+               env B freeze phase=1.0 s, next push=14.1 s
+global t=3 s  : env A early termination -&gt; A counter=0, freeze phase와 push timer 재표본화
+global t=20 s : 생존한 env B timeout/reset
+global t=23 s : env A가 3 s 이후 20 s 생존했다면 timeout/reset</code></pre>
+<p><span class="docutils literal">feet_air_time_positive_biped</span> 는 느리고 긴 step을 유도하기 위해 <span class="docutils literal">threshold=0.65 s</span>, <span class="docutils literal">weight=0.5</span> 를
+사용한다. Threshold는 정확한 gait period 목표나 single-stance 종료 cutoff가 아니라 raw reward의 포화값이다.
+한발 지지가 <span class="docutils literal">0.65 s</span> 보다 길어져도 raw reward <span class="docutils literal">0.65</span> 가 매 policy step 계속 반환되며, 최대
+pre-<span class="docutils literal">dt</span> 항목 크기는 step당 <span class="docutils literal">0.65 * 0.5 = 0.325</span> 다. 이는 이전 <span class="docutils literal">0.4 * 0.75 = 0.30</span> 과 비슷한 크기다.</p>
 <p><span class="docutils literal">no_jumps</span> 는 Isaac Lab 공통 <span class="docutils literal">mdp.desired_contacts</span> 를 <span class="docutils literal"><span class="pre">weight=-2.0</span></span> 과 force <span class="docutils literal">threshold=1.0 N</span> 으로
 사용한다. 좌우 Foot의 최근 5개 contact-force sample 중 어느 쪽에도 threshold를 넘는 접촉이 없을 때만 raw
 penalty <span class="docutils literal">1</span> 을 반환한다. 따라서 정상 single stance와 toe-off는 허용하고 양발이 동시에 뜬 flight phase만
@@ -1688,6 +1772,38 @@ base linear velocity</code></pre>
 <pre class="code python literal-block"><code><span class="name">apply_rok4_domain_randomization</span><span class="punctuation">(</span><span class="name builtin pseudo">self</span><span class="punctuation">)</span></code></pre>
 <p>이 분리의 목적은 reward, observation, action 설정과 DR 튜닝값을 섞지 않는 것이다. 앞으로 friction, restitution,
 mass, COM, reset perturbation을 조정할 때 이 파일을 먼저 보면 된다.</p>
+<p>Baseline commit <span class="docutils literal">d949d40</span> 이후 변경 범위는 다음과 같다.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>구분</p></th>
+<th class="head"><p>baseline 대비 변경 여부</p></th>
+<th class="head"><p>현재 내용</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p>Policy observation noise</p></td>
+<td><p>변경 없음</p></td>
+<td><p><span class="docutils literal">base_ang_vel <span class="pre">+-0.2</span></span>, <span class="docutils literal">projected_gravity <span class="pre">+-0.05</span></span>, <span class="docutils literal">actuator_pos <span class="pre">+-0.01</span> rad</span>, <span class="docutils literal">actuator_vel <span class="pre">+-1.5</span> rad/s</span> 를 유지하며 command와 last action에는 noise가 없다.</p></td>
+</tr>
+<tr><td><p>Physics DR</p></td>
+<td><p>변경</p></td>
+<td><p>correlated Foot material DR과 environment/joint별 static friction, viscous friction, armature scale DR 추가</p></td>
+</tr>
+<tr><td><p>Reset state</p></td>
+<td><p>변경</p></td>
+<td><p>joint position <span class="docutils literal">0.9~1.1</span> scale은 유지하고 joint velocity를 고정 0에서 <span class="docutils literal"><span class="pre">Uniform(-0.1,0.1)</span> rad/s</span> 로 변경</p></td>
+</tr>
+<tr><td><p>Termination/timeout</p></td>
+<td><p>변경 없음</p></td>
+<td><p>Foot 이외 illegal contact 종료와 episode timeout <span class="docutils literal">20 s</span> 는 baseline 동작을 유지</p></td>
+</tr>
+</tbody>
+</table>
 <p>현재 DR 구조는 다음과 같다.</p>
 <table>
 <colgroup>
@@ -1702,9 +1818,13 @@ mass, COM, reset perturbation을 조정할 때 이 파일을 먼저 보면 된�
 </tr>
 </thead>
 <tbody>
-<tr><td><p>Foot physics material</p></td>
+<tr><td><p>Robot/Foot physics material</p></td>
 <td><p><span class="docutils literal">startup</span></p></td>
-<td><p><span class="docutils literal">L_Foot_Link</span>, <span class="docutils literal">R_Foot_Link</span> 의 static friction <span class="docutils literal">0.8</span>, dynamic friction <span class="docutils literal">0.6</span>, restitution <span class="docutils literal">0.1~0.3</span></p></td>
+<td><p>모든 robot collision shape를 nominal <span class="docutils literal">0.8/0.6</span> 으로 먼저 고정한 뒤, 환경별 좌우 Foot만 공통 static friction <span class="docutils literal">0.5~0.9</span>, dynamic <span class="docutils literal">0.75 * static</span> (<span class="docutils literal">0.375~0.675</span>), restitution <span class="docutils literal">0.1~0.3</span> 으로 덮어쓴다.</p></td>
+</tr>
+<tr><td><p>Joint physics</p></td>
+<td><p><span class="docutils literal">startup</span></p></td>
+<td><p>각 environment/joint의 nominal <span class="docutils literal">ROK4_STATIC_FRICTION</span>, <span class="docutils literal">ROK4_VISCOUS_FRICTION</span>, <span class="docutils literal">ROK4_ARMATURE</span> 를 서로 독립적으로 <span class="docutils literal">Uniform(0.8, 1.2)</span> 배 scale</p></td>
 </tr>
 <tr><td><p>Body mass</p></td>
 <td><p><span class="docutils literal">startup</span></p></td>
@@ -1720,17 +1840,96 @@ mass, COM, reset perturbation을 조정할 때 이 파일을 먼저 보면 된�
 </tr>
 <tr><td><p>Reset joint pose</p></td>
 <td><p><span class="docutils literal">reset</span></p></td>
-<td><p>default joint position을 <span class="docutils literal">0.9~1.1</span> scale</p></td>
+<td><p>각 environment/joint가 default joint position을 독립적으로 <span class="docutils literal">0.9~1.1</span> scale한다. Default가 0인 관절은 그대로 0이다.</p></td>
+</tr>
+<tr><td><p>Reset joint velocity</p></td>
+<td><p><span class="docutils literal">reset</span></p></td>
+<td><p>각 environment/joint가 절대 속도 <span class="docutils literal"><span class="pre">Uniform(-0.1,</span> 0.1) rad/s</span> 를 독립적으로 표본화</p></td>
 </tr>
 <tr><td><p>Reset base pose/velocity</p></td>
 <td><p><span class="docutils literal">reset</span></p></td>
 <td><p>episode reset마다 base x/y/yaw pose와 base velocity를 약하게 randomize</p></td>
 </tr>
+<tr><td><p>Root XY velocity push</p></td>
+<td><p><span class="docutils literal">interval</span></p></td>
+<td><p>환경별 <span class="docutils literal">10~15 s</span> timer로 world-frame root x/y velocity에 각각 <span class="docutils literal"><span class="pre">-0.5~0.5</span> m/s</span> 를 추가</p></td>
+</tr>
 </tbody>
 </table>
-<p><span class="docutils literal">startup</span> DR은 scene 생성 시 각 environment에 대해 샘플링된다. <span class="docutils literal">reset</span> DR은 episode reset마다 다시
-샘플링된다. 4096개 environment 학습에서 CPU-heavy DR을 매 reset 수행하지 않기 위해 material, mass, COM은
+<p><span class="docutils literal">startup</span> DR은 scene 생성 시 각 environment에 대해 한 번 샘플링된다. <span class="docutils literal">reset</span> DR은 해당 environment의
+episode reset마다 다시 샘플링된다. <span class="docutils literal">interval</span> event는 환경별 남은 시간을 가지며 reset 때 timer도 다시
+표본화한다. 4096개 environment 학습에서 CPU-heavy DR을 매 reset 수행하지 않기 위해 material, mass, COM은
 현재 <span class="docutils literal">startup</span> 으로 둔다.</p>
+<p>Material event는 먼저 G1/Digit 방식과 같은 nominal robot friction <span class="docutils literal">mu_static=0.8</span>, <span class="docutils literal">mu_dynamic=0.6</span> 을
+모든 robot collision shape에 명시한다. 그 뒤 RoK4 로컬 <span class="docutils literal">randomize_rigid_body_material_correlated</span> event가
+환경마다 Foot material bucket 하나를 선택해 좌우 Foot의 모든 collision shape에 공통 적용한다. Foot의
+<span class="docutils literal">mu_static</span> 은 <span class="docutils literal">Uniform(0.5, 0.9)</span> 에서 표본화하고
+<span class="docutils literal">mu_dynamic = 0.75 * mu_static</span> 으로 계산하므로 dynamic friction은 <span class="docutils literal">0.375~0.675</span> 이며 항상 static보다 작다.
+두 값을 독립 표본화하지 않아 비물리적인 <span class="docutils literal">mu_dynamic &gt; mu_static</span> 조합을 막고, 좌우 발 마찰 차이가 policy
+비대칭을 만드는 것도 피한다. 이 첫 범위는 nominal <span class="docutils literal">0.8/0.6</span> 주변의 미끄러운 조건부터 먼저 확장하는 단계다.
+Foot friction DR 범위는 학습 task에만 적용한다. Play와 Teleop은 Foot까지 nominal
+<span class="docutils literal">mu_static=0.8</span>, <span class="docutils literal">mu_dynamic=0.6</span> 으로 고정한다. Foot 이외 shape의 restitution은 asset 원본값을 유지하고,
+Foot restitution만 학습에서 <span class="docutils literal">0.1~0.3</span> 으로 덮어쓴다.</p>
+<p>Joint physics DR은 Isaac Lab의 <span class="docutils literal">randomize_joint_parameters</span> startup event를 사용한다. Isaac Sim 5에서는
+<span class="docutils literal"><span class="pre">friction_distribution_params=(0.8,</span> 1.2)</span> 가 nominal static friction과 viscous friction에 각각 독립적인
+uniform scale을 적용한다. <span class="docutils literal"><span class="pre">armature_distribution_params=(0.8,</span> 1.2)</span> 는 별도의 독립 표본으로 joint armature를
+scale한다. 따라서 environment <span class="docutils literal">e</span> 와 joint <span class="docutils literal">j</span> 에 대해 다음 관계가 성립한다.</p>
+<div class="formula">
+<span class="environment"><span class="arrayrow">
+<span class="arraycell align-r">
+<i>μ</i><sub><i>s</i>, <i>e</i>, <i>j</i></sub>
+</span>
+<span class="arraycell align-l">
+ = <i>μ</i><span class="scripts"><sup class="script"><i>nominal</i></sup><sub class="script"><i>s</i>, <i>j</i></sub></span><i>U</i><sub><i>s</i>, <i>e</i>, <i>j</i></sub>(0.8, 1.2)
+</span>
+
+</span>
+<span class="arrayrow">
+<span class="arraycell align-r">
+ 
+</span>
+<span class="arraycell align-l">
+ 
+</span>
+
+</span>
+<span class="arrayrow">
+<span class="arraycell align-r">
+<i>c</i><sub><i>v</i>, <i>e</i>, <i>j</i></sub>
+</span>
+<span class="arraycell align-l">
+ = <i>c</i><span class="scripts"><sup class="script"><i>nominal</i></sup><sub class="script"><i>v</i>, <i>j</i></sub></span><i>U</i><sub><i>v</i>, <i>e</i>, <i>j</i></sub>(0.8, 1.2)
+</span>
+
+</span>
+<span class="arrayrow">
+<span class="arraycell align-r">
+ 
+</span>
+<span class="arraycell align-l">
+ 
+</span>
+
+</span>
+<span class="arrayrow">
+<span class="arraycell align-r">
+<i>I</i><sub><i>a</i>, <i>e</i>, <i>j</i></sub>
+</span>
+<span class="arraycell align-l">
+ = <i>I</i><span class="scripts"><sup class="script"><i>nominal</i></sup><sub class="script"><i>a</i>, <i>j</i></sub></span><i>U</i><sub><i>a</i>, <i>e</i>, <i>j</i></sub>(0.8, 1.2)
+</span>
+
+</span>
+</span>
+</div>
+<p>세 random variable은 서로 독립이며 4096개 environment에도 독립적으로 생성된다. 이 event는 PhysX joint
+property만 바꾸며 actuator-space PD의 <span class="docutils literal">ROK4_ACTUATOR_KP</span> 와 <span class="docutils literal">ROK4_ACTUATOR_KD</span> 는 변경하지 않는다.
+Play와 Teleop에서는 <span class="docutils literal">joint_physics</span> event를 <span class="docutils literal">None</span> 으로 제거하여 세 물성을 nominal 값으로 유지한다.</p>
+<p>Joint reset은 RoK4 로컬 <span class="docutils literal">reset_joints_by_position_scale_and_velocity</span> 를 사용한다. 기존 Isaac Lab
+<span class="docutils literal">reset_joints_by_scale</span> 에 <span class="docutils literal"><span class="pre">velocity_range=(-0.1,</span> 0.1)</span> 만 넣으면 default joint velocity <span class="docutils literal">0</span> 에 random
+scale을 곱하므로 결과가 계속 0이다. 로컬 함수는 position에는 기존처럼 default pose의 <span class="docutils literal">0.9~1.1</span> scale을
+적용하지만, velocity에는 scale이 아닌 절대값 <span class="docutils literal"><span class="pre">Uniform(-0.1,</span> 0.1) rad/s</span> 를 직접 표본화한다. 이 값은 episode
+reset마다 모든 environment와 13개 관절에 독립적으로 생성되고 joint velocity limit 안으로 clamp된다.</p>
 <p>Mass와 COM DR은 다음 세 body group으로 나누어 관리한다.</p>
 <table>
 <colgroup>
@@ -2010,7 +2209,7 @@ policy가 얼마나 달라졌는지를 측정한다. 기존 TensorBoard event �
 <h3><span class="docutils literal">scripts/rsl_rl/train.py</span></h3>
 <p>RoK4 task와 <span class="docutils literal">RoK4OnPolicyRunner</span> 를 등록한 뒤 Isaac Lab 원본 RSL-RL training script를 실행한다.</p>
 <p>사용자는 Isaac Lab root에서 다음처럼 실행한다.</p>
-<pre class="code bash literal-block"><code>./isaaclab.sh -p /home/rclab/rok4_lab/scripts/rsl_rl/train.py <span class="literal string escape">\
+<pre class="code bash literal-block"><code>./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4_LAB_ROOT</span><span class="literal string interpol">}</span>/scripts/rsl_rl/train.py <span class="literal string escape">\
 </span>  --task RoK4-Isaac-Velocity-Flat-v0 <span class="literal string escape">\
 </span>  --num_envs <span class="literal number">512</span> <span class="literal string escape">\
 </span>  --max_iterations <span class="literal number">5000</span> <span class="literal string escape">\
@@ -2020,7 +2219,7 @@ policy가 얼마나 달라졌는지를 측정한다. 기존 TensorBoard event �
 <h3><span class="docutils literal">scripts/rsl_rl/play.py</span></h3>
 <p>RoK4 task를 등록한 뒤 Isaac Lab 원본 RSL-RL playback script를 실행한다.</p>
 <p>사용자는 Isaac Lab root에서 다음처럼 실행한다.</p>
-<pre class="code bash literal-block"><code>./isaaclab.sh -p /home/rclab/rok4_lab/scripts/rsl_rl/play.py <span class="literal string escape">\
+<pre class="code bash literal-block"><code>./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4_LAB_ROOT</span><span class="literal string interpol">}</span>/scripts/rsl_rl/play.py <span class="literal string escape">\
 </span>  --task RoK4-Isaac-Velocity-Flat-Play-v0 <span class="literal string escape">\
 </span>  --num_envs <span class="literal number">16</span> <span class="literal string escape">\
 </span>  --checkpoint /path/to/model.pt</code></pre>
@@ -2089,7 +2288,7 @@ Teleop은 env가 하나이므로 항상 env 0이다. 학습 중 부모 <span cla
 <span class="docutils literal">Se2Gamepad</span> 는 Omniverse gamepad interface를 직접 사용하므로 ROS 2 <span class="docutils literal">joy_node</span>, Isaac Sim ROS 2 Bridge,
 <span class="docutils literal">/joy</span> subscriber 또는 별도 IPC가 필요하지 않다.</p>
 <p>Gamepad 실행:</p>
-<pre class="code bash literal-block"><code>./isaaclab.sh -p /home/rclab/rok4_lab/scripts/rsl_rl/play_teleop.py <span class="literal string escape">\
+<pre class="code bash literal-block"><code>./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4_LAB_ROOT</span><span class="literal string interpol">}</span>/scripts/rsl_rl/play_teleop.py <span class="literal string escape">\
 </span>  --task RoK4-Isaac-Velocity-Flat-Teleop-v0 <span class="literal string escape">\
 </span>  --teleop_device gamepad <span class="literal string escape">\
 </span>  --teleop_dead_zone <span class="literal number">0</span>.05 <span class="literal string escape">\
@@ -2100,7 +2299,7 @@ Teleop은 env가 하나이므로 항상 env 0이다. 학습 중 부모 <span cla
 방향이 일치한다. 정규화된 입력은 <span class="docutils literal"><span class="pre">[-1,</span> 1]</span> 로 clip한 뒤 학습 범위
 <span class="docutils literal"><span class="pre">vx=(-0.3,</span> 0.85) m/s</span>, <span class="docutils literal"><span class="pre">vy=(-0.3,</span> 0.3) m/s</span>, <span class="docutils literal"><span class="pre">wz=(-0.6,</span> 0.6) rad/s</span> 로 scale한다.</p>
 <p>Keyboard 실행:</p>
-<pre class="code bash literal-block"><code>./isaaclab.sh -p /home/rclab/rok4_lab/scripts/rsl_rl/play_teleop.py <span class="literal string escape">\
+<pre class="code bash literal-block"><code>./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4_LAB_ROOT</span><span class="literal string interpol">}</span>/scripts/rsl_rl/play_teleop.py <span class="literal string escape">\
 </span>  --task RoK4-Isaac-Velocity-Flat-Teleop-v0 <span class="literal string escape">\
 </span>  --teleop_device keyboard <span class="literal string escape">\
 </span>  --checkpoint /path/to/model.pt <span class="literal string escape">\
@@ -2121,7 +2320,7 @@ command를 유지한 상태에서 실제 scale된 command와 로봇의 측정 �
 command tracking과 외란 복원을 동시에 확인할 수 있다.</p>
 </section>
 </section>
-<section id="id4">
+<section id="id5">
 <h2>수정된 기존 파일</h2>
 <section id="source-rok4-tasks-rok4-tasks-init-py">
 <h3><span class="docutils literal">source/rok4_tasks/rok4_tasks/__init__.py</span></h3>
@@ -2143,11 +2342,11 @@ environment 및 queue 적용 흐름도 문서화했다.</p>
 <p><span class="docutils literal">Unreleased</span> 항목에 RoK4 flat RSL-RL task 추가 내용을 기록했다.</p>
 </section>
 </section>
-<section id="id5">
+<section id="id6">
 <h2>학습 실행 흐름</h2>
 <p>학습 명령을 실행하면 전체 흐름은 다음과 같다.</p>
 <pre class="code text literal-block"><code>./isaaclab.sh
-  -&gt; /home/rclab/rok4_lab/scripts/rsl_rl/train.py
+  -&gt; ${ROK4_LAB_ROOT}/scripts/rsl_rl/train.py
     -&gt; _run_isaaclab_rsl.py
       -&gt; sys.path에 rok4_tasks 추가
       -&gt; Isaac Lab 원본 train.py 실행
@@ -2162,10 +2361,10 @@ environment 및 queue 적용 흐름도 문서화했다.</p>
         -&gt; RoK4PPO 학습
           -&gt; Loss/kl, Loss/kl_max 기록</code></pre>
 </section>
-<section id="id6">
+<section id="id7">
 <h2>스모크 테스트 결과</h2>
 <p>다음 smoke test를 수행했다.</p>
-<pre class="code bash literal-block"><code>./isaaclab.sh -p /home/rclab/rok4_lab/scripts/rsl_rl/train.py <span class="literal string escape">\
+<pre class="code bash literal-block"><code>./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4_LAB_ROOT</span><span class="literal string interpol">}</span>/scripts/rsl_rl/train.py <span class="literal string escape">\
 </span>  --task RoK4-Isaac-Velocity-Flat-v0 <span class="literal string escape">\
 </span>  --num_envs <span class="literal number">2</span> <span class="literal string escape">\
 </span>  --max_iterations <span class="literal number">1</span> <span class="literal string escape">\
@@ -2204,12 +2403,12 @@ environment 및 queue 적용 흐름도 문서화했다.</p>
 <td><p>성공</p></td>
 </tr>
 <tr><td><p>생성 checkpoint</p></td>
-<td><p><span class="docutils literal"><span class="pre">/home/rclab/IsaacLab/logs/rsl_rl/rok4_flat/2026-07-07_13-44-26/model_0.pt</span></span></p></td>
+<td><p><span class="docutils literal"><span class="pre">${ISAACLAB_ROOT}/logs/rsl_rl/rok4_flat/2026-07-07_13-44-26/model_0.pt</span></span></p></td>
 </tr>
 </tbody>
 </table>
 </section>
-<section id="id7">
+<section id="id8">
 <h2>현재 설계 의도</h2>
 <p>현재 task는 최종 rough terrain 정책이 아니다. 첫 번째 목표는 원인 분리가 쉬운 flat walking baseline이다.</p>
 <p>현재 단계에서 의도적으로 넣지 않은 항목은 다음과 같다.</p>
@@ -2228,29 +2427,28 @@ teacher-student distillation
 5. weak rough terrain curriculum
 6. estimator 또는 teacher-student 구조 추가</code></pre>
 </section>
-<section id="id8">
+<section id="id9">
 <h2>주요 실행 명령어</h2>
 <p>Smoke test:</p>
-<pre class="code bash literal-block"><code><span class="name builtin">cd</span> /home/rclab/rok4_lab
-<span class="name variable">ROK4LAB_DIR</span><span class="operator">=</span><span class="keyword">$(</span><span class="name builtin">pwd</span><span class="keyword">)</span>
-
-<span class="name builtin">cd</span> /home/rclab/IsaacLab
+<pre class="code bash literal-block"><code><span class="name builtin">export</span> <span class="name variable">ROK4_LAB_ROOT</span><span class="operator">=</span><span class="literal string double">&quot;</span><span class="literal string interpol">${</span><span class="name variable">HOME</span><span class="literal string interpol">}</span><span class="literal string double">/rok4_lab&quot;</span>
+<span class="name builtin">export</span> <span class="name variable">ISAACLAB_ROOT</span><span class="operator">=</span><span class="literal string double">&quot;</span><span class="literal string interpol">${</span><span class="name variable">HOME</span><span class="literal string interpol">}</span><span class="literal string double">/IsaacLab&quot;</span>
+<span class="name builtin">cd</span> <span class="literal string double">&quot;</span><span class="literal string interpol">${</span><span class="name variable">ISAACLAB_ROOT</span><span class="literal string interpol">}</span><span class="literal string double">&quot;</span>
 conda activate env_isaaclab
 
-./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4LAB_DIR</span><span class="literal string interpol">}</span>/scripts/rsl_rl/train.py <span class="literal string escape">\
+./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4_LAB_ROOT</span><span class="literal string interpol">}</span>/scripts/rsl_rl/train.py <span class="literal string escape">\
 </span>  --task RoK4-Isaac-Velocity-Flat-v0 <span class="literal string escape">\
 </span>  --num_envs <span class="literal number">2</span> <span class="literal string escape">\
 </span>  --max_iterations <span class="literal number">1</span> <span class="literal string escape">\
 </span>  --headless</code></pre>
 <p>Normal training:</p>
-<pre class="code bash literal-block"><code>./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4LAB_DIR</span><span class="literal string interpol">}</span>/scripts/rsl_rl/train.py <span class="literal string escape">\
+<pre class="code bash literal-block"><code>./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4_LAB_ROOT</span><span class="literal string interpol">}</span>/scripts/rsl_rl/train.py <span class="literal string escape">\
 </span>  --task RoK4-Isaac-Velocity-Flat-v0 <span class="literal string escape">\
 </span>  --num_envs <span class="literal number">4096</span> <span class="literal string escape">\
 </span>  --max_iterations <span class="literal number">5000</span> <span class="literal string escape">\
 </span>  --headless <span class="literal string escape">\
 </span>  --run_name symmetry_aug_fresh</code></pre>
 <p>Training with periodic video:</p>
-<pre class="code bash literal-block"><code>./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4LAB_DIR</span><span class="literal string interpol">}</span>/scripts/rsl_rl/train.py <span class="literal string escape">\
+<pre class="code bash literal-block"><code>./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4_LAB_ROOT</span><span class="literal string interpol">}</span>/scripts/rsl_rl/train.py <span class="literal string escape">\
 </span>  --task RoK4-Isaac-Velocity-Flat-v0 <span class="literal string escape">\
 </span>  --num_envs <span class="literal number">4096</span> <span class="literal string escape">\
 </span>  --max_iterations <span class="literal number">5000</span> <span class="literal string escape">\
@@ -2264,21 +2462,21 @@ policy에서 위 설정은 5초 영상을 100초의 simulation time마다 기록
 저장한다. Headless 녹화는 config에 설정된 고정 camera를 사용하므로 학습 중 대화식 zoom/회전은 할 수 없고,
 rendering으로 인해 GPU·학습시간·저장공간 overhead가 추가된다.</p>
 <p>Play:</p>
-<pre class="code bash literal-block"><code>./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4LAB_DIR</span><span class="literal string interpol">}</span>/scripts/rsl_rl/play.py <span class="literal string escape">\
+<pre class="code bash literal-block"><code>./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4_LAB_ROOT</span><span class="literal string interpol">}</span>/scripts/rsl_rl/play.py <span class="literal string escape">\
 </span>  --task RoK4-Isaac-Velocity-Flat-Play-v0 <span class="literal string escape">\
 </span>  --num_envs <span class="literal number">16</span> <span class="literal string escape">\
 </span>  --checkpoint /path/to/model.pt</code></pre>
 <p>실행 후 <span class="docutils literal">RoK4 Push Test</span> frame에서 <span class="docutils literal">Delta velocity [m/s]</span> 를 정하고 방향 버튼을 누른다. 여러 env를
 띄운 경우 <span class="docutils literal">Viewer Settings &gt; Environment Index</span> 로 push 대상 env를 먼저 선택한다.</p>
 <p>Teleop with gamepad:</p>
-<pre class="code bash literal-block"><code>./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4LAB_DIR</span><span class="literal string interpol">}</span>/scripts/rsl_rl/play_teleop.py <span class="literal string escape">\
+<pre class="code bash literal-block"><code>./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4_LAB_ROOT</span><span class="literal string interpol">}</span>/scripts/rsl_rl/play_teleop.py <span class="literal string escape">\
 </span>  --task RoK4-Isaac-Velocity-Flat-Teleop-v0 <span class="literal string escape">\
 </span>  --teleop_device gamepad <span class="literal string escape">\
 </span>  --teleop_dead_zone <span class="literal number">0</span>.05 <span class="literal string escape">\
 </span>  --checkpoint /path/to/model.pt <span class="literal string escape">\
 </span>  --real-time</code></pre>
 <p>Teleop with keyboard:</p>
-<pre class="code bash literal-block"><code>./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4LAB_DIR</span><span class="literal string interpol">}</span>/scripts/rsl_rl/play_teleop.py <span class="literal string escape">\
+<pre class="code bash literal-block"><code>./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4_LAB_ROOT</span><span class="literal string interpol">}</span>/scripts/rsl_rl/play_teleop.py <span class="literal string escape">\
 </span>  --task RoK4-Isaac-Velocity-Flat-Teleop-v0 <span class="literal string escape">\
 </span>  --teleop_device keyboard <span class="literal string escape">\
 </span>  --checkpoint /path/to/model.pt <span class="literal string escape">\

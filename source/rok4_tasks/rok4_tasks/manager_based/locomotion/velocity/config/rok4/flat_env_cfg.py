@@ -26,6 +26,8 @@ from rok4_tasks.manager_based.locomotion.velocity.config.rok4.contact_force_visu
     RoK4ContactForceVisualizer,
 )
 from rok4_tasks.manager_based.locomotion.velocity.config.rok4.domain_randomization_cfg import (
+    ROK4_NOMINAL_DYNAMIC_FRICTION,
+    ROK4_NOMINAL_STATIC_FRICTION,
     apply_rok4_domain_randomization,
 )
 from rok4_tasks.manager_based.locomotion.velocity.config.rok4.push_test_window import (
@@ -176,11 +178,11 @@ class RoK4RewardsCfg(RewardsCfg):
     )
     feet_air_time = RewTerm(
         func=mdp.feet_air_time_positive_biped,
-        weight=0.75,
+        weight=0.5,
         params={
             "command_name": "base_velocity",
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["L_Foot_Link", "R_Foot_Link"]),
-            "threshold": 0.4,
+            "threshold": 0.65,
         },
     )
     no_jumps = RewTerm(
@@ -248,6 +250,11 @@ class RoK4RewardsCfg(RewardsCfg):
         func=mdp.joint_deviation_l1,
         weight=-0.05,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Hip_Yaw_Joint", ".*_Hip_Roll_Joint"])},
+    )
+    joint_deviation_hip_pitch = RewTerm(
+        func=mdp.joint_deviation_l1,
+        weight=-0.01,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Hip_Pitch_Joint"])},
     )
     joint_deviation_torso = RewTerm(
         func=mdp.joint_deviation_l1,
@@ -379,6 +386,15 @@ class RoK4FlatEnvCfg_PLAY(RoK4FlatEnvCfg):
         self.observations.policy.enable_corruption = False
         self.events.base_external_force_torque = None
         self.events.push_robot = None
+        self.events.joint_physics = None
+        # Keep checkpoint evaluation deterministic at the nominal 0.8/0.6 Foot friction.
+        self.events.physics_material.params["static_friction_range"] = (
+            ROK4_NOMINAL_STATIC_FRICTION,
+            ROK4_NOMINAL_STATIC_FRICTION,
+        )
+        self.events.physics_material.params["dynamic_friction_ratio"] = (
+            ROK4_NOMINAL_DYNAMIC_FRICTION / ROK4_NOMINAL_STATIC_FRICTION
+        )
         self.commands.base_velocity.periodic_freeze_enabled = False
         self.commands.base_velocity.ranges.lin_vel_x = (0.0, 0.0)
         self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)

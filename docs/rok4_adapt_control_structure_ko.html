@@ -556,16 +556,32 @@ a { text-decoration: none; }
 <dd><p>2026-07-16</p>
 </dd>
 <dt>최종 업데이트</dt>
-<dd><p>2026-07-27</p>
+<dd><p>2026-07-30</p>
 </dd>
 <dt>대상 저장소</dt>
-<dd><p><span class="docutils literal">/home/rclab/rok4_lab</span></p>
+<dd><p>RoK4 repository root (<span class="docutils literal">${ROK4_LAB_ROOT}</span>)</p>
 </dd>
 <dt>기준 환경</dt>
 <dd><p>Isaac Lab v2.3.2, Isaac Sim 5.1.0, <span class="docutils literal">env_isaaclab</span></p>
 </dd>
 </dl>
-<section id="id1">
+<style>
+@media print {
+  body, main {
+    background-color: white;
+  }
+  pre.code {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+</style><section id="id1">
+<h2>경로 표기</h2>
+<p><span class="docutils literal">${ROK4_LAB_ROOT}</span> 는 특정 사용자 홈 경로가 아니라 이 저장소를 clone한 실제 root를 뜻한다.</p>
+<pre class="code bash literal-block"><code><span class="name builtin">export</span> <span class="name variable">ROK4_LAB_ROOT</span><span class="operator">=</span><span class="literal string double">&quot;</span><span class="literal string interpol">${</span><span class="name variable">HOME</span><span class="literal string interpol">}</span><span class="literal string double">/rok4_lab&quot;</span>
+<span class="name builtin">export</span> <span class="name variable">ISAACLAB_ROOT</span><span class="operator">=</span><span class="literal string double">&quot;</span><span class="literal string interpol">${</span><span class="name variable">HOME</span><span class="literal string interpol">}</span><span class="literal string double">/IsaacLab&quot;</span></code></pre>
+</section>
+<section id="id2">
 <h2>문서 목적</h2>
 <p>이 문서는 RoK4의 policy action이 ADAPT actuator position target을 거쳐 PhysX joint effort가 되기까지의 전체
 제어 경로를 설명한다. 특히 다음처럼 코드만 보면 혼동하기 쉬운 부분을 구분한다.</p>
@@ -583,7 +599,7 @@ pre-domain-randomization 및 pre-observation-noise-tuning reference다.</p>
 <li><p><span class="docutils literal">compute()</span> 출력에서 position/velocity를 <span class="docutils literal">None</span> 으로 만드는 것은 PhysX drive를 끄기 위한 별도 단계다.</p></li>
 </ul>
 </section>
-<section id="id2">
+<section id="id3">
 <h2>관련 파일과 역할</h2>
 <table>
 <colgroup>
@@ -637,7 +653,7 @@ Runtime reference
 <p>따라서 action과 actuator는 같은 <span class="docutils literal">RoK4AdaptTransmission</span> instance를 공유한다. Action target과 actuator PD가
 서로 다른 ADAPT 행렬을 별도로 만들지 않으므로 링크 길이나 행렬 정의가 어긋나지 않는다.</p>
 </section>
-<section id="id3">
+<section id="id4">
 <h2>좌표 순서와 변환 대상</h2>
 <p>모든 policy/ADAPT 계산은 <span class="docutils literal">rok4.py</span> 의 <span class="docutils literal">ROK4_JOINT_ORDER</span> 를 기준으로 한다.</p>
 <pre class="code text literal-block"><code>index 0   L_Hip_Yaw_Joint       direct
@@ -991,7 +1007,7 @@ current q, q_dot + q_target + zero velocity/effort targets
   -&gt; joint torque tau_q
   -&gt; PhysX joint effort</code></pre>
 </section>
-<section id="id4">
+<section id="id5">
 <h2>검증 포인트</h2>
 <ul class="simple">
 <li><p>Action Manager 출력 dimension은 13이어야 한다.</p></li>
@@ -1008,7 +1024,7 @@ current q, q_dot + q_target + zero velocity/effort targets
 <h2>Isaac Lab 원본과의 경계</h2>
 <p>이 구현은 Isaac Lab 원본 source를 수정하지 않는다. RoK4 로컬 class가 Isaac Lab public actuator/action interface를
 상속하고, Isaac Lab <span class="docutils literal">Articulation</span> 이 제공하는 target/state 전달 경로를 그대로 사용한다. 변경 대상은 모두
-<span class="docutils literal">/home/rclab/rok4_lab</span> 내부다.</p>
+<span class="docutils literal">${ROK4_LAB_ROOT}</span> 내부다.</p>
 </section>
 </main>
 </body>
