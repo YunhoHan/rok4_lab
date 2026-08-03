@@ -2,7 +2,7 @@ RoK4 Reward Structure
 =============================================================
 
 작성일: 2026-07-15
-최종 업데이트: 2026-08-03
+최종 업데이트: 2026-08-04
 
 .. raw:: html
 
@@ -729,6 +729,41 @@ RoK4 flat task는 Isaac Lab의 ``TerminationsCfg`` 를 수정하지 않고 로�
 적용되지 않는다. 여러 body가 동시에 접촉해도 termination flag는 boolean이므로 termination penalty는 한 번만
 적용된다. Contact sensor는 상대 물체 종류를 구분하지 않은 net contact force를 사용하므로 self-collision으로
 선택 body에 큰 접촉력이 생겨도 종료될 수 있다.
+
+Touchdown air-time 로그 해석
+------------------------------------------------------
+
+Directional-gait 기준 run
+``2026-08-03_14-58-46_touchdown_air_symmetric_x_fastforward_fresh20k`` 의
+``Episode_Reward/feet_air_time`` 은 다음처럼 변했다.
+
+.. list-table:: Touchdown feet-air-time checkpoint 값
+   :header-rows: 1
+
+   * - checkpoint
+     - logged reward
+   * - ``model_9999.pt``
+     - ``0.00278``
+   * - ``model_14999.pt``
+     - ``0.00244``
+   * - ``model_19999.pt``
+     - ``0.00297``
+   * - 마지막 500 iteration 평균
+     - ``0.00272``
+
+이 scalar는 발의 평균 air-time 초 단위 값이 아니다. Reward Manager가 기록하는 episode-normalized 값에는
+policy ``dt=0.01 s``, reward ``weight=0.5``, 유효 touchdown 빈도, 완료된 air-time, planar moving-command
+mask가 함께 들어간다. 개념적으로 다음 곱에 가깝다.
+
+.. math::
+
+   \bar r_{air} \approx 0.01 \cdot 0.5 \cdot
+   f_{touchdown} \cdot \mathbb{E}[\min(T_{air}, 0.65)] \cdot p_{moving}
+
+규칙적인 교대 보행에서는 touchdown 빈도와 step air-time이 서로 반비례할 수 있으므로 이 scalar 하나로
+``T_air`` 을 역산할 수 없다. 또한 10k, 15k, 20k 값이 단조 증가하지 않아도 보행이 악화되었다는 뜻이 아니다.
+정확한 air-time이 필요하면 좌우 발별 touchdown ``last_air_time`` 평균/중앙값/상위 백분위, 초당 touchdown
+횟수, ``0.65 s`` cap 도달 비율을 별도 metric으로 기록해야 한다.
 
 현재 설계 의도
 ------------------------------------------------------

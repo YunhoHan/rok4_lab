@@ -2,13 +2,20 @@
 
 Current project version: `0.2.0`
 
-Flat walking baseline: `Yunho Symmetry ADAPT v1` (experimental)
+Flat walking baseline: `Yunho Directional Touchdown ADAPT v1` (experimental)
 
-Current actuator-space reference policy: run
-`2026-07-24_19-34-26_symmetry_aug_nojumps2_swing_roll100_fresh`, checkpoint `model_9999.pt`
+Current directional-gait reference policy: run
+`2026-08-03_14-58-46_touchdown_air_symmetric_x_fastforward_fresh20k`, checkpoint `model_19999.pt`.
+Teleop evaluation confirmed stable forward, backward, lateral, and yaw motion. Checkpoints `model_9999.pt` and
+`model_14999.pt` remain useful comparison points, but the TensorBoard tracking metrics are effectively converged by
+15k and contact/sliding terms receive only small additional improvements by 20k.
 
-This checkpoint is the pre-DR/noise-tuning reference. The next experiments modify domain randomization and policy
-observation noise while preserving this baseline for behavior comparison.
+The previous Sim2Sim-validated reference remains run
+`2026-07-30_00-50-43_adapt_reset_jointphysics_footdr_fresh`, checkpoint `model_5000.pt`. Preserve both the checkpoint
+and its exported ONNX separately; exporting another checkpoint rewrites the run's default `exported/policy.onnx`.
+
+The next experiment extends critic-only privileged observations on a new branch and starts a fresh 20k run. It must
+not change the 240-value actor observation or 13-value actuator action contract, and it does not replace this baseline.
 
 Previous joint-space reference policy: run `2026-07-15_17-28-41`, checkpoint `model_4999.pt`
 
@@ -87,6 +94,17 @@ Project notes are kept in `docs/` as editable RST/HTML files and generated PDFs:
 | `docs/_build/pdf/rok4_reward_structure_ko.pdf` | RoK4 reward terms, inherited reward settings, reward/DR separation, and reward function meanings. |
 | `docs/_build/pdf/rok4_adapt_control_structure_ko.pdf` | ADAPT matrices, action/actuator object relationships, target/state origins, explicit PD call flow, and torque limits. |
 | `docs/_build/pdf/rok4_randomization_and_noise_ko.pdf` | Observation noise, reset randomization, physics DR, sampling cadence, and Train/Play/Teleop differences. |
+
+The development branches intentionally remain independent:
+
+| Branch | Purpose |
+| --- | --- |
+| `main` | Published symmetric ADAPT walking baseline. |
+| `yunho/adapt-actuator-interface` | Historical actuator-interface development line. |
+| `yunho/symmetry-augmentation` | Sim2Sim-validated symmetry and DR baseline. |
+| `yunho/directional-gait-rework` | Touchdown air-time and directional command-role baseline described here. |
+
+Documentation updates on one branch do not imply merging or moving the other branch pointers.
 
 Documentation uses `${ROK4_LAB_ROOT}` for this repository root and `${ISAACLAB_ROOT}` for the Isaac Lab repository
 root. Set them to the actual clone locations instead of copying a machine-specific `/home/<user>/...` path:

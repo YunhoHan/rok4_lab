@@ -836,7 +836,7 @@ span.boxed, span.framebox {
 <dd><p>2026-07-15</p>
 </dd>
 <dt>최종 업데이트</dt>
-<dd><p>2026-08-03</p>
+<dd><p>2026-08-04</p>
 </dd>
 <dt>대상 저장소</dt>
 <dd><p>RoK4 repository root (<span class="docutils literal">${ROK4_LAB_ROOT}</span>)</p>
@@ -2412,6 +2412,64 @@ environment 및 queue 적용 흐름도 문서화했다.</p>
 </tr>
 </tbody>
 </table>
+</section>
+<section id="directional-gait-20k">
+<h2>Directional gait 20k 검증 기준</h2>
+<p>현재 directional-gait 기준 run은 다음과 같다.</p>
+<pre class="code text literal-block"><code>run        : 2026-08-03_14-58-46_touchdown_air_symmetric_x_fastforward_fresh20k
+checkpoint : model_19999.pt
+branch     : yunho/directional-gait-rework</code></pre>
+<p>Teleop에서 전진, 후진, 좌우 횡이동, 양방향 yaw 회전을 확인했다. 아래 값은 각 checkpoint step에서 기록된
+TensorBoard scalar이며, reward 설정이 다른 run과 <span class="docutils literal">Train/mean_reward</span> 만 직접 비교해서는 안 된다.</p>
+<table class="colwidths-given">
+<caption>Directional gait checkpoint 비교</caption>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>checkpoint</p></th>
+<th class="head"><p>mean reward</p></th>
+<th class="head"><p>XY velocity error</p></th>
+<th class="head"><p>yaw velocity error</p></th>
+<th class="head"><p>feet slide</p></th>
+<th class="head"><p>policy noise std</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p><span class="docutils literal">model_9999.pt</span></p></td>
+<td><p><span class="docutils literal">37.82</span></p></td>
+<td><p><span class="docutils literal">0.114</span></p></td>
+<td><p><span class="docutils literal">0.149</span></p></td>
+<td><p><span class="docutils literal"><span class="pre">-0.00564</span></span></p></td>
+<td><p><span class="docutils literal">0.0709</span></p></td>
+</tr>
+<tr><td><p><span class="docutils literal">model_14999.pt</span></p></td>
+<td><p><span class="docutils literal">38.34</span></p></td>
+<td><p><span class="docutils literal">0.091</span></p></td>
+<td><p><span class="docutils literal">0.138</span></p></td>
+<td><p><span class="docutils literal"><span class="pre">-0.00417</span></span></p></td>
+<td><p><span class="docutils literal">0.0669</span></p></td>
+</tr>
+<tr><td><p><span class="docutils literal">model_19999.pt</span></p></td>
+<td><p><span class="docutils literal">38.35</span></p></td>
+<td><p><span class="docutils literal">0.093</span></p></td>
+<td><p><span class="docutils literal">0.139</span></p></td>
+<td><p><span class="docutils literal"><span class="pre">-0.00343</span></span></p></td>
+<td><p><span class="docutils literal">0.0697</span></p></td>
+</tr>
+</tbody>
+</table>
+<p>Tracking은 약 15k에서 사실상 plateau에 도달했고, 15k에서 20k 사이에는 sliding, jump, orientation 같은
+contact-related term이 조금 더 정돈되었다. 따라서 현재 기준 checkpoint는 <span class="docutils literal">model_19999.pt</span> 로 보존하되,
+새 실험에서도 <span class="docutils literal">model_9999.pt</span>, <span class="docutils literal">model_14999.pt</span>, <span class="docutils literal">model_19999.pt</span> 를 모두 비교한다.</p>
+<p>다음 실험은 별도 branch에서 critic-only privileged observation을 확장하고 fresh <span class="docutils literal">20,000</span> iteration으로
+학습한다. 현재 actor의 240차원 입력, 13차원 actuator action, reward, command 역할을 그대로 둔 상태에서 critic
+입력 효과만 비교해야 한다. 기존 branch를 merge하거나 기존 checkpoint를 resume하여 교정하는 실험이 아니다.</p>
 </section>
 <section id="id8">
 <h2>현재 설계 의도</h2>

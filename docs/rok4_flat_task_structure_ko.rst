@@ -2,7 +2,7 @@ RoK4 Flat RSL-RL Task 구조 문서
 ========================================================================
 
 :작성일: 2026-07-15
-:최종 업데이트: 2026-08-03
+:최종 업데이트: 2026-08-04
 :대상 저장소: RoK4 repository root (``${ROK4_LAB_ROOT}``)
 :기준 환경: Isaac Lab v2.3.2, Isaac Sim 5.1.0, ``env_isaaclab``
 
@@ -1547,6 +1547,57 @@ environment 및 queue 적용 흐름도 문서화했다.
      - 성공
    * - 생성 checkpoint
      - ``${ISAACLAB_ROOT}/logs/rsl_rl/rok4_flat/2026-07-07_13-44-26/model_0.pt``
+
+Directional gait 20k 검증 기준
+------------------------------------------------------
+
+현재 directional-gait 기준 run은 다음과 같다.
+
+.. code-block:: text
+
+   run        : 2026-08-03_14-58-46_touchdown_air_symmetric_x_fastforward_fresh20k
+   checkpoint : model_19999.pt
+   branch     : yunho/directional-gait-rework
+
+Teleop에서 전진, 후진, 좌우 횡이동, 양방향 yaw 회전을 확인했다. 아래 값은 각 checkpoint step에서 기록된
+TensorBoard scalar이며, reward 설정이 다른 run과 ``Train/mean_reward`` 만 직접 비교해서는 안 된다.
+
+.. list-table:: Directional gait checkpoint 비교
+   :header-rows: 1
+   :widths: 18 14 14 14 14 14
+
+   * - checkpoint
+     - mean reward
+     - XY velocity error
+     - yaw velocity error
+     - feet slide
+     - policy noise std
+   * - ``model_9999.pt``
+     - ``37.82``
+     - ``0.114``
+     - ``0.149``
+     - ``-0.00564``
+     - ``0.0709``
+   * - ``model_14999.pt``
+     - ``38.34``
+     - ``0.091``
+     - ``0.138``
+     - ``-0.00417``
+     - ``0.0669``
+   * - ``model_19999.pt``
+     - ``38.35``
+     - ``0.093``
+     - ``0.139``
+     - ``-0.00343``
+     - ``0.0697``
+
+Tracking은 약 15k에서 사실상 plateau에 도달했고, 15k에서 20k 사이에는 sliding, jump, orientation 같은
+contact-related term이 조금 더 정돈되었다. 따라서 현재 기준 checkpoint는 ``model_19999.pt`` 로 보존하되,
+새 실험에서도 ``model_9999.pt``, ``model_14999.pt``, ``model_19999.pt`` 를 모두 비교한다.
+
+다음 실험은 별도 branch에서 critic-only privileged observation을 확장하고 fresh ``20,000`` iteration으로
+학습한다. 현재 actor의 240차원 입력, 13차원 actuator action, reward, command 역할을 그대로 둔 상태에서 critic
+입력 효과만 비교해야 한다. 기존 branch를 merge하거나 기존 checkpoint를 resume하여 교정하는 실험이 아니다.
 
 현재 설계 의도
 ------------------------------------------------------

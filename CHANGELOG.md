@@ -4,6 +4,9 @@
 
 ### Changed
 
+- Recorded the 20k directional-gait reference run and its 10k/15k/20k TensorBoard comparison, and documented that
+  the next critic-only privileged-observation experiment starts fresh on a separate branch without merging the
+  existing baseline branches.
 - Changed feet-air-time shaping from dense single-stance rewards to a capped one-shot reward when exactly one foot
   touches down, preventing prolonged one-foot support from collecting the saturated value every policy step.
 - Split dedicated sagittal commands into symmetric low-speed `vx=+/-[0.15, 0.30] m/s` roles and a separate 5%
