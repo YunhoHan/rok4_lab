@@ -22,6 +22,24 @@ ROK4_RELAXED_ACTION_IDS = (2, 3, 8, 9)
 """Actuator indices with reduced physical effort and state penalties."""
 
 
+def feet_air_time_touchdown_biped(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    threshold: float,
+    sensor_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Reward completed swing time once when exactly one foot touches down."""
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+
+    first_contact = contact_sensor.compute_first_contact(env.step_dt)[:, sensor_cfg.body_ids]
+    last_air_time = contact_sensor.data.last_air_time[:, sensor_cfg.body_ids]
+    single_touchdown = torch.sum(first_contact.int(), dim=1) == 1
+    reward = torch.sum(torch.clamp(last_air_time, min=0.0, max=threshold) * first_contact, dim=1)
+    reward *= single_touchdown
+    reward *= torch.linalg.vector_norm(env.command_manager.get_command(command_name)[:, :2], dim=1) > 0.1
+    return reward
+
+
 def feet_flat_orientation_l2(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg,

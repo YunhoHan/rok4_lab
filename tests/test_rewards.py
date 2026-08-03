@@ -108,6 +108,60 @@ def test_lateral_separation_penalizes_narrow_and_crossed_feet_in_all_command_sta
     torch.testing.assert_close(penalty, torch.tensor([0.0, 0.0144, 0.0676, 0.0676]))
 
 
+def test_feet_air_time_rewards_single_touchdown_once_and_masks_small_commands() -> None:
+    """Completed air time must be paid only for one-foot touchdown under a moving command."""
+
+    class _ContactSensorStub:
+        def __init__(self):
+            self.data = SimpleNamespace(
+                last_air_time=torch.tensor(
+                    [
+                        [0.80, 0.20],
+                        [0.10, 0.40],
+                        [0.60, 0.70],
+                        [0.50, 0.20],
+                        [0.50, 0.20],
+                    ]
+                )
+            )
+
+        def compute_first_contact(self, dt: float) -> torch.Tensor:
+            assert dt == 0.01
+            return torch.tensor(
+                [
+                    [True, False],
+                    [False, True],
+                    [True, True],
+                    [True, False],
+                    [False, False],
+                ]
+            )
+
+    commands = torch.tensor(
+        [
+            [0.20, 0.00, 0.00],
+            [0.00, 0.20, 0.00],
+            [0.20, 0.00, 0.00],
+            [0.05, 0.00, 0.00],
+            [0.20, 0.00, 0.00],
+        ]
+    )
+    env = SimpleNamespace(
+        step_dt=0.01,
+        scene=_SceneStub(entities={}, sensors={"contact_forces": _ContactSensorStub()}),
+        command_manager=SimpleNamespace(get_command=lambda _name: commands),
+    )
+
+    reward = _REWARDS.feet_air_time_touchdown_biped(
+        env,
+        command_name="base_velocity",
+        threshold=0.65,
+        sensor_cfg=_SceneEntityCfgStub("contact_forces"),
+    )
+
+    torch.testing.assert_close(reward, torch.tensor([0.65, 0.40, 0.0, 0.0, 0.0]))
+
+
 def test_feet_swing_roll_penalizes_only_airborne_feet(monkeypatch) -> None:
     """Swing-foot roll must be penalized without constraining feet that are in contact."""
 

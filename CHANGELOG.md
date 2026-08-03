@@ -4,6 +4,10 @@
 
 ### Changed
 
+- Changed feet-air-time shaping from dense single-stance rewards to a capped one-shot reward when exactly one foot
+  touches down, preventing prolonged one-foot support from collecting the saturated value every policy step.
+- Split dedicated sagittal commands into symmetric low-speed `vx=+/-[0.15, 0.30] m/s` roles and a separate 5%
+  forward-only `vx=[0.30, 0.85] m/s` role while leaving lateral separation constraints unchanged.
 - Changed the feet-air-time reward from `weight=0.75, threshold=0.4 s` to `weight=0.5, threshold=0.65 s` to encourage
   slower, longer steps while keeping its maximum pre-`dt` contribution close to the previous value.
 - Added a separate `-0.01` hip-pitch deviation penalty to mildly constrain excessive whole-leg swing without coupling

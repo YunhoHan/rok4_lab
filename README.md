@@ -449,20 +449,22 @@ episode reset, each environment independently receives one role for that episode
 
 | Code role | Motion meaning | Ratio |
 | --- | --- | ---: |
-| `mixed` | unconstrained `vx`, `vy`, and `wz` | 50% |
+| `mixed` | unconstrained `vx`, `vy`, and `wz` | 45% |
 | `standing` | exact-zero command for the full episode | 5% |
 | `walking` | continuously moving mixed command without periodic freeze | 5% |
-| `x` | sagittal forward/backward motion with only `vx` active | 10% |
+| `x` | symmetric low-speed `vx=+/-[0.15, 0.30] m/s` | 10% |
+| `fast_forward` | forward-only `vx=[0.30, 0.85] m/s` | 5% |
 | `y` | lateral left/right motion with only `vy` active | 10% |
 | `yaw` | clockwise/counter-clockwise turning with only `wz` active | 10% |
-| `x_yaw` | sagittal motion and turning with `vy=0` | 10% |
+| `x_yaw` | symmetric low-speed sagittal motion and turning with `vy=0` | 10% |
 
-The signs inside the `x`, `y`, and `yaw` roles are sampled with equal probability. The two signs of `vx` and `wz`
-are sampled independently in `x_yaw`, giving the four forward/backward and clockwise/counter-clockwise combinations.
-Dedicated commands use minimum absolute magnitudes of `0.15 m/s` for `vx` and `vy`, and `0.15 rad/s` for `wz`.
+The signs inside the `x`, `y`, and `yaw` roles are sampled with equal probability. The `x` and `x_yaw` roles limit
+`|vx|` to `[0.15, 0.30] m/s`, so `+0.3` and `-0.3 m/s` occupy the same dedicated training range. The two signs of
+`vx` and `wz` are sampled independently in `x_yaw`, giving the four forward/backward and clockwise/counter-clockwise
+combinations. The separate `fast_forward` role retains the full positive range up to `0.85 m/s`.
 
-The `mixed`, `x`, `y`, `yaw`, and `x_yaw` roles use independent random phases and independently sampled `1.5-3.0 s`
-standing windows in a `10 s` cycle. Thus 90% of environments train asynchronous moving-to-standing transitions,
+The `mixed`, `x`, `fast_forward`, `y`, `yaw`, and `x_yaw` roles use independent random phases and independently sampled
+`1.5-3.0 s` standing windows in a `10 s` cycle. Thus 90% of environments train asynchronous moving-to-standing transitions,
 while `standing` remains zero and `walking` never freezes. A normal `10 s` command resampling retains the episode
 role and samples a new command within that role; the next environment reset samples a new role. Exact-zero commands
 set the command term's standing mask, activating `stand_still_joint_deviation_l1` with weight `-0.2`.
@@ -488,10 +490,12 @@ contains one push, while an environment that terminates before `10 s` may receiv
 freeze phase are sampled independently, a push can occur while moving, during exact-zero standing, or around a command
 transition. Play and Teleop disable this automatic push event and provide the manual `RoK4 Push Test` UI instead.
 
-The positive biped feet-air-time reward uses `threshold=0.65 s` and `weight=0.5` to encourage slower, longer steps.
-The threshold saturates the raw per-step value at `0.65`; it is not a gait-period target or a cutoff that stops reward
-after `0.65 s`. A longer uninterrupted single stance continues to return `0.65` on every policy step. The maximum
-pre-`dt` contribution per step is `0.65 * 0.5 = 0.325`, close to the previous `0.4 * 0.75 = 0.30` scale.
+The RoK4-local touchdown feet-air-time reward uses `threshold=0.65 s` and `weight=0.5`. It reads each foot's completed
+`last_air_time` only when exactly one foot reports first contact, clamps that completed swing to `0.65 s`, and pays it
+once on that touchdown step. It returns zero during swing, continued support, simultaneous two-foot touchdown, and
+planar commands at or below `0.1 m/s`. Holding one foot in the air beyond `0.65 s` therefore produces no repeated reward;
+the next valid touchdown has a maximum pre-`dt` contribution of `0.65 * 0.5 = 0.325`. Because this reward is event-based,
+its TensorBoard magnitude is not directly comparable with the previous dense per-step feet-air-time term.
 
 The `no_jumps` penalty uses Isaac Lab's `mdp.desired_contacts` with weight `-2.0` and a `1.0 N` force threshold. It
 checks the recent contact-force history of both feet and returns a penalty only when neither foot has a qualifying

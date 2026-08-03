@@ -553,7 +553,7 @@ a { text-decoration: none; }
 <h1 class="title">RoK4 Reward Structure</h1>
 
 <p>작성일: 2026-07-15
-최종 업데이트: 2026-07-31</p>
+최종 업데이트: 2026-08-03</p>
 <style>
 @media print {
   @page {
@@ -907,10 +907,10 @@ TensorBoard의 <span class="docutils literal"><span class="pre">Loss/kl``(iterat
 <td><p>world frame yaw angular velocity command를 추종하게 한다.</p></td>
 </tr>
 <tr><td><p><span class="docutils literal">feet_air_time</span></p></td>
-<td><p><span class="docutils literal">mdp.feet_air_time_positive_biped</span></p></td>
+<td><p><span class="docutils literal">mdp.feet_air_time_touchdown_biped</span></p></td>
 <td><p><span class="docutils literal">0.5</span></p></td>
 <td><p>feet: <span class="docutils literal">L_Foot_Link</span>, <span class="docutils literal">R_Foot_Link</span>; <span class="docutils literal">threshold=0.65</span></p></td>
-<td><p>양발 보행에서 한 발씩 공중에 있는 느리고 긴 step pattern을 유도한다. Threshold는 single-stance를 종료하는 시간 제한이 아니라 매 step raw reward가 <span class="docutils literal">0.65</span> 에서 포화되는 기준이다.</p></td>
+<td><p>정확히 한 발이 first contact가 된 step에 완료된 air-time을 최대 <span class="docutils literal">0.65</span> 까지 한 번 지급한다. 계속 한 발을 들거나 지지하는 동안에는 반복 지급하지 않는다.</p></td>
 </tr>
 <tr><td><p><span class="docutils literal">no_jumps</span></p></td>
 <td><p><span class="docutils literal">mdp.desired_contacts</span></p></td>
@@ -1118,9 +1118,9 @@ reset 직후 첫 두 policy step은 history가 부족하므로 0으로 처리한
 <td><p>locomotion mdp</p></td>
 <td><p>world z축 angular velocity command error에 <span class="docutils literal"><span class="pre">exp(-error</span> / std^2)</span> 를 적용한다.</p></td>
 </tr>
-<tr><td><p><span class="docutils literal">feet_air_time_positive_biped</span></p></td>
-<td><p>locomotion mdp</p></td>
-<td><p>한 발 지지 상태의 air/contact time을 보상하며, command 크기가 작으면 0이 된다.</p></td>
+<tr><td><p><span class="docutils literal">feet_air_time_touchdown_biped</span></p></td>
+<td><p>RoK4 local mdp</p></td>
+<td><p>정확히 한 발이 first contact가 된 순간 <span class="docutils literal">min(last_air_time, threshold)</span> 를 한 번 반환하며, 작은 command와 양발 동시 touchdown은 0이 된다.</p></td>
 </tr>
 <tr><td><p><span class="docutils literal">desired_contacts</span></p></td>
 <td><p>Isaac Lab 공통</p></td>
@@ -1201,19 +1201,21 @@ reset 직후 첫 두 policy step은 history가 부족하므로 0으로 처리한
 <span class="name">ang_vel_z</span> <span class="operator">=</span> <span class="punctuation">(</span><span class="operator">-</span><span class="literal number float">0.6</span><span class="punctuation">,</span> <span class="literal number float">0.6</span><span class="punctuation">)</span></code></pre>
 <p><span class="docutils literal">RoK4PeriodicFreezeVelocityCommand</span> 는 episode reset마다 환경 역할을 다음 확률로 표본화한다.</p>
 <ol class="arabic simple">
-<li><p>50% <span class="docutils literal">mixed</span>: <span class="docutils literal">vx</span>, <span class="docutils literal">vy</span>, <span class="docutils literal">wz</span> 를 모두 표본화한다.</p></li>
+<li><p>45% <span class="docutils literal">mixed</span>: <span class="docutils literal">vx</span>, <span class="docutils literal">vy</span>, <span class="docutils literal">wz</span> 를 모두 표본화한다.</p></li>
 <li><p>5% <span class="docutils literal">standing</span>: episode 동안 exact-zero command를 유지한다.</p></li>
 <li><p>5% <span class="docutils literal">walking</span>: planar command norm <span class="docutils literal">0.15 m/s</span> 이상만 사용하고 freeze하지 않는다.</p></li>
-<li><p>10% <span class="docutils literal">x</span>: sagittal 전진/후진 command만 표본화한다.</p></li>
+<li><p>10% <span class="docutils literal">x</span>: <span class="docutils literal"><span class="pre">vx=+/-Uniform(0.15,</span> 0.30) m/s</span> 저속 대칭 전후진만 표본화한다.</p></li>
+<li><p>5% <span class="docutils literal">fast_forward</span>: <span class="docutils literal">vx=Uniform(0.30, 0.85) m/s</span> 고속 전진만 표본화한다.</p></li>
 <li><p>10% <span class="docutils literal">y</span>: lateral 좌/우 command만 표본화한다.</p></li>
 <li><p>10% <span class="docutils literal">yaw</span>: 시계/반시계 yaw-rate command만 표본화한다.</p></li>
-<li><p>10% <span class="docutils literal">x_yaw</span>: <span class="docutils literal">vy=0</span> 인 전후진+회전 command를 표본화한다.</p></li>
+<li><p>10% <span class="docutils literal">x_yaw</span>: <span class="docutils literal">vy=0</span> 인 저속 대칭 전후진+회전 command를 표본화한다.</p></li>
 </ol>
 <p>코드에서는 command 축과 직접 대응하는 <span class="docutils literal">x/y/yaw/x_yaw</span> 이름을 사용한다. 각 단일 축 역할은 양/음 부호를
-50:50 확률로 표본화하며 <span class="docutils literal">x_yaw</span> 의 두 부호는 독립적으로 표본화한다. 전용 역할의 최소 절댓값은 <span class="docutils literal">vx/vy</span>
-<span class="docutils literal">0.15 m/s</span>, <span class="docutils literal">wz</span> <span class="docutils literal">0.15 rad/s</span> 이다. 4096개 환경에서 각 10% 단일 축 역할은 평균 약 410개이고, 각
-부호는 평균 약 205개이므로 이전 Gym의 방향별 200개 population과 비슷한 표본 규모다.</p>
-<p><span class="docutils literal">mixed/x/y/yaw/x_yaw</span> 의 비율 합 90%는 <span class="docutils literal">10.0 s</span> cycle과 환경별 <span class="docutils literal">Uniform(1.5, 3.0) s</span> freeze duration을
+50:50 확률로 표본화하며 <span class="docutils literal">x_yaw</span> 의 두 부호는 독립적으로 표본화한다. <span class="docutils literal">x</span> 와 <span class="docutils literal">x_yaw</span> 의 <span class="docutils literal">vx</span> 는
+절댓값 <span class="docutils literal">0.15~0.30 m/s</span> 로 대칭이고, <span class="docutils literal">fast_forward</span> 가 <span class="docutils literal">0.30~0.85 m/s</span> 를 별도로 담당한다. <span class="docutils literal">vy</span> 의
+최소 절댓값은 <span class="docutils literal">0.15 m/s</span>, <span class="docutils literal">wz</span> 는 <span class="docutils literal">0.15 rad/s</span> 이다. 4096개 환경에서 각 10% 역할은 평균 약 410개이고,
+각 부호는 평균 약 205개이므로 이전 Gym의 방향별 200개 population과 비슷한 표본 규모다.</p>
+<p><span class="docutils literal">mixed/x/fast_forward/y/yaw/x_yaw</span> 의 비율 합 90%는 <span class="docutils literal">10.0 s</span> cycle과 환경별 <span class="docutils literal">Uniform(1.5, 3.0) s</span> freeze duration을
 사용한다. Random initial phase와 독립 duration 때문에 같은 PPO batch에서 moving, standing, transition을
 동시에 관측한다. Episode 중 command를 다시 표본화할 때는 역할을 유지하며, reset 때 역할 자체를 다시 무작위로
 뽑는다. 부모의 별도 standing 확률은 <span class="docutils literal">rel_standing_envs=0.0</span> 으로 비활성화한다. 작은 non-zero mixed command는
@@ -1236,7 +1238,7 @@ push 시간을 <span class="docutils literal">Uniform(10, 15) s</span> 로 표�
 전체 13관절을 default pose 근처로 유지한다. 현재 weight는 <span class="docutils literal"><span class="pre">-0.2</span></span> 이다. <span class="docutils literal"><span class="pre">-1.0</span></span> 실험은 안정적인 양발
 standing을 만들었지만 feet-air-time 감소와 foot-slide 증가가 관측되어 보행 자유도를 회복하도록 완화했다.</p>
 <p>이 command는 <span class="docutils literal">track_lin_vel_xy_exp</span>, <span class="docutils literal">track_ang_vel_z_exp</span>, <span class="docutils literal">feet_air_time</span> 에 직접 영향을 준다. 특히
-<span class="docutils literal">feet_air_time_positive_biped</span> 는 x/y command norm이 <span class="docutils literal">0.1</span> 이하이면 reward를 0으로 만든다. 즉 거의 정지
+<span class="docutils literal">feet_air_time_touchdown_biped</span> 는 x/y command norm이 <span class="docutils literal">0.1</span> 이하이면 reward를 0으로 만든다. 즉 거의 정지
 명령에서는 stepping reward가 강하게 작동하지 않는다.</p>
 <p><span class="docutils literal">UniformVelocityCommand</span> 가 반환하는 <span class="docutils literal">[lin_vel_x, lin_vel_y, ang_vel_z]</span> 는 robot base frame 기준
 command다. 따라서 양의 <span class="docutils literal">lin_vel_x</span> 는 로봇이 현재 바라보는 방향의 전진, 양의 <span class="docutils literal">lin_vel_y</span> 는 로봇 기준
@@ -1250,10 +1252,11 @@ roll/pitch를 제외한 yaw 회전만 역변환한 gravity-aligned yaw frame 속
 yaw angular velocity다. Navigation에서 목표 world heading이 필요하면 policy 외부의 상위 controller가
 heading error를 <span class="docutils literal">wz</span> 로 변환해 이 동일한 velocity interface에 전달한다.</p>
 <p>현재 <span class="docutils literal">feet_air_time</span> 은 느리고 긴 step을 유도하기 위해 <span class="docutils literal">threshold=0.65 s</span>, <span class="docutils literal">weight=0.5</span> 를 사용한다.
-따라서 최대 raw reward는 <span class="docutils literal">0.65</span> 이고, 최대 pre-<span class="docutils literal">dt</span> 항목 크기는 policy step당
-<span class="docutils literal">0.65 * 0.5 = 0.325</span> 다. 이는 이전 <span class="docutils literal">0.4 * 0.75 = 0.30</span> 과 비슷하므로 reward 최대 규모를 크게 바꾸지
-않으면서 증가 구간만 늘린다. 이 threshold는 single-stance 보상을 중단하는 cutoff가 아니다. 한발 지지가
-<span class="docutils literal">0.65 s</span> 를 넘으면 raw reward가 계속 <span class="docutils literal">0.65</span> 로 포화되어 매 policy step 지급된다.</p>
+정확히 한 발이 first contact가 된 policy step에 그 발의 완료된 <span class="docutils literal">last_air_time</span> 을 읽고
+<span class="docutils literal">min(last_air_time, 0.65)</span> 를 한 번 반환한다. 양발이 같은 step에 first contact가 되거나 planar command norm이
+<span class="docutils literal">0.1 m/s</span> 이하이면 0이다. 따라서 최대 pre-<span class="docutils literal">dt</span> event 크기는 <span class="docutils literal">0.65 * 0.5 = 0.325</span> 이지만, 한 발 지지를
+계속 유지하거나 air-time이 <span class="docutils literal">0.65 s</span> 를 넘는 동안에는 추가 reward를 받지 않는다. 이 sparse event term의
+TensorBoard 값은 이전 dense per-step term과 직접 비교할 수 없다.</p>
 <p><span class="docutils literal">no_jumps</span> 는 <span class="docutils literal">mdp.desired_contacts</span> 를 <span class="docutils literal"><span class="pre">weight=-2.0</span></span> 과 force <span class="docutils literal">threshold=1.0 N</span> 으로 사용한다.
 최근 contact-force history에서 좌우 Foot 모두 threshold를 넘지 못한 경우에만 raw value <span class="docutils literal">1</span> 을 반환하므로,
 Reward Manager에서는 해당 양발 flight interval에 음의 점수가 적용된다. 한 발이라도 접촉 중이면 0이므로 정상
@@ -1268,8 +1271,8 @@ lateral 성분 <span class="docutils literal">n_y^2 = sin^2(roll)</span> 만 pen
 각도를 평평하게 만들지 않는다.</p>
 <p>Contact sensor는 <span class="docutils literal">update_period=0.002 s</span> 와 <span class="docutils literal">history_length=self.decimation=5</span> 를 사용한다. 따라서
 <span class="docutils literal">no_jumps</span>, <span class="docutils literal">feet_slide</span>, <span class="docutils literal">undesired_contacts</span>, <span class="docutils literal">illegal_body_contact</span> 처럼 <span class="docutils literal">net_forces_w_history</span> 를 검사하는
-항목은 최근 policy interval의 5개 physics contact sample을 확인한다. 반면 <span class="docutils literal">feet_air_time_positive_biped</span> 는
-이 force history가 아니라 sensor의 현재 <span class="docutils literal">current_air_time</span> 과 <span class="docutils literal">current_contact_time</span> 을 사용한다.
+항목은 최근 policy interval의 5개 physics contact sample을 확인한다. 반면 <span class="docutils literal">feet_air_time_touchdown_biped</span> 는
+<span class="docutils literal">compute_first_contact(env.step_dt)</span> 와 완료된 <span class="docutils literal">last_air_time</span> 을 사용한다.
 이 contact-force history는 policy observation history와 별개의 buffer이다.</p>
 <p>Play 환경은 현재 standing 검증을 위해 <span class="docutils literal">lin_vel_x=0.0 m/s</span> 를 사용하고 lateral/yaw command도 0으로 고정한다. 별도의 Teleop 환경은
 긴 resampling interval을 사용하고, gamepad 또는 keyboard의

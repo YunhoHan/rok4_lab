@@ -2,7 +2,7 @@ RoK4 Reward Structure
 =============================================================
 
 작성일: 2026-07-15
-최종 업데이트: 2026-07-31
+최종 업데이트: 2026-08-03
 
 .. raw:: html
 
@@ -367,10 +367,10 @@ RoK4 전용 Reward Terms
      - ``command_name="base_velocity"``, ``std=0.5``
      - world frame yaw angular velocity command를 추종하게 한다.
    * - ``feet_air_time``
-     - ``mdp.feet_air_time_positive_biped``
+     - ``mdp.feet_air_time_touchdown_biped``
      - ``0.5``
      - feet: ``L_Foot_Link``, ``R_Foot_Link``; ``threshold=0.65``
-     - 양발 보행에서 한 발씩 공중에 있는 느리고 긴 step pattern을 유도한다. Threshold는 single-stance를 종료하는 시간 제한이 아니라 매 step raw reward가 ``0.65`` 에서 포화되는 기준이다.
+     - 정확히 한 발이 first contact가 된 step에 완료된 air-time을 최대 ``0.65`` 까지 한 번 지급한다. 계속 한 발을 들거나 지지하는 동안에는 반복 지급하지 않는다.
    * - ``no_jumps``
      - ``mdp.desired_contacts``
      - ``-2.0``
@@ -539,9 +539,9 @@ Reward Function 요약
    * - ``track_ang_vel_z_world_exp``
      - locomotion mdp
      - world z축 angular velocity command error에 ``exp(-error / std^2)`` 를 적용한다.
-   * - ``feet_air_time_positive_biped``
-     - locomotion mdp
-     - 한 발 지지 상태의 air/contact time을 보상하며, command 크기가 작으면 0이 된다.
+   * - ``feet_air_time_touchdown_biped``
+     - RoK4 local mdp
+     - 정확히 한 발이 first contact가 된 순간 ``min(last_air_time, threshold)`` 를 한 번 반환하며, 작은 command와 양발 동시 touchdown은 0이 된다.
    * - ``desired_contacts``
      - Isaac Lab 공통
      - 지정 body 중 하나라도 최근 force history에서 threshold를 넘으면 0, 모두 접촉하지 않으면 1을 반환한다. Negative weight와 함께 양발 flight penalty로 사용한다.
@@ -607,20 +607,22 @@ Command와 Reward의 연결
 
 ``RoK4PeriodicFreezeVelocityCommand`` 는 episode reset마다 환경 역할을 다음 확률로 표본화한다.
 
-1. 50% ``mixed``: ``vx``, ``vy``, ``wz`` 를 모두 표본화한다.
+1. 45% ``mixed``: ``vx``, ``vy``, ``wz`` 를 모두 표본화한다.
 2. 5% ``standing``: episode 동안 exact-zero command를 유지한다.
 3. 5% ``walking``: planar command norm ``0.15 m/s`` 이상만 사용하고 freeze하지 않는다.
-4. 10% ``x``: sagittal 전진/후진 command만 표본화한다.
-5. 10% ``y``: lateral 좌/우 command만 표본화한다.
-6. 10% ``yaw``: 시계/반시계 yaw-rate command만 표본화한다.
-7. 10% ``x_yaw``: ``vy=0`` 인 전후진+회전 command를 표본화한다.
+4. 10% ``x``: ``vx=+/-Uniform(0.15, 0.30) m/s`` 저속 대칭 전후진만 표본화한다.
+5. 5% ``fast_forward``: ``vx=Uniform(0.30, 0.85) m/s`` 고속 전진만 표본화한다.
+6. 10% ``y``: lateral 좌/우 command만 표본화한다.
+7. 10% ``yaw``: 시계/반시계 yaw-rate command만 표본화한다.
+8. 10% ``x_yaw``: ``vy=0`` 인 저속 대칭 전후진+회전 command를 표본화한다.
 
 코드에서는 command 축과 직접 대응하는 ``x/y/yaw/x_yaw`` 이름을 사용한다. 각 단일 축 역할은 양/음 부호를
-50:50 확률로 표본화하며 ``x_yaw`` 의 두 부호는 독립적으로 표본화한다. 전용 역할의 최소 절댓값은 ``vx/vy``
-``0.15 m/s``, ``wz`` ``0.15 rad/s`` 이다. 4096개 환경에서 각 10% 단일 축 역할은 평균 약 410개이고, 각
-부호는 평균 약 205개이므로 이전 Gym의 방향별 200개 population과 비슷한 표본 규모다.
+50:50 확률로 표본화하며 ``x_yaw`` 의 두 부호는 독립적으로 표본화한다. ``x`` 와 ``x_yaw`` 의 ``vx`` 는
+절댓값 ``0.15~0.30 m/s`` 로 대칭이고, ``fast_forward`` 가 ``0.30~0.85 m/s`` 를 별도로 담당한다. ``vy`` 의
+최소 절댓값은 ``0.15 m/s``, ``wz`` 는 ``0.15 rad/s`` 이다. 4096개 환경에서 각 10% 역할은 평균 약 410개이고,
+각 부호는 평균 약 205개이므로 이전 Gym의 방향별 200개 population과 비슷한 표본 규모다.
 
-``mixed/x/y/yaw/x_yaw`` 의 비율 합 90%는 ``10.0 s`` cycle과 환경별 ``Uniform(1.5, 3.0) s`` freeze duration을
+``mixed/x/fast_forward/y/yaw/x_yaw`` 의 비율 합 90%는 ``10.0 s`` cycle과 환경별 ``Uniform(1.5, 3.0) s`` freeze duration을
 사용한다. Random initial phase와 독립 duration 때문에 같은 PPO batch에서 moving, standing, transition을
 동시에 관측한다. Episode 중 command를 다시 표본화할 때는 역할을 유지하며, reset 때 역할 자체를 다시 무작위로
 뽑는다. 부모의 별도 standing 확률은 ``rel_standing_envs=0.0`` 으로 비활성화한다. 작은 non-zero mixed command는
@@ -647,7 +649,7 @@ Periodic freeze와 ``standing`` 역할은 command를 ``[0, 0, 0]`` 으로 만드
 standing을 만들었지만 feet-air-time 감소와 foot-slide 증가가 관측되어 보행 자유도를 회복하도록 완화했다.
 
 이 command는 ``track_lin_vel_xy_exp``, ``track_ang_vel_z_exp``, ``feet_air_time`` 에 직접 영향을 준다. 특히
-``feet_air_time_positive_biped`` 는 x/y command norm이 ``0.1`` 이하이면 reward를 0으로 만든다. 즉 거의 정지
+``feet_air_time_touchdown_biped`` 는 x/y command norm이 ``0.1`` 이하이면 reward를 0으로 만든다. 즉 거의 정지
 명령에서는 stepping reward가 강하게 작동하지 않는다.
 
 ``UniformVelocityCommand`` 가 반환하는 ``[lin_vel_x, lin_vel_y, ang_vel_z]`` 는 robot base frame 기준
@@ -664,10 +666,11 @@ yaw angular velocity다. Navigation에서 목표 world heading이 필요하면 p
 heading error를 ``wz`` 로 변환해 이 동일한 velocity interface에 전달한다.
 
 현재 ``feet_air_time`` 은 느리고 긴 step을 유도하기 위해 ``threshold=0.65 s``, ``weight=0.5`` 를 사용한다.
-따라서 최대 raw reward는 ``0.65`` 이고, 최대 pre-``dt`` 항목 크기는 policy step당
-``0.65 * 0.5 = 0.325`` 다. 이는 이전 ``0.4 * 0.75 = 0.30`` 과 비슷하므로 reward 최대 규모를 크게 바꾸지
-않으면서 증가 구간만 늘린다. 이 threshold는 single-stance 보상을 중단하는 cutoff가 아니다. 한발 지지가
-``0.65 s`` 를 넘으면 raw reward가 계속 ``0.65`` 로 포화되어 매 policy step 지급된다.
+정확히 한 발이 first contact가 된 policy step에 그 발의 완료된 ``last_air_time`` 을 읽고
+``min(last_air_time, 0.65)`` 를 한 번 반환한다. 양발이 같은 step에 first contact가 되거나 planar command norm이
+``0.1 m/s`` 이하이면 0이다. 따라서 최대 pre-``dt`` event 크기는 ``0.65 * 0.5 = 0.325`` 이지만, 한 발 지지를
+계속 유지하거나 air-time이 ``0.65 s`` 를 넘는 동안에는 추가 reward를 받지 않는다. 이 sparse event term의
+TensorBoard 값은 이전 dense per-step term과 직접 비교할 수 없다.
 
 ``no_jumps`` 는 ``mdp.desired_contacts`` 를 ``weight=-2.0`` 과 force ``threshold=1.0 N`` 으로 사용한다.
 최근 contact-force history에서 좌우 Foot 모두 threshold를 넘지 못한 경우에만 raw value ``1`` 을 반환하므로,
@@ -685,8 +688,8 @@ lateral 성분 ``n_y^2 = sin^2(roll)`` 만 penalty로 반환한다. 따라서 fo
 
 Contact sensor는 ``update_period=0.002 s`` 와 ``history_length=self.decimation=5`` 를 사용한다. 따라서
 ``no_jumps``, ``feet_slide``, ``undesired_contacts``, ``illegal_body_contact`` 처럼 ``net_forces_w_history`` 를 검사하는
-항목은 최근 policy interval의 5개 physics contact sample을 확인한다. 반면 ``feet_air_time_positive_biped`` 는
-이 force history가 아니라 sensor의 현재 ``current_air_time`` 과 ``current_contact_time`` 을 사용한다.
+항목은 최근 policy interval의 5개 physics contact sample을 확인한다. 반면 ``feet_air_time_touchdown_biped`` 는
+``compute_first_contact(env.step_dt)`` 와 완료된 ``last_air_time`` 을 사용한다.
 이 contact-force history는 policy observation history와 별개의 buffer이다.
 
 Play 환경은 현재 standing 검증을 위해 ``lin_vel_x=0.0 m/s`` 를 사용하고 lateral/yaw command도 0으로 고정한다. 별도의 Teleop 환경은

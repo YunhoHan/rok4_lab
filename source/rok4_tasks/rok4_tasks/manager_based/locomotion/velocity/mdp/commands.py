@@ -21,10 +21,20 @@ class RoK4PeriodicFreezeVelocityCommand(UniformVelocityCommand):
     _ROLE_STANDING = 1
     _ROLE_WALKING = 2
     _ROLE_X = 3
-    _ROLE_Y = 4
-    _ROLE_YAW = 5
-    _ROLE_X_YAW = 6
-    _ROLE_NAMES = ("mixed", "standing", "walking", "x", "y", "yaw", "x_yaw")
+    _ROLE_FAST_FORWARD = 4
+    _ROLE_Y = 5
+    _ROLE_YAW = 6
+    _ROLE_X_YAW = 7
+    _ROLE_NAMES = (
+        "mixed",
+        "standing",
+        "walking",
+        "x",
+        "fast_forward",
+        "y",
+        "yaw",
+        "x_yaw",
+    )
 
     cfg: RoK4PeriodicFreezeVelocityCommandCfg
 
@@ -53,8 +63,24 @@ class RoK4PeriodicFreezeVelocityCommand(UniformVelocityCommand):
 
             if cfg.x_env_ratio > 0.0 or cfg.x_yaw_env_ratio > 0.0:
                 self._validate_dedicated_command_range(
-                    "lin_vel_x", cfg.ranges.lin_vel_x, cfg.dedicated_x_min_abs_vel
+                    "low_speed_lin_vel_x",
+                    (-cfg.dedicated_x_max_abs_vel, cfg.dedicated_x_max_abs_vel),
+                    cfg.dedicated_x_min_abs_vel,
                 )
+                if cfg.dedicated_x_max_abs_vel > min(
+                    abs(cfg.ranges.lin_vel_x[0]), cfg.ranges.lin_vel_x[1]
+                ):
+                    raise ValueError("dedicated_x_max_abs_vel exceeds the symmetric lin_vel_x range.")
+            if cfg.fast_forward_env_ratio > 0.0:
+                if not (
+                    cfg.dedicated_x_max_abs_vel
+                    <= cfg.fast_forward_min_vel
+                    <= cfg.ranges.lin_vel_x[1]
+                ):
+                    raise ValueError(
+                        "fast_forward_min_vel must lie between dedicated_x_max_abs_vel and the positive "
+                        "lin_vel_x limit."
+                    )
             if cfg.y_env_ratio > 0.0:
                 self._validate_dedicated_command_range(
                     "lin_vel_y", cfg.ranges.lin_vel_y, cfg.dedicated_y_min_abs_vel
@@ -148,6 +174,7 @@ class RoK4PeriodicFreezeVelocityCommand(UniformVelocityCommand):
         self._resample_always_walking_command(walking_env_ids)
 
         self._resample_x_command(self._env_ids_for_role(env_ids, self._ROLE_X))
+        self._resample_fast_forward_command(self._env_ids_for_role(env_ids, self._ROLE_FAST_FORWARD))
         self._resample_y_command(self._env_ids_for_role(env_ids, self._ROLE_Y))
         self._resample_yaw_command(self._env_ids_for_role(env_ids, self._ROLE_YAW))
         self._resample_x_yaw_command(self._env_ids_for_role(env_ids, self._ROLE_X_YAW))
@@ -210,7 +237,18 @@ class RoK4PeriodicFreezeVelocityCommand(UniformVelocityCommand):
             return
         self.vel_command_b[env_ids] = 0.0
         self.vel_command_b[env_ids, 0] = self._sample_balanced_signed_values(
-            len(env_ids), self.cfg.ranges.lin_vel_x, self.cfg.dedicated_x_min_abs_vel
+            len(env_ids),
+            (-self.cfg.dedicated_x_max_abs_vel, self.cfg.dedicated_x_max_abs_vel),
+            self.cfg.dedicated_x_min_abs_vel,
+        )
+
+    def _resample_fast_forward_command(self, env_ids: torch.Tensor):
+        """Sample forward-only commands above the symmetric low-speed range."""
+        if len(env_ids) == 0:
+            return
+        self.vel_command_b[env_ids] = 0.0
+        self.vel_command_b[env_ids, 0] = torch.empty(len(env_ids), device=self.device).uniform_(
+            self.cfg.fast_forward_min_vel, self.cfg.ranges.lin_vel_x[1]
         )
 
     def _resample_y_command(self, env_ids: torch.Tensor):
@@ -237,7 +275,9 @@ class RoK4PeriodicFreezeVelocityCommand(UniformVelocityCommand):
             return
         self.vel_command_b[env_ids] = 0.0
         self.vel_command_b[env_ids, 0] = self._sample_balanced_signed_values(
-            len(env_ids), self.cfg.ranges.lin_vel_x, self.cfg.dedicated_x_min_abs_vel
+            len(env_ids),
+            (-self.cfg.dedicated_x_max_abs_vel, self.cfg.dedicated_x_max_abs_vel),
+            self.cfg.dedicated_x_min_abs_vel,
         )
         self.vel_command_b[env_ids, 2] = self._sample_balanced_signed_values(
             len(env_ids), self.cfg.ranges.ang_vel_z, self.cfg.dedicated_yaw_min_abs_vel
@@ -271,6 +311,7 @@ class RoK4PeriodicFreezeVelocityCommand(UniformVelocityCommand):
             cfg.standing_env_ratio,
             cfg.walking_env_ratio,
             cfg.x_env_ratio,
+            cfg.fast_forward_env_ratio,
             cfg.y_env_ratio,
             cfg.yaw_env_ratio,
             cfg.x_yaw_env_ratio,
@@ -309,7 +350,7 @@ class RoK4PeriodicFreezeVelocityCommandCfg(UniformVelocityCommandCfg):
     periodic_freeze_enabled: bool = True
     """Whether to enable training-only episode roles and asynchronous standing windows."""
 
-    mixed_env_ratio: float = 0.50
+    mixed_env_ratio: float = 0.45
     """Probability that an environment alternates between moving and standing during an episode."""
 
     standing_env_ratio: float = 0.05
@@ -319,7 +360,10 @@ class RoK4PeriodicFreezeVelocityCommandCfg(UniformVelocityCommandCfg):
     """Probability that an environment receives only moving commands throughout an episode."""
 
     x_env_ratio: float = 0.10
-    """Probability of balanced forward/backward commands with only base-frame ``vx`` active."""
+    """Probability of symmetric low-speed forward/backward commands with only base-frame ``vx`` active."""
+
+    fast_forward_env_ratio: float = 0.05
+    """Probability of forward-only commands above the symmetric low-speed range."""
 
     y_env_ratio: float = 0.10
     """Probability of balanced left/right commands with only base-frame ``vy`` active."""
@@ -341,6 +385,12 @@ class RoK4PeriodicFreezeVelocityCommandCfg(UniformVelocityCommandCfg):
 
     dedicated_x_min_abs_vel: float = 0.15
     """Minimum absolute ``vx`` sampled by the ``x`` and ``x_yaw`` roles [m/s]."""
+
+    dedicated_x_max_abs_vel: float = 0.30
+    """Maximum absolute ``vx`` sampled symmetrically by the ``x`` and ``x_yaw`` roles [m/s]."""
+
+    fast_forward_min_vel: float = 0.30
+    """Minimum ``vx`` sampled by the forward-only role [m/s]."""
 
     dedicated_y_min_abs_vel: float = 0.15
     """Minimum absolute ``vy`` sampled by the ``y`` role [m/s]."""

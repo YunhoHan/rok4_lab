@@ -62,14 +62,17 @@ def _command_stub(num_envs: int = 128):
     command = object.__new__(_COMMANDS.RoK4PeriodicFreezeVelocityCommand)
     command._env = SimpleNamespace(device="cpu")
     command.cfg = SimpleNamespace(
-        mixed_env_ratio=0.50,
+        mixed_env_ratio=0.45,
         standing_env_ratio=0.05,
         walking_env_ratio=0.05,
         x_env_ratio=0.10,
+        fast_forward_env_ratio=0.05,
         y_env_ratio=0.10,
         yaw_env_ratio=0.10,
         x_yaw_env_ratio=0.10,
         dedicated_x_min_abs_vel=0.15,
+        dedicated_x_max_abs_vel=0.30,
+        fast_forward_min_vel=0.30,
         dedicated_y_min_abs_vel=0.15,
         dedicated_yaw_min_abs_vel=0.15,
         ranges=SimpleNamespace(
@@ -89,28 +92,32 @@ def _command_stub(num_envs: int = 128):
 
 def test_episode_role_boundaries_and_freeze_eligibility(monkeypatch) -> None:
     """Every configured role must occupy its interval and use the intended freeze behavior."""
-    command = _command_stub(num_envs=7)
-    samples = torch.tensor([0.25, 0.525, 0.575, 0.65, 0.75, 0.85, 0.95])
+    command = _command_stub(num_envs=8)
+    samples = torch.tensor([0.20, 0.475, 0.525, 0.60, 0.675, 0.75, 0.85, 0.95])
     monkeypatch.setattr(torch, "rand", lambda count, device: samples.to(device))
 
-    command._sample_environment_roles(torch.arange(7))
+    command._sample_environment_roles(torch.arange(8))
 
-    torch.testing.assert_close(command._environment_role, torch.arange(7))
+    torch.testing.assert_close(command._environment_role, torch.arange(8))
     torch.testing.assert_close(
         command._is_periodic_freeze_env,
-        torch.tensor([True, False, False, True, True, True, True]),
+        torch.tensor([True, False, False, True, True, True, True, True]),
     )
 
 
 def test_dedicated_roles_activate_only_their_command_axes() -> None:
-    """Dedicated x, y, yaw, and x-yaw roles must zero every unrelated command axis."""
+    """Dedicated roles must activate only their intended command axes and ranges."""
     command = _command_stub()
     env_ids = torch.arange(128)
 
     command._resample_x_command(env_ids)
     assert torch.all(command.vel_command_b[:, 1:] == 0.0)
     assert torch.all((torch.abs(command.vel_command_b[:, 0]) >= 0.15))
-    assert torch.all((command.vel_command_b[:, 0] >= -0.3) & (command.vel_command_b[:, 0] <= 0.85))
+    assert torch.all((command.vel_command_b[:, 0] >= -0.3) & (command.vel_command_b[:, 0] <= 0.3))
+
+    command._resample_fast_forward_command(env_ids)
+    assert torch.all(command.vel_command_b[:, 1:] == 0.0)
+    assert torch.all((command.vel_command_b[:, 0] >= 0.3) & (command.vel_command_b[:, 0] <= 0.85))
 
     command._resample_y_command(env_ids)
     assert torch.all(command.vel_command_b[:, [0, 2]] == 0.0)
@@ -125,6 +132,7 @@ def test_dedicated_roles_activate_only_their_command_axes() -> None:
     command._resample_x_yaw_command(env_ids)
     assert torch.all(command.vel_command_b[:, 1] == 0.0)
     assert torch.all(torch.abs(command.vel_command_b[:, 0]) >= 0.15)
+    assert torch.all(torch.abs(command.vel_command_b[:, 0]) <= 0.3)
     assert torch.all(torch.abs(command.vel_command_b[:, 2]) >= 0.15)
 
 

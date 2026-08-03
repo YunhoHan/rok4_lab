@@ -139,10 +139,11 @@ class RoK4CommandsCfg(CommandsCfg):
         heading_command=False,
         debug_vis=True,
         periodic_freeze_enabled=True,
-        mixed_env_ratio=0.50,
+        mixed_env_ratio=0.45,
         standing_env_ratio=0.05,
         walking_env_ratio=0.05,
         x_env_ratio=0.10,
+        fast_forward_env_ratio=0.05,
         y_env_ratio=0.10,
         yaw_env_ratio=0.10,
         x_yaw_env_ratio=0.10,
@@ -150,6 +151,8 @@ class RoK4CommandsCfg(CommandsCfg):
         periodic_freeze_duration_range_s=(1.5, 3.0),
         always_walking_min_lin_vel=0.15,
         dedicated_x_min_abs_vel=0.15,
+        dedicated_x_max_abs_vel=0.30,
+        fast_forward_min_vel=0.30,
         dedicated_y_min_abs_vel=0.15,
         dedicated_yaw_min_abs_vel=0.15,
         ranges=mdp.RoK4PeriodicFreezeVelocityCommandCfg.Ranges(
@@ -177,7 +180,7 @@ class RoK4RewardsCfg(RewardsCfg):
         params={"command_name": "base_velocity", "std": 0.5},
     )
     feet_air_time = RewTerm(
-        func=mdp.feet_air_time_positive_biped,
+        func=mdp.feet_air_time_touchdown_biped,
         weight=0.5,
         params={
             "command_name": "base_velocity",

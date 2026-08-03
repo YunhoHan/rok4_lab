@@ -2,7 +2,7 @@ RoK4 Flat RSL-RL Task 구조 문서
 ========================================================================
 
 :작성일: 2026-07-15
-:최종 업데이트: 2026-07-31
+:최종 업데이트: 2026-08-03
 :대상 저장소: RoK4 repository root (``${ROK4_LAB_ROOT}``)
 :기준 환경: Isaac Lab v2.3.2, Isaac Sim 5.1.0, ``env_isaaclab``
 
@@ -645,7 +645,7 @@ Gymnasium task를 등록하는 파일이다. 여기에서 다음 task 이름이 
    * - Observation
      - actuator position/velocity를 포함한 blind proprioceptive history observation
    * - Command
-     - ``mixed/standing/walking/x/y/yaw/x_yaw`` 7개 episode role과 환경별 비동기 periodic freeze
+     - ``mixed/standing/walking/x/fast_forward/y/yaw/x_yaw`` 8개 episode role과 환경별 비동기 periodic freeze
    * - Domain randomization
      - ``domain_randomization_cfg.py`` 의 ``apply_rok4_domain_randomization(self)`` 호출
    * - Reward
@@ -777,23 +777,26 @@ Flat 학습은 ``lin_vel_x=(-0.3, 0.85) m/s``, ``lin_vel_y=(-0.3, 0.3) m/s``,
 
 .. code-block:: text
 
-   50% mixed    : vx, vy, wz 전체 표본화
-    5% standing : episode 전체 exact-zero command
-    5% walking  : freeze 없는 mixed moving command
-   10% x        : sagittal 전진/후진, vx만 활성
-   10% y        : lateral 좌/우 이동, vy만 활성
-   10% yaw      : 시계/반시계 회전, wz만 활성
-   10% x_yaw    : sagittal 이동 + 회전, vy=0
+   45% mixed        : vx, vy, wz 전체 표본화
+    5% standing     : episode 전체 exact-zero command
+    5% walking      : freeze 없는 mixed moving command
+   10% x            : 저속 대칭 전후진, vx=+/-[0.15, 0.30] m/s
+    5% fast_forward : 고속 전진, vx=[0.30, 0.85] m/s
+   10% y            : lateral 좌/우 이동, vy만 활성
+   10% yaw          : 시계/반시계 회전, wz만 활성
+   10% x_yaw        : 저속 대칭 전후진 + 회전, vy=0
 
 코드의 역할 이름은 command vector의 축에 직접 대응하도록 ``x``, ``y``, ``yaw``, ``x_yaw`` 를 사용한다.
 문서의 보행 의미로는 ``x`` 가 sagittal 전후진, ``y`` 가 lateral 좌우 이동이다. ``x``, ``y``, ``yaw`` 내부의
-양/음 부호는 각각 50:50 확률로 표본화한다. ``x_yaw`` 는 ``vx`` 와 ``wz`` 부호를 독립적으로 표본화하므로
-전진/후진과 시계/반시계 회전의 네 조합을 만든다. 전용 역할이 우연히 정지 command가 되지 않도록 ``vx`` 와
-``vy`` 는 최소 절댓값 ``0.15 m/s``, ``wz`` 는 ``0.15 rad/s`` 를 사용한다.
+양/음 부호는 각각 50:50 확률로 표본화한다. ``x`` 와 ``x_yaw`` 의 ``vx`` 는
+``+/-Uniform(0.15, 0.30) m/s`` 로 제한하여 ``+0.3`` 과 ``-0.3 m/s`` 가 같은 전용 학습 범위에 놓이게 한다.
+``x_yaw`` 는 ``vx`` 와 ``wz`` 부호를 독립적으로 표본화하므로 전진/후진과 시계/반시계 회전의 네 조합을 만든다.
+별도 ``fast_forward`` 역할은 ``Uniform(0.30, 0.85) m/s`` 로 기존 고속 전진 능력을 유지한다. ``vy`` 의 최소
+절댓값은 ``0.15 m/s``, ``wz`` 는 ``0.15 rad/s`` 이다.
 
-``mixed``, ``x``, ``y``, ``yaw``, ``x_yaw`` 환경은 ``10.0 s`` cycle 안에서 서로 다른 random phase로 시작한다.
+``mixed``, ``x``, ``fast_forward``, ``y``, ``yaw``, ``x_yaw`` 환경은 ``10.0 s`` cycle 안에서 서로 다른 random phase로 시작한다.
 각 환경은 독립적으로 ``Uniform(1.5, 3.0) s`` standing duration을 표본화하므로 모든 환경이 동시에 멈추지
-않는다. 이 다섯 역할의 비율 합은 90%이므로 기존과 같은 90% population에서 moving-to-standing transition을
+않는다. 이 여섯 역할의 비율 합은 90%이므로 기존과 같은 90% population에서 moving-to-standing transition을
 학습한다. ``standing`` 은 항상 exact zero이고, ``walking`` 은 freeze 없이 planar command norm이 ``0.15 m/s``
 이상일 때까지 다시 표본화한다. 평균 freeze duration ``2.25 s`` 를 기준으로 하면 전체 time sample은 대략
 standing 25%, moving 75%가 된다.
@@ -875,10 +878,12 @@ Freeze phase와 push time-left는 서로 독립적으로 표본화된다. 따라
    global t=20 s : 생존한 env B timeout/reset
    global t=23 s : env A가 3 s 이후 20 s 생존했다면 timeout/reset
 
-``feet_air_time_positive_biped`` 는 느리고 긴 step을 유도하기 위해 ``threshold=0.65 s``, ``weight=0.5`` 를
-사용한다. Threshold는 정확한 gait period 목표나 single-stance 종료 cutoff가 아니라 raw reward의 포화값이다.
-한발 지지가 ``0.65 s`` 보다 길어져도 raw reward ``0.65`` 가 매 policy step 계속 반환되며, 최대
-pre-``dt`` 항목 크기는 step당 ``0.65 * 0.5 = 0.325`` 다. 이는 이전 ``0.4 * 0.75 = 0.30`` 과 비슷한 크기다.
+RoK4-local ``feet_air_time_touchdown_biped`` 는 ``threshold=0.65 s``, ``weight=0.5`` 를 사용한다. Contact sensor의
+``last_air_time`` 을 읽어 정확히 한 발이 first contact가 된 step에만 완료된 swing time을 한 번 지급한다.
+Raw reward는 ``min(last_air_time, 0.65)`` 이며, swing 중, 계속된 지지, 양발 동시 first contact, planar command
+norm ``0.1 m/s`` 이하에서는 0이다. 따라서 한 발을 ``0.65 s`` 보다 오래 들어도 반복 보상은 없고 다음 유효
+착지에서 최대 pre-``dt`` 항목 ``0.65 * 0.5 = 0.325`` 를 한 번만 받는다. Event 기반 값이므로 이전 dense
+per-step ``feet_air_time_positive_biped`` 의 TensorBoard 크기와 직접 비교하지 않는다.
 
 ``no_jumps`` 는 Isaac Lab 공통 ``mdp.desired_contacts`` 를 ``weight=-2.0`` 과 force ``threshold=1.0 N`` 으로
 사용한다. 좌우 Foot의 최근 5개 contact-force sample 중 어느 쪽에도 threshold를 넘는 접촉이 없을 때만 raw
