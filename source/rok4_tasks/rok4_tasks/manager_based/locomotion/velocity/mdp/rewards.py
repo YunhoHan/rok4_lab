@@ -40,6 +40,61 @@ def feet_air_time_touchdown_biped(
     return reward
 
 
+def base_height_relative_l2(
+    env: ManagerBasedRLEnv,
+    target_height: float,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Penalize root height error above the flat environment origin [m^2]."""
+    asset = env.scene[asset_cfg.name]
+    height = asset.data.root_pos_w[:, 2] - env.scene.env_origins[:, 2]
+    return torch.square(height - target_height)
+
+
+def feet_swing_clearance_exp(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    target_height: float,
+    std: float,
+    velocity_scale: float,
+    asset_cfg: SceneEntityCfg,
+    sensor_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Reward moving swing feet near a target flat-ground clearance.
+
+    The height is the selected foot-body origin's world-Z coordinate relative
+    to the environment origin. The term is disabled in standing environments.
+    """
+    if std <= 0.0:
+        raise ValueError(f"std must be positive, received {std}.")
+    if velocity_scale <= 0.0:
+        raise ValueError(f"velocity_scale must be positive, received {velocity_scale}.")
+
+    asset = env.scene[asset_cfg.name]
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    foot_pos_w = asset.data.body_pos_w[:, asset_cfg.body_ids]
+    foot_vel_w = asset.data.body_lin_vel_w[:, asset_cfg.body_ids]
+    current_air_time = contact_sensor.data.current_air_time[:, sensor_cfg.body_ids]
+
+    if foot_pos_w.shape[1] != current_air_time.shape[1]:
+        raise ValueError(
+            f"Selected {foot_pos_w.shape[1]} foot bodies but received "
+            f"{current_air_time.shape[1]} contact bodies."
+        )
+
+    foot_height = foot_pos_w[..., 2] - env.scene.env_origins[:, 2].unsqueeze(-1)
+    foot_xy_speed = torch.linalg.vector_norm(foot_vel_w[..., :2], dim=-1)
+    velocity_gate = torch.tanh(foot_xy_speed / velocity_scale)
+    height_reward = torch.exp(-torch.square(foot_height - target_height) / std**2)
+
+    command_term = env.command_manager.get_term(command_name)
+    valid_swing = current_air_time > 0.0
+    valid_swing &= ~command_term.is_standing_env.unsqueeze(-1)
+    valid_count = torch.sum(valid_swing, dim=1)
+    reward = torch.sum(velocity_gate * height_reward * valid_swing, dim=1)
+    return torch.where(valid_count > 0, reward / valid_count.clamp(min=1), torch.zeros_like(reward))
+
+
 def feet_flat_orientation_l2(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg,

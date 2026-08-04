@@ -14,8 +14,9 @@ The previous Sim2Sim-validated reference remains run
 `2026-07-30_00-50-43_adapt_reset_jointphysics_footdr_fresh`, checkpoint `model_5000.pt`. Preserve both the checkpoint
 and its exported ONNX separately; exporting another checkpoint rewrites the run's default `exported/policy.onnx`.
 
-The next experiment extends critic-only privileged observations on a new branch and starts a fresh 20k run. It must
-not change the 240-value actor observation or 13-value actuator action contract, and it does not replace this baseline.
+The `yunho/privileged-observation` experiment keeps this policy as its parent baseline and extends only the training
+critic. The 240-value actor observation and 13-value actuator action contract remain unchanged, so exported actor
+policies retain the same Sim2Sim/Sim2Real interface.
 
 Previous joint-space reference policy: run `2026-07-15_17-28-41`, checkpoint `model_4999.pt`
 
@@ -80,9 +81,11 @@ link lengths, gains, and limits, and stores that config object in `ROK4_TRAIN_CF
 the inherited observation-config object as a whole. The resulting frame has 48 values and its five-frame flattened
 history produces the 240-value policy input. Its actuator state terms use `J^-1 (q - q_default)` position and
 `J^-1 (q_dot - q_dot_default)` velocity without a manual observation scale, matching the parent task's relative-state
-naming and centering convention in actuator coordinates. The actor remains blind at 240 values. During training, the
-critic additionally receives the current simulator `base_lin_vel_b=[vx, vy, vz]` through a three-value uncorrupted
-`privileged` group, producing a 243-value asymmetric critic input.
+naming and centering convention in actuator coordinates. The actor remains blind at 240 noisy-history values. During
+training, the critic receives a separately evaluated clean 240-value history plus ten current privileged values:
+`base_lin_vel_b` (3), base height (1), left/right Foot body-origin height (2), contact flags (2), and current air times
+(2). This produces a 250-value asymmetric critic input. The ten privileged values are current-frame state, not a
+five-frame history.
 
 ## Documentation
 
@@ -103,6 +106,7 @@ The development branches intentionally remain independent:
 | `yunho/adapt-actuator-interface` | Historical actuator-interface development line. |
 | `yunho/symmetry-augmentation` | Sim2Sim-validated symmetry and DR baseline. |
 | `yunho/directional-gait-rework` | Touchdown air-time and directional command-role baseline described here. |
+| `yunho/privileged-observation` | Clean critic history, current privileged foot state, and height/clearance reward experiment. |
 
 Documentation updates on one branch do not imply merging or moving the other branch pointers.
 
@@ -292,12 +296,15 @@ Self-collision is enabled in the RoK4 articulation config through `enabled_self_
 The `yunho/symmetry-augmentation` experiment uses RSL-RL's symmetry data-augmentation path, following the corrected
 on-policy PPO formulation from *Symmetry Considerations for Learning Task Symmetric Robot Policies* (Mittal et al.,
 2024). Each PPO mini-batch keeps its original samples and appends one left-right mirrored copy. It does not create a
-second network, change the 240D actor or 243D critic input sizes, or add a weighted mirror loss.
+second network or add a weighted mirror loss. On this branch, it preserves the 240D actor and mirrors the separate
+240D clean critic history plus the 10D current privileged state, for a total critic input of 250D.
 
 RoK4's mirror callback transforms all five history samples in the term-major Isaac Lab layout, the current privileged
-base linear velocity, and the 13D raw actuator action. For each ADAPT leg block, exchanging the final two actuator
-coordinates preserves joint ankle pitch and reverses joint ankle roll. Unit tests verify this relationship through
-`J P_psi = P_q J`, verify that mirroring twice recovers the original sample, and verify the doubled TensorDict batch.
+base/foot state, and the 13D raw actuator action. Base height is preserved, lateral base velocity changes sign, and
+left/right foot height, contact, and air-time values are swapped. For each ADAPT leg block, exchanging the final two
+actuator coordinates preserves joint ankle pitch and reverses joint ankle roll. Unit tests verify this relationship
+through `J P_psi = P_q J`, verify that mirroring twice recovers the original sample, and verify the doubled TensorDict
+batch.
 
 Start this experiment as a fresh run rather than resuming the pre-symmetry checkpoint. The regular training command
 uses augmentation automatically on this branch because `RoK4FlatPPORunnerCfg.algorithm.symmetry_cfg` enables data
@@ -410,9 +417,9 @@ RoK4 basis. All 13 actuators contribute; hip-pitch and knee indices `[2, 3, 8, 9
 `actuator_torques_l2`, `actuator_vel_l2`, and `actuator_acc_l2` use weights `-2.0e-6`, `-1.0e-4`, and `-1.0e-8`.
 
 > **Checkpoint compatibility:** The actor remains 13 actions and 240 observations, but their semantics changed from
-> joint coordinates to actuator coordinates. The critic now receives 243 values after adding privileged base linear
-> velocity. Do not resume or play a joint-space checkpoint, including the `2026-07-15_17-28-41` Yunho v1 baseline,
-> or a pre-privileged-critic checkpoint with this configuration. Start a new training run.
+> joint coordinates to actuator coordinates. The critic now receives 250 values after adding a clean history and
+> current privileged base/foot state. Do not resume training from a 243D-critic or joint-space checkpoint with this
+> configuration. Start a fresh training run. Actor-only inference exports keep the existing 240D interface.
 Acceleration remains the physical Isaac Lab acceleration transformed by `inverse(J)`, not Gym's undivided velocity
 difference.
 
@@ -514,6 +521,14 @@ once on that touchdown step. It returns zero during swing, continued support, si
 planar commands at or below `0.1 m/s`. Holding one foot in the air beyond `0.65 s` therefore produces no repeated reward;
 the next valid touchdown has a maximum pre-`dt` contribution of `0.65 * 0.5 = 0.325`. Because this reward is event-based,
 its TensorBoard magnitude is not directly comparable with the previous dense per-step feet-air-time term.
+
+This branch adds two height terms without enabling a height scanner. `base_height_l2` uses target `0.907 m` and
+weight `-1.0`, measuring root world Z relative to each flat environment origin. `feet_clearance` uses weight `+0.2`
+and rewards valid swing feet with
+`tanh(||v_xy|| / 0.20) * exp(-(h - 0.10)^2 / 0.05^2)`. It is zero in standing environments and while neither foot is
+in swing. The clearance height is the `Foot_Link` body-origin Z relative to the environment origin, not
+a collision-point or ray-scanner measurement; its approximately `4 mm` sole offset is intentionally left uncorrected
+for this first flat-ground experiment.
 
 The `no_jumps` penalty uses Isaac Lab's `mdp.desired_contacts` with weight `-2.0` and a `1.0 N` force threshold. It
 checks the recent contact-force history of both feet and returns a penalty only when neither foot has a qualifying
@@ -629,7 +644,7 @@ algorithm parameters. These values are starting points for flat walking, not fin
 | actor/critic hidden dims | `[512, 256, 128]` |
 | actor/critic obs normalization | `True` |
 | actor input | `policy` history, `240` values |
-| critic input | `policy + privileged base_lin_vel_b`, `243` values |
+| critic input | clean `critic` history 240D + current `privileged` state 10D, `250` values |
 | action clipping | `clip_actions = 1.0` |
 | learning rate | `1.0e-3` |
 | entropy coef | `0.002` |

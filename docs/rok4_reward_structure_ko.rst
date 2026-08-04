@@ -144,6 +144,8 @@ Isaac Lab 원본 source를 수정하지 않는다. Isaac Lab의 부모 class와 
                           ├─ track_lin_vel_xy_exp
                           ├─ track_ang_vel_z_exp
                           ├─ feet_air_time
+                          ├─ base_height_l2
+                          ├─ feet_clearance
                           ├─ no_jumps
                           ├─ feet_slide
                           ├─ feet_flat_orientation_l2 (현재 None: 비활성)
@@ -366,11 +368,21 @@ RoK4 전용 Reward Terms
      - ``1.0``
      - ``command_name="base_velocity"``, ``std=0.5``
      - world frame yaw angular velocity command를 추종하게 한다.
+   * - ``base_height_l2``
+     - ``mdp.base_height_relative_l2``
+     - ``-1.0``
+     - flat environment origin 기준 ``target_height=0.907 m``
+     - root world Z에서 각 environment origin Z를 뺀 base height가 gait-ready IK 기준 높이와 달라지는 정도를 제곱 penalty로 만든다.
    * - ``feet_air_time``
      - ``mdp.feet_air_time_touchdown_biped``
      - ``0.5``
      - feet: ``L_Foot_Link``, ``R_Foot_Link``; ``threshold=0.65``
      - 정확히 한 발이 first contact가 된 step에 완료된 air-time을 최대 ``0.65`` 까지 한 번 지급한다. 계속 한 발을 들거나 지지하는 동안에는 반복 지급하지 않는다.
+   * - ``feet_clearance``
+     - ``mdp.feet_swing_clearance_exp``
+     - ``0.2``
+     - target ``0.10 m``, std ``0.05 m``, velocity scale ``0.20 m/s``
+     - standing이 아닌 환경에서 움직이는 swing Foot 원점이 목표 높이에 가까우면 dense positive reward를 준다. Air-time 길이는 이 term에서 제한하지 않고 touchdown reward가 별도로 담당한다.
    * - ``no_jumps``
      - ``mdp.desired_contacts``
      - ``-2.0``
@@ -539,9 +551,15 @@ Reward Function 요약
    * - ``track_ang_vel_z_world_exp``
      - locomotion mdp
      - world z축 angular velocity command error에 ``exp(-error / std^2)`` 를 적용한다.
+   * - ``base_height_relative_l2``
+     - RoK4 local mdp
+     - flat environment origin 기준 root 높이와 ``0.907 m`` 목표의 제곱 오차를 반환한다.
    * - ``feet_air_time_touchdown_biped``
      - RoK4 local mdp
      - 정확히 한 발이 first contact가 된 순간 ``min(last_air_time, threshold)`` 를 한 번 반환하며, 작은 command와 양발 동시 touchdown은 0이 된다.
+   * - ``feet_swing_clearance_exp``
+     - RoK4 local mdp
+     - 유효 swing Foot별 ``tanh(v_xy/0.20) exp(-(h-0.10)^2/0.05^2)`` 를 평균하며 standing에서는 0이다.
    * - ``desired_contacts``
      - Isaac Lab 공통
      - 지정 body 중 하나라도 최근 force history에서 threshold를 넘으면 0, 모두 접촉하지 않으면 1을 반환한다. Negative weight와 함께 양발 flight penalty로 사용한다.
@@ -671,6 +689,40 @@ heading error를 ``wz`` 로 변환해 이 동일한 velocity interface에 전달
 ``0.1 m/s`` 이하이면 0이다. 따라서 최대 pre-``dt`` event 크기는 ``0.65 * 0.5 = 0.325`` 이지만, 한 발 지지를
 계속 유지하거나 air-time이 ``0.65 s`` 를 넘는 동안에는 추가 reward를 받지 않는다. 이 sparse event term의
 TensorBoard 값은 이전 dense per-step term과 직접 비교할 수 없다.
+
+``base_height_l2`` 는 평지에서 height scanner 없이 각 environment origin을 지면 기준으로 사용한다.
+
+.. math::
+
+   p_{base-height}
+   = \left(z_{base,w} - z_{origin,w} - 0.907\right)^2
+
+Raw 값에는 ``weight=-1.0`` 과 policy ``dt`` 가 적용된다. 목표는 standing에서만이 아니라 전체 보행에 적용되므로
+몸통의 자연스러운 상하 진동도 작은 penalty를 받는다. 첫 실험에서는 높이를 완전히 고정하는 강한 제약이 아니라
+평균 자세가 크게 주저앉거나 과도하게 올라가는 것을 막는 약한 기준으로 사용한다.
+
+``feet_clearance`` 는 touchdown event가 아니라 swing 중 매 policy step 계산하는 dense positive reward다. 유효한
+Foot 집합을 ``S`` 라고 하면 raw reward는 다음과 같다.
+
+.. math::
+
+   r_{clear}
+   = \frac{1}{|S|}
+     \sum_{i \in S}
+     \tanh\left(\frac{\|v_{i,xy}\|}{0.20}\right)
+     \exp\left(-\frac{(h_i-0.10)^2}{0.05^2}\right)
+
+여기서 ``h_i = z_FootLink,i,w - z_origin,w`` 이고 ``v_i,xy`` 는 Foot body의 world-frame planar speed다.
+``S`` 에는 ``current_air_time > 0`` 이고 command generator의 ``is_standing_env=False`` 인 발만 포함된다.
+유효한 발이 없으면 0이다. 두 발이 동시에 유효해도 합이 아니라 평균하므로 raw 최대값은 1 미만이다. Weight는
+``+0.2`` 이다.
+
+현재 ``Foot_Link`` 원점은 약 8 mm 발 두께의 가운데에 있어 실제 sole보다 약 4 mm 높다. 따라서 이 ``h_i`` 는
+정확한 collision-point clearance가 아니라 평지용 body-origin proxy다. ``std=0.05 m`` 기준에서 4 mm offset의
+목표점 reward는 ``exp(-(0.004/0.05)^2) ~= 0.994`` 이므로 첫 실험에서는 offset 보정이나 height scanner를
+추가하지 않는다. 속도 gate는 높이 목표에 도달했더라도 거의 정지한 발이 점수를 받는 것을 막는다. 예를 들어
+``v_xy=0.10 m/s`` 에서는 ``tanh(0.5) ~= 0.462``, ``0.20 m/s`` 에서는 ``tanh(1) ~= 0.762`` 이며 고속에서는
+부드럽게 1에 포화된다.
 
 ``no_jumps`` 는 ``mdp.desired_contacts`` 를 ``weight=-2.0`` 과 force ``threshold=1.0 N`` 으로 사용한다.
 최근 contact-force history에서 좌우 Foot 모두 threshold를 넘지 못한 경우에만 raw value ``1`` 을 반환하므로,

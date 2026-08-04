@@ -8,6 +8,7 @@ import torch
 
 from isaaclab.assets import Articulation
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.sensors import ContactSensor
 
 from rok4_tasks.assets.robots.rok4_adapt import RoK4AdaptActuator
 
@@ -39,6 +40,44 @@ def actuator_vel_rel(
     joint_vel = asset.data.joint_vel[:, asset_cfg.joint_ids]
     default_joint_vel = asset.data.default_joint_vel[:, asset_cfg.joint_ids]
     return actuator.transmission.joint_to_actuator_velocity(joint_vel - default_joint_vel)
+
+
+def base_height(
+    env: ManagerBasedEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Root height above the flat environment origin [m]."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    return asset.data.root_pos_w[:, 2:3] - env.scene.env_origins[:, 2:3]
+
+
+def foot_height(
+    env: ManagerBasedEnv,
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Selected foot-body origin heights above the flat environment origin [m]."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    foot_pos_w = asset.data.body_pos_w[:, asset_cfg.body_ids]
+    return foot_pos_w[..., 2] - env.scene.env_origins[:, 2].unsqueeze(-1)
+
+
+def foot_contact_flag(
+    env: ManagerBasedEnv,
+    sensor_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Binary contact state for the selected feet."""
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    contact_time = contact_sensor.data.current_contact_time[:, sensor_cfg.body_ids]
+    return (contact_time > 0.0).to(dtype=contact_time.dtype)
+
+
+def foot_current_air_time(
+    env: ManagerBasedEnv,
+    sensor_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Current uninterrupted air time for the selected feet [s]."""
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    return contact_sensor.data.current_air_time[:, sensor_cfg.body_ids]
 
 
 def _adapt_actuator(asset: Articulation, actuator_name: str) -> RoK4AdaptActuator:

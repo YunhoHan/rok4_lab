@@ -992,9 +992,14 @@ physics DR은 simulator와 다른 물성에서도 동작하는 policy를 유도�
 </tr>
 </tbody>
 </table>
-<p>Actor observation의 <span class="docutils literal">enable_corruption=True</span> 때문에 위 noise는 Train에서 활성화된다. Critic은 같은 policy
-observation 240개와 현재 simulator <span class="docutils literal">base_lin_vel_b</span> 3개를 함께 사용한다. Privileged term은
-<span class="docutils literal">enable_corruption=False</span> 이므로 base linear velocity 자체에는 noise를 추가하지 않는다.</p>
+<p>Actor observation의 <span class="docutils literal">enable_corruption=True</span> 때문에 위 noise는 Train에서 활성화된다. Critic은 actor tensor를
+재사용하지 않고 같은 6개 term을 별도의 <span class="docutils literal">CriticCfg</span> 로 계산한다. Critic group도 5-frame term-major history
+240차원이지만 noise를 선언하지 않고 <span class="docutils literal">enable_corruption=False</span> 로 설정한다. 따라서 physics DR이 반영된 실제
+simulator state는 그대로 보되 인위적인 additive observation noise는 없는 clean history다.</p>
+<p>Critic에는 history가 없는 current privileged 10차원이 이어진다. 순서는 <span class="docutils literal">base_lin_vel_b</span> 3, environment-origin
+기준 base height 1, 좌우 Foot body-origin height 2, 좌우 contact flag 2, 좌우 current air time 2다. Privileged group도
+<span class="docutils literal">enable_corruption=False</span> 이다. 결과적으로 actor는 noisy 240D, critic은 clean history 240D + current privileged
+10D = 250D를 받는다.</p>
 <p>Play와 Teleop은 <span class="docutils literal">self.observations.policy.enable_corruption=False</span> 로 설정하므로 policy observation noise를
 사용하지 않는다. 이는 checkpoint를 같은 simulator 조건에서 재현하고 동작을 눈으로 평가하기 위한 설정이다.</p>
 <section id="noise-normalization">
@@ -1006,12 +1011,11 @@ observation 240개와 현재 simulator <span class="docutils literal">base_lin_v
 <p>RSL-RL의 <span class="docutils literal">actor_obs_normalization=True</span> 와 <span class="docutils literal">critic_obs_normalization=True</span> 는 running mean과 variance로
 network 입력의 통계적 scale을 조정한다. Noise를 제거하거나 물리 단위의 오차를 대신하지 않는다. 처리 순서는
 개념적으로 다음과 같다.</p>
-<pre class="code text literal-block"><code>simulator state
-  -&gt; observation term
-  -&gt; additive observation noise
-  -&gt; 5-frame history
-  -&gt; RSL-RL running normalization
-  -&gt; Actor/Critic</code></pre>
+<pre class="code text literal-block"><code>simulator state + physics DR
+  ├─ PolicyCfg terms -&gt; additive noise -&gt; 5-frame history 240D
+  │    -&gt; actor running normalization -&gt; Actor
+  └─ CriticCfg terms -&gt; no additive noise -&gt; 5-frame history 240D
+       + current PrivilegedCfg 10D -&gt; critic running normalization -&gt; Critic</code></pre>
 <p>Baseline <span class="docutils literal">d949d40</span> 이후 observation noise 범위는 변경하지 않았다. Actuator position noise를 <span class="docutils literal">0.02</span>, <span class="docutils literal">0.05</span>
 또는 <span class="docutils literal">0.1 rad</span> 로 올리는 실험은 transmission 오차와 센서 오차를 분리하기 어려워 현재 보류한다.</p>
 </section>

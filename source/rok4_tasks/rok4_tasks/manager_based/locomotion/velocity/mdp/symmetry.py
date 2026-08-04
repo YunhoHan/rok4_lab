@@ -21,9 +21,12 @@ _ACTUATOR_DIM = 13
 # [base_ang_vel(5x3), projected_gravity(5x3), command(5x3), actuator_pos(5x13),
 #  actuator_vel(5x13), last_action(5x13)], rather than five contiguous 48-value frames.
 _POLICY_OBS_DIM = _POLICY_HISTORY_LENGTH * (3 * _VECTOR_DIM + 3 * _ACTUATOR_DIM)
+_PRIVILEGED_OBS_DIM = 10
 
 _ACTUATOR_MIRROR_INDICES = (6, 7, 8, 9, 11, 10, 0, 1, 2, 3, 5, 4, 12)
 _ACTUATOR_MIRROR_SIGNS = (-1.0, -1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, -1.0)
+_PRIVILEGED_MIRROR_INDICES = (0, 1, 2, 3, 5, 4, 7, 6, 9, 8)
+_PRIVILEGED_MIRROR_SIGNS = (1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0)
 
 
 @torch.no_grad()
@@ -51,7 +54,7 @@ def compute_symmetric_states(
     del env
 
     if obs is not None:
-        unexpected_groups = set(obs.keys()) - {"policy", "privileged"}
+        unexpected_groups = set(obs.keys()) - {"policy", "critic", "privileged"}
         if unexpected_groups:
             raise ValueError(f"RoK4 symmetry does not define transforms for observation groups: {unexpected_groups}.")
 
@@ -59,6 +62,10 @@ def compute_symmetric_states(
         obs_aug = obs.repeat(2)
         obs_aug["policy"][:batch_size] = obs["policy"]
         obs_aug["policy"][batch_size:] = _mirror_policy_observation(obs["policy"])
+
+        if "critic" in obs.keys():
+            obs_aug["critic"][:batch_size] = obs["critic"]
+            obs_aug["critic"][batch_size:] = _mirror_policy_observation(obs["critic"])
 
         if "privileged" in obs.keys():
             obs_aug["privileged"][:batch_size] = obs["privileged"]
@@ -114,11 +121,16 @@ def _mirror_policy_observation(obs: torch.Tensor) -> torch.Tensor:
 
 
 def _mirror_privileged_observation(obs: torch.Tensor) -> torch.Tensor:
-    """Mirror the critic-only current base linear velocity ``[vx, vy, vz]``."""
-    if obs.shape[-1] != _VECTOR_DIM:
-        raise ValueError(f"Expected {_VECTOR_DIM} privileged values, received shape {tuple(obs.shape)}.")
-    signs = obs.new_tensor((1.0, -1.0, 1.0))
-    return obs * signs
+    """Mirror current critic-only base and bilateral foot state.
+
+    The layout is ``[base_vel_xyz, base_height, foot_height_lr,
+    contact_lr, current_air_time_lr]``.
+    """
+    if obs.shape[-1] != _PRIVILEGED_OBS_DIM:
+        raise ValueError(f"Expected {_PRIVILEGED_OBS_DIM} privileged values, received shape {tuple(obs.shape)}.")
+    indices = torch.tensor(_PRIVILEGED_MIRROR_INDICES, device=obs.device)
+    signs = obs.new_tensor(_PRIVILEGED_MIRROR_SIGNS)
+    return obs[..., indices] * signs
 
 
 def _mirror_vector_history(values: torch.Tensor, signs: tuple[float, float, float]) -> torch.Tensor:

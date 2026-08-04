@@ -230,18 +230,22 @@ RoK4 구조 관계
      │         └─ J psi_target -> q_target
      ├─ observations.py
      │    ├─ actuator_pos_rel: J^-1 (q - q_default)
-     │    └─ actuator_vel_rel: J^-1 (qdot - qdot_default)
+     │    ├─ actuator_vel_rel: J^-1 (qdot - qdot_default)
+     │    ├─ base/Foot height: flat env origin 기준 world Z
+     │    └─ Foot contact flag/current air time
      ├─ rewards.py
      │    ├─ actuator torque/velocity/acceleration penalty
      │    ├─ actuator torque/velocity limit penalty
      │    ├─ mapped joint action-position limit penalty
      │    ├─ 접촉 중 foot flat-orientation penalty (구현됨, 현재 None)
      │    ├─ yaw-frame straight-walking stance-width penalty (구현됨, 현재 None)
+     │    ├─ base-height L2와 swing-foot clearance reward
      │    ├─ signed foot lateral-separation anti-cross penalty
      │    └─ 1차/2차 clipped raw actuator action-rate penalty
      └─ symmetry.py
           ├─ 240D term-major policy history 좌우 반전
-          ├─ 3D privileged base velocity 좌우 반전
+          ├─ 240D clean critic history 좌우 반전
+          ├─ 10D current privileged base/Foot state 좌우 반전
           └─ 13D raw ADAPT actuator action 좌우 반전
 
    RoK4 debug/verification
@@ -455,7 +459,8 @@ Isaac Lab ``ObservationGroupCfg`` 를 상속하므로 history, corruption, term 
    새 class 정의
      RoK4ObservationsCfg                          # 부모 ObservationsCfg 상속 없음
        ├─ PolicyCfg(ObsGroup)                    # actor용 5-step noisy history
-       └─ PrivilegedCfg(ObsGroup)                # critic 전용 현재 base linear velocity
+       ├─ CriticCfg(ObsGroup)                    # critic용 5-step clean history
+       └─ PrivilegedCfg(ObsGroup)                # critic 전용 current base/Foot state
 
    환경 field 교체
      LocomotionVelocityRoughEnvCfg
@@ -468,8 +473,8 @@ Isaac Lab ``ObservationGroupCfg`` 를 상속하므로 history, corruption, term 
 따라서 이것은 ``RoK4ObservationsCfg`` 가 부모 observation class를 상속해 method를 override하는 구조가 아니다.
 ``RoK4FlatEnvCfg`` 가 상속받은 ``observations`` config field를 새 객체로 대체하는 config-level override다. 부모의
 부모의 ``base_lin_vel``, ``joint_pos``, ``joint_vel``, ``height_scan`` term은 자동으로 남지 않는다. RoK4는
-아래 policy term을 명시적으로 다시 구성하고, ``base_lin_vel`` 만 별도의 critic 전용 privileged group으로
-다시 추가한다.
+아래 6개 proprioceptive term을 actor와 critic용으로 각각 명시하고, simulator current state 10개를 별도의
+critic-only privileged group으로 추가한다.
 
 .. list-table::
    :header-rows: 1
@@ -499,15 +504,50 @@ Isaac Lab ``ObservationGroupCfg`` 를 상속하므로 history, corruption, term 
      - 48
      - history 적용 전 한 frame의 observation dimension
 
-``history_length=5`` 와 ``flatten_history_dim=True`` 를 적용하므로 최종 policy tensor는 ``48 * 5 = 240``
-차원이다. ``enable_corruption=True`` 는 각 ``ObsTerm`` 에 설정된 noise를 활성화하지만 dimension을 바꾸지 않는다.
-``concatenate_terms=True`` 는 선언된 term들을 하나의 policy tensor로 이어 붙인다.
+``PolicyCfg`` 와 ``CriticCfg`` 모두 ``history_length=5`` 와 ``flatten_history_dim=True`` 를 적용하므로 각각
+``48 * 5 = 240`` 차원이다. Policy만 ``enable_corruption=True`` 이므로 term별 additive noise가 history에 저장된다.
+Critic은 같은 물리량을 별도로 계산하지만 noise를 선언하지 않고 ``enable_corruption=False`` 로 두어 clean history를
+만든다. 여기서 clean은 physics DR이 없는 상태가 아니라 simulator의 randomized 실제 state에 인위적 센서 noise만
+추가하지 않는다는 뜻이다.
 
-``PrivilegedCfg`` 는 simulator의 현재 ``base_lin_vel_b=[vx, vy, vz]`` 3개를 noise와 history 없이 제공한다.
-PPO runner의 ``obs_groups`` 는 actor에 ``["policy"]``, critic에 ``["policy", "privileged"]`` 를 연결한다.
-따라서 actor 입력은 기존과 같은 240차원이고 critic 입력은 ``240 + 3 = 243`` 차원이다. Critic-only 정보는
-inference policy나 ONNX actor 입력에 포함되지 않는다. 다만 critic 첫 입력층 크기가 달라지므로 이 변경 이전의
-240/240 actor-critic checkpoint는 새 설정에 그대로 resume하기보다 새 run으로 학습하는 것이 안전하다.
+``PrivilegedCfg`` 는 history 없이 아래 current-frame 10개를 제공한다.
+
+.. list-table:: Current privileged layout
+   :header-rows: 1
+
+   * - index
+     - term
+     - 차원
+     - 의미
+   * - ``0:3``
+     - ``base_lin_vel``
+     - 3
+     - body-frame root linear velocity ``[vx, vy, vz]``
+   * - ``3:4``
+     - ``base_height``
+     - 1
+     - root world Z에서 environment origin Z를 뺀 평지 기준 높이
+   * - ``4:6``
+     - ``foot_height``
+     - 2
+     - Left/Right ``Foot_Link`` 원점 world Z에서 environment origin Z를 뺀 값
+   * - ``6:8``
+     - ``foot_contact``
+     - 2
+     - Left/Right ``current_contact_time > 0`` binary flag
+   * - ``8:10``
+     - ``foot_air_time``
+     - 2
+     - Left/Right current uninterrupted air time [s]
+
+Foot height는 ray-based height scanner나 collision-point query가 아니다. 현재 평지에서는 ``Foot_Link`` 원점이
+발바닥 중심보다 약 ``0.004 m`` 위라는 고정 offset을 포함한 clearance proxy다. 이 4 mm는 현재 clearance reward의
+``std=0.05 m`` 보다 충분히 작으므로 별도 보정하지 않는다.
+
+PPO runner의 ``obs_groups`` 는 actor에 ``["policy"]``, critic에 ``["critic", "privileged"]`` 를 연결한다.
+따라서 actor 입력은 기존과 같은 240차원이고 critic 입력은 ``240 + 10 = 250`` 차원이다. Privileged 정보와 clean
+critic history는 inference policy나 ONNX actor 입력에 포함되지 않는다. Critic 첫 입력층이 달라지므로 243D critic
+checkpoint에서 resume하지 않고 fresh run으로 비교한다.
 
 현재 ``actuator_pos`` 와 ``actuator_vel`` term은 부모 Isaac Lab의 ``joint_pos_rel``, ``joint_vel_rel`` 패턴처럼
 default state를 뺀 뒤 actuator 좌표로 변환한다. Position은 gait-ready default pose에서 0이 되고, 현재
@@ -1160,12 +1200,13 @@ RSL-RL PPO runner 설정 파일이다.
    * - desired KL
      - ``0.01``
    * - obs groups
-     - actor는 ``policy`` 240차원, critic은 ``policy + privileged`` 243차원
+     - actor는 noisy ``policy`` 240차원, critic은 clean ``critic`` 240 + current ``privileged`` 10 = 250차원
    * - symmetry data augmentation
      - original:left-right mirror = ``1:1``, mirror loss는 ``False``
 
-현재 actor는 blind policy history만 사용하고, critic은 current ``base_lin_vel`` 3개를 추가로 받는 asymmetric
-구조다. Explicit estimator는 아직 넣지 않았으며 rough terrain 단계에서 검토한다.
+현재 actor는 blind noisy policy history만 사용하고, critic은 같은 항목의 clean history와 current base/Foot state를
+받는 asymmetric 구조다. Privileged 10D에는 history를 적용하지 않는다. Explicit estimator는 아직 넣지 않았으며
+rough terrain 단계에서 검토한다.
 
 ``entropy_coef`` 는 exploration standard deviation을 키우는 방향의 entropy 항에 곱해지는 계수다. 현재
 ``0.002`` 는 최초 ``0.008`` 과 저-noise 실험값 ``0.001`` 사이의 중간 설정이다. 최초 설정보다 특정 관절의
@@ -1192,8 +1233,8 @@ symmetry loss 항이나 ``mirror_loss_coeff`` 튜닝은 없다. 한 mini-batch�
    mirrored half가 재사용하는 rollout 값:
      advantage A, return R, target value, old log probability
 
-Actor와 critic network를 두 개 만드는 방식이 아니다. 같은 actor/critic이 원본과 mirror sample을 모두 계산하며,
-network 입력 dimension도 actor ``240``, critic ``243`` 으로 유지된다. 증가하는 것은 PPO update mini-batch의
+Actor와 critic network를 두 벌 만드는 방식이 아니다. 같은 actor/critic이 원본과 mirror sample을 모두 계산하며,
+network 입력 dimension은 actor ``240``, critic ``250`` 으로 유지된다. 증가하는 것은 PPO update mini-batch의
 sample 행 수다. 현재 actor/critic empirical observation normalization도 기존 baseline과 같이 ``True`` 로
 유지하며 symmetry callback은 raw observation group을 먼저 반전한다.
 
@@ -1233,6 +1274,12 @@ Policy history의 실제 메모리 순서는 주의가 필요하다. Isaac Lab O
    * - critic privileged base linear velocity
      - ``[vx, vy, vz]``
      - ``[vx, -vy, vz]``
+   * - critic privileged base height
+     - ``[h_base]``
+     - ``[h_base]``
+   * - critic privileged Foot height/contact/air time
+     - ``[L, R]`` for each bilateral term
+     - ``[R, L]`` for each bilateral term
 
 Actuator position, actuator velocity, last action, PPO action에는 모두 같은 13D actuator 변환 ``K_g`` 를 사용한다.
 Canonical 순서에서 식은 다음과 같다.
@@ -1536,11 +1583,11 @@ environment 및 queue 적용 흐름도 문서화했다.
    * - action shape
      - ``13``
    * - observation shape
-     - ``policy=240``, ``privileged=3``
+     - 이전 smoke 기준 ``policy=240``, ``privileged=3``
    * - actor input
      - 5-step history 기반 240차원
    * - critic input
-     - actor history와 현재 ``base_lin_vel_b`` 를 합친 243차원
+     - 이전 smoke 기준 actor history와 현재 ``base_lin_vel_b`` 를 합친 243차원
    * - actor output
      - 13차원 normalized actuator action
    * - PPO 1 iteration
@@ -1595,9 +1642,10 @@ Tracking은 약 15k에서 사실상 plateau에 도달했고, 15k에서 20k 사�
 contact-related term이 조금 더 정돈되었다. 따라서 현재 기준 checkpoint는 ``model_19999.pt`` 로 보존하되,
 새 실험에서도 ``model_9999.pt``, ``model_14999.pt``, ``model_19999.pt`` 를 모두 비교한다.
 
-다음 실험은 별도 branch에서 critic-only privileged observation을 확장하고 fresh ``20,000`` iteration으로
-학습한다. 현재 actor의 240차원 입력, 13차원 actuator action, reward, command 역할을 그대로 둔 상태에서 critic
-입력 효과만 비교해야 한다. 기존 branch를 merge하거나 기존 checkpoint를 resume하여 교정하는 실험이 아니다.
+현재 ``yunho/privileged-observation`` branch는 위 directional baseline에서 분기하여 critic을 250D로 확장하고,
+동시에 base-height와 swing-clearance reward를 시험한다. Actor의 240차원 입력과 13차원 actuator action contract는
+그대로다. Critic-only 변경과 reward 변경이 함께 들어가므로 baseline과 비교할 때 두 효과가 완전히 분리된 ablation은
+아니며, 기존 checkpoint를 resume하지 않고 fresh ``20,000`` iteration으로 학습한다.
 
 현재 설계 의도
 ------------------------------------------------------
@@ -1614,7 +1662,7 @@ contact-related term이 조금 더 정돈되었다. 따라서 현재 기준 chec
    camera observation
    explicit estimator / MLP encoder
    teacher-student distillation
-   추가 privileged terrain/contact state
+   terrain height scanner / rough-terrain privileged height state
 
 추후 권장 순서는 다음과 같다.
 

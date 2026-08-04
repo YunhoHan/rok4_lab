@@ -130,9 +130,15 @@ Observation noise
      - 없음
      - normalized raw action
 
-Actor observation의 ``enable_corruption=True`` 때문에 위 noise는 Train에서 활성화된다. Critic은 같은 policy
-observation 240개와 현재 simulator ``base_lin_vel_b`` 3개를 함께 사용한다. Privileged term은
-``enable_corruption=False`` 이므로 base linear velocity 자체에는 noise를 추가하지 않는다.
+Actor observation의 ``enable_corruption=True`` 때문에 위 noise는 Train에서 활성화된다. Critic은 actor tensor를
+재사용하지 않고 같은 6개 term을 별도의 ``CriticCfg`` 로 계산한다. Critic group도 5-frame term-major history
+240차원이지만 noise를 선언하지 않고 ``enable_corruption=False`` 로 설정한다. 따라서 physics DR이 반영된 실제
+simulator state는 그대로 보되 인위적인 additive observation noise는 없는 clean history다.
+
+Critic에는 history가 없는 current privileged 10차원이 이어진다. 순서는 ``base_lin_vel_b`` 3, environment-origin
+기준 base height 1, 좌우 Foot body-origin height 2, 좌우 contact flag 2, 좌우 current air time 2다. Privileged group도
+``enable_corruption=False`` 이다. 결과적으로 actor는 noisy 240D, critic은 clean history 240D + current privileged
+10D = 250D를 받는다.
 
 Play와 Teleop은 ``self.observations.policy.enable_corruption=False`` 로 설정하므로 policy observation noise를
 사용하지 않는다. 이는 checkpoint를 같은 simulator 조건에서 재현하고 동작을 눈으로 평가하기 위한 설정이다.
@@ -153,12 +159,11 @@ network 입력의 통계적 scale을 조정한다. Noise를 제거하거나 물�
 
 .. code-block:: text
 
-   simulator state
-     -> observation term
-     -> additive observation noise
-     -> 5-frame history
-     -> RSL-RL running normalization
-     -> Actor/Critic
+   simulator state + physics DR
+     ├─ PolicyCfg terms -> additive noise -> 5-frame history 240D
+     │    -> actor running normalization -> Actor
+     └─ CriticCfg terms -> no additive noise -> 5-frame history 240D
+          + current PrivilegedCfg 10D -> critic running normalization -> Critic
 
 Baseline ``d949d40`` 이후 observation noise 범위는 변경하지 않았다. Actuator position noise를 ``0.02``, ``0.05``
 또는 ``0.1 rad`` 로 올리는 실험은 transmission 오차와 센서 오차를 분리하기 어려워 현재 보류한다.

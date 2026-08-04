@@ -1051,18 +1051,22 @@ RoK4 local MDP
   │         └─ J psi_target -&gt; q_target
   ├─ observations.py
   │    ├─ actuator_pos_rel: J^-1 (q - q_default)
-  │    └─ actuator_vel_rel: J^-1 (qdot - qdot_default)
+  │    ├─ actuator_vel_rel: J^-1 (qdot - qdot_default)
+  │    ├─ base/Foot height: flat env origin 기준 world Z
+  │    └─ Foot contact flag/current air time
   ├─ rewards.py
   │    ├─ actuator torque/velocity/acceleration penalty
   │    ├─ actuator torque/velocity limit penalty
   │    ├─ mapped joint action-position limit penalty
   │    ├─ 접촉 중 foot flat-orientation penalty (구현됨, 현재 None)
   │    ├─ yaw-frame straight-walking stance-width penalty (구현됨, 현재 None)
+  │    ├─ base-height L2와 swing-foot clearance reward
   │    ├─ signed foot lateral-separation anti-cross penalty
   │    └─ 1차/2차 clipped raw actuator action-rate penalty
   └─ symmetry.py
        ├─ 240D term-major policy history 좌우 반전
-       ├─ 3D privileged base velocity 좌우 반전
+       ├─ 240D clean critic history 좌우 반전
+       ├─ 10D current privileged base/Foot state 좌우 반전
        └─ 13D raw ADAPT actuator action 좌우 반전
 
 RoK4 debug/verification
@@ -1256,7 +1260,8 @@ Isaac Lab <span class="docutils literal">ObservationGroupCfg</span> 를 상속�
 <pre class="code text literal-block"><code>새 class 정의
   RoK4ObservationsCfg                          # 부모 ObservationsCfg 상속 없음
     ├─ PolicyCfg(ObsGroup)                    # actor용 5-step noisy history
-    └─ PrivilegedCfg(ObsGroup)                # critic 전용 현재 base linear velocity
+    ├─ CriticCfg(ObsGroup)                    # critic용 5-step clean history
+    └─ PrivilegedCfg(ObsGroup)                # critic 전용 current base/Foot state
 
 환경 field 교체
   LocomotionVelocityRoughEnvCfg
@@ -1268,8 +1273,8 @@ Isaac Lab <span class="docutils literal">ObservationGroupCfg</span> 를 상속�
 <p>따라서 이것은 <span class="docutils literal">RoK4ObservationsCfg</span> 가 부모 observation class를 상속해 method를 override하는 구조가 아니다.
 <span class="docutils literal">RoK4FlatEnvCfg</span> 가 상속받은 <span class="docutils literal">observations</span> config field를 새 객체로 대체하는 config-level override다. 부모의
 부모의 <span class="docutils literal">base_lin_vel</span>, <span class="docutils literal">joint_pos</span>, <span class="docutils literal">joint_vel</span>, <span class="docutils literal">height_scan</span> term은 자동으로 남지 않는다. RoK4는
-아래 policy term을 명시적으로 다시 구성하고, <span class="docutils literal">base_lin_vel</span> 만 별도의 critic 전용 privileged group으로
-다시 추가한다.</p>
+아래 6개 proprioceptive term을 actor와 critic용으로 각각 명시하고, simulator current state 10개를 별도의
+critic-only privileged group으로 추가한다.</p>
 <table>
 <colgroup>
 <col style="width: 33%" />
@@ -1313,14 +1318,62 @@ Isaac Lab <span class="docutils literal">ObservationGroupCfg</span> 를 상속�
 </tr>
 </tbody>
 </table>
-<p><span class="docutils literal">history_length=5</span> 와 <span class="docutils literal">flatten_history_dim=True</span> 를 적용하므로 최종 policy tensor는 <span class="docutils literal">48 * 5 = 240</span>
-차원이다. <span class="docutils literal">enable_corruption=True</span> 는 각 <span class="docutils literal">ObsTerm</span> 에 설정된 noise를 활성화하지만 dimension을 바꾸지 않는다.
-<span class="docutils literal">concatenate_terms=True</span> 는 선언된 term들을 하나의 policy tensor로 이어 붙인다.</p>
-<p><span class="docutils literal">PrivilegedCfg</span> 는 simulator의 현재 <span class="docutils literal"><span class="pre">base_lin_vel_b=[vx,</span> vy, vz]</span> 3개를 noise와 history 없이 제공한다.
-PPO runner의 <span class="docutils literal">obs_groups</span> 는 actor에 <span class="docutils literal">[&quot;policy&quot;]</span>, critic에 <span class="docutils literal">[&quot;policy&quot;, &quot;privileged&quot;]</span> 를 연결한다.
-따라서 actor 입력은 기존과 같은 240차원이고 critic 입력은 <span class="docutils literal">240 + 3 = 243</span> 차원이다. Critic-only 정보는
-inference policy나 ONNX actor 입력에 포함되지 않는다. 다만 critic 첫 입력층 크기가 달라지므로 이 변경 이전의
-240/240 actor-critic checkpoint는 새 설정에 그대로 resume하기보다 새 run으로 학습하는 것이 안전하다.</p>
+<p><span class="docutils literal">PolicyCfg</span> 와 <span class="docutils literal">CriticCfg</span> 모두 <span class="docutils literal">history_length=5</span> 와 <span class="docutils literal">flatten_history_dim=True</span> 를 적용하므로 각각
+<span class="docutils literal">48 * 5 = 240</span> 차원이다. Policy만 <span class="docutils literal">enable_corruption=True</span> 이므로 term별 additive noise가 history에 저장된다.
+Critic은 같은 물리량을 별도로 계산하지만 noise를 선언하지 않고 <span class="docutils literal">enable_corruption=False</span> 로 두어 clean history를
+만든다. 여기서 clean은 physics DR이 없는 상태가 아니라 simulator의 randomized 실제 state에 인위적 센서 noise만
+추가하지 않는다는 뜻이다.</p>
+<p><span class="docutils literal">PrivilegedCfg</span> 는 history 없이 아래 current-frame 10개를 제공한다.</p>
+<table>
+<caption>Current privileged layout</caption>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>index</p></th>
+<th class="head"><p>term</p></th>
+<th class="head"><p>차원</p></th>
+<th class="head"><p>의미</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p><span class="docutils literal">0:3</span></p></td>
+<td><p><span class="docutils literal">base_lin_vel</span></p></td>
+<td><p>3</p></td>
+<td><p>body-frame root linear velocity <span class="docutils literal">[vx, vy, vz]</span></p></td>
+</tr>
+<tr><td><p><span class="docutils literal">3:4</span></p></td>
+<td><p><span class="docutils literal">base_height</span></p></td>
+<td><p>1</p></td>
+<td><p>root world Z에서 environment origin Z를 뺀 평지 기준 높이</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">4:6</span></p></td>
+<td><p><span class="docutils literal">foot_height</span></p></td>
+<td><p>2</p></td>
+<td><p>Left/Right <span class="docutils literal">Foot_Link</span> 원점 world Z에서 environment origin Z를 뺀 값</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">6:8</span></p></td>
+<td><p><span class="docutils literal">foot_contact</span></p></td>
+<td><p>2</p></td>
+<td><p>Left/Right <span class="docutils literal">current_contact_time &gt; 0</span> binary flag</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">8:10</span></p></td>
+<td><p><span class="docutils literal">foot_air_time</span></p></td>
+<td><p>2</p></td>
+<td><p>Left/Right current uninterrupted air time [s]</p></td>
+</tr>
+</tbody>
+</table>
+<p>Foot height는 ray-based height scanner나 collision-point query가 아니다. 현재 평지에서는 <span class="docutils literal">Foot_Link</span> 원점이
+발바닥 중심보다 약 <span class="docutils literal">0.004 m</span> 위라는 고정 offset을 포함한 clearance proxy다. 이 4 mm는 현재 clearance reward의
+<span class="docutils literal">std=0.05 m</span> 보다 충분히 작으므로 별도 보정하지 않는다.</p>
+<p>PPO runner의 <span class="docutils literal">obs_groups</span> 는 actor에 <span class="docutils literal">[&quot;policy&quot;]</span>, critic에 <span class="docutils literal">[&quot;critic&quot;, &quot;privileged&quot;]</span> 를 연결한다.
+따라서 actor 입력은 기존과 같은 240차원이고 critic 입력은 <span class="docutils literal">240 + 10 = 250</span> 차원이다. Privileged 정보와 clean
+critic history는 inference policy나 ONNX actor 입력에 포함되지 않는다. Critic 첫 입력층이 달라지므로 243D critic
+checkpoint에서 resume하지 않고 fresh run으로 비교한다.</p>
 <p>현재 <span class="docutils literal">actuator_pos</span> 와 <span class="docutils literal">actuator_vel</span> term은 부모 Isaac Lab의 <span class="docutils literal">joint_pos_rel</span>, <span class="docutils literal">joint_vel_rel</span> 패턴처럼
 default state를 뺀 뒤 actuator 좌표로 변환한다. Position은 gait-ready default pose에서 0이 되고, 현재
 <span class="docutils literal">q_dot_default=0</span> 이므로 velocity 값은 absolute velocity와 수치상 같다. 별도의 수동 observation scale은
@@ -2065,15 +2118,16 @@ actor 입력을 5 frame 쌓는 <span class="docutils literal">self.observations.
 <td><p><span class="docutils literal">0.01</span></p></td>
 </tr>
 <tr><td><p>obs groups</p></td>
-<td><p>actor는 <span class="docutils literal">policy</span> 240차원, critic은 <span class="docutils literal">policy + privileged</span> 243차원</p></td>
+<td><p>actor는 noisy <span class="docutils literal">policy</span> 240차원, critic은 clean <span class="docutils literal">critic</span> 240 + current <span class="docutils literal">privileged</span> 10 = 250차원</p></td>
 </tr>
 <tr><td><p>symmetry data augmentation</p></td>
 <td><p>original:left-right mirror = <span class="docutils literal">1:1</span>, mirror loss는 <span class="docutils literal">False</span></p></td>
 </tr>
 </tbody>
 </table>
-<p>현재 actor는 blind policy history만 사용하고, critic은 current <span class="docutils literal">base_lin_vel</span> 3개를 추가로 받는 asymmetric
-구조다. Explicit estimator는 아직 넣지 않았으며 rough terrain 단계에서 검토한다.</p>
+<p>현재 actor는 blind noisy policy history만 사용하고, critic은 같은 항목의 clean history와 current base/Foot state를
+받는 asymmetric 구조다. Privileged 10D에는 history를 적용하지 않는다. Explicit estimator는 아직 넣지 않았으며
+rough terrain 단계에서 검토한다.</p>
 <p><span class="docutils literal">entropy_coef</span> 는 exploration standard deviation을 키우는 방향의 entropy 항에 곱해지는 계수다. 현재
 <span class="docutils literal">0.002</span> 는 최초 <span class="docutils literal">0.008</span> 과 저-noise 실험값 <span class="docutils literal">0.001</span> 사이의 중간 설정이다. 최초 설정보다 특정 관절의
 noise standard deviation이 과도하게 커지는 현상을 줄이면서, <span class="docutils literal">0.001</span> 에서 관찰된 강한 exploration 감소를
@@ -2093,8 +2147,8 @@ actions:      [a_1, ..., a_B, K_g(a_1), ..., K_g(a_B)]
 
 mirrored half가 재사용하는 rollout 값:
   advantage A, return R, target value, old log probability</code></pre>
-<p>Actor와 critic network를 두 개 만드는 방식이 아니다. 같은 actor/critic이 원본과 mirror sample을 모두 계산하며,
-network 입력 dimension도 actor <span class="docutils literal">240</span>, critic <span class="docutils literal">243</span> 으로 유지된다. 증가하는 것은 PPO update mini-batch의
+<p>Actor와 critic network를 두 벌 만드는 방식이 아니다. 같은 actor/critic이 원본과 mirror sample을 모두 계산하며,
+network 입력 dimension은 actor <span class="docutils literal">240</span>, critic <span class="docutils literal">250</span> 으로 유지된다. 증가하는 것은 PPO update mini-batch의
 sample 행 수다. 현재 actor/critic empirical observation normalization도 기존 baseline과 같이 <span class="docutils literal">True</span> 로
 유지하며 symmetry callback은 raw observation group을 먼저 반전한다.</p>
 <p>Policy history의 실제 메모리 순서는 주의가 필요하다. Isaac Lab ObservationManager는 각 term의 5-step history를
@@ -2138,6 +2192,14 @@ sample 행 수다. 현재 actor/critic empirical observation normalization도 �
 <tr><td><p>critic privileged base linear velocity</p></td>
 <td><p><span class="docutils literal">[vx, vy, vz]</span></p></td>
 <td><p><span class="docutils literal">[vx, <span class="pre">-vy,</span> vz]</span></p></td>
+</tr>
+<tr><td><p>critic privileged base height</p></td>
+<td><p><span class="docutils literal">[h_base]</span></p></td>
+<td><p><span class="docutils literal">[h_base]</span></p></td>
+</tr>
+<tr><td><p>critic privileged Foot height/contact/air time</p></td>
+<td><p><span class="docutils literal">[L, R]</span> for each bilateral term</p></td>
+<td><p><span class="docutils literal">[R, L]</span> for each bilateral term</p></td>
 </tr>
 </tbody>
 </table>
@@ -2393,13 +2455,13 @@ environment 및 queue 적용 흐름도 문서화했다.</p>
 <td><p><span class="docutils literal">13</span></p></td>
 </tr>
 <tr><td><p>observation shape</p></td>
-<td><p><span class="docutils literal">policy=240</span>, <span class="docutils literal">privileged=3</span></p></td>
+<td><p>이전 smoke 기준 <span class="docutils literal">policy=240</span>, <span class="docutils literal">privileged=3</span></p></td>
 </tr>
 <tr><td><p>actor input</p></td>
 <td><p>5-step history 기반 240차원</p></td>
 </tr>
 <tr><td><p>critic input</p></td>
-<td><p>actor history와 현재 <span class="docutils literal">base_lin_vel_b</span> 를 합친 243차원</p></td>
+<td><p>이전 smoke 기준 actor history와 현재 <span class="docutils literal">base_lin_vel_b</span> 를 합친 243차원</p></td>
 </tr>
 <tr><td><p>actor output</p></td>
 <td><p>13차원 normalized actuator action</p></td>
@@ -2467,9 +2529,10 @@ TensorBoard scalar이며, reward 설정이 다른 run과 <span class="docutils l
 <p>Tracking은 약 15k에서 사실상 plateau에 도달했고, 15k에서 20k 사이에는 sliding, jump, orientation 같은
 contact-related term이 조금 더 정돈되었다. 따라서 현재 기준 checkpoint는 <span class="docutils literal">model_19999.pt</span> 로 보존하되,
 새 실험에서도 <span class="docutils literal">model_9999.pt</span>, <span class="docutils literal">model_14999.pt</span>, <span class="docutils literal">model_19999.pt</span> 를 모두 비교한다.</p>
-<p>다음 실험은 별도 branch에서 critic-only privileged observation을 확장하고 fresh <span class="docutils literal">20,000</span> iteration으로
-학습한다. 현재 actor의 240차원 입력, 13차원 actuator action, reward, command 역할을 그대로 둔 상태에서 critic
-입력 효과만 비교해야 한다. 기존 branch를 merge하거나 기존 checkpoint를 resume하여 교정하는 실험이 아니다.</p>
+<p>현재 <span class="docutils literal"><span class="pre">yunho/privileged-observation</span></span> branch는 위 directional baseline에서 분기하여 critic을 250D로 확장하고,
+동시에 base-height와 swing-clearance reward를 시험한다. Actor의 240차원 입력과 13차원 actuator action contract는
+그대로다. Critic-only 변경과 reward 변경이 함께 들어가므로 baseline과 비교할 때 두 효과가 완전히 분리된 ablation은
+아니며, 기존 checkpoint를 resume하지 않고 fresh <span class="docutils literal">20,000</span> iteration으로 학습한다.</p>
 </section>
 <section id="id8">
 <h2>현재 설계 의도</h2>
@@ -2481,7 +2544,7 @@ height scanner
 camera observation
 explicit estimator / MLP encoder
 teacher-student distillation
-추가 privileged terrain/contact state</code></pre>
+terrain height scanner / rough-terrain privileged height state</code></pre>
 <p>추후 권장 순서는 다음과 같다.</p>
 <pre class="code text literal-block"><code>1. Flat smoke test 확인
 2. Flat 학습으로 서기/걷기 안정화

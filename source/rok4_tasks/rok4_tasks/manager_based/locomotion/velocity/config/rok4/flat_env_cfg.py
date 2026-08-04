@@ -114,10 +114,65 @@ class RoK4ObservationsCfg:
     policy: PolicyCfg = PolicyCfg()
 
     @configclass
+    class CriticCfg(ObsGroup):
+        """Uncorrupted proprioceptive history available only to the critic."""
+
+        base_ang_vel = ObsTerm(func=mdp.base_ang_vel)
+        projected_gravity = ObsTerm(func=mdp.projected_gravity)
+        velocity_commands = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
+        actuator_pos = ObsTerm(
+            func=mdp.actuator_pos_rel,
+            params={
+                "asset_cfg": SceneEntityCfg("robot", joint_names=ROK4_JOINT_ORDER, preserve_order=True),
+                "actuator_name": "body",
+            },
+        )
+        actuator_vel = ObsTerm(
+            func=mdp.actuator_vel_rel,
+            params={
+                "asset_cfg": SceneEntityCfg("robot", joint_names=ROK4_JOINT_ORDER, preserve_order=True),
+                "actuator_name": "body",
+            },
+        )
+        actions = ObsTerm(func=mdp.last_action, params={"action_name": "actuator_pos"})
+
+        def __post_init__(self):
+            """Configure clean critic history without synthetic observation noise."""
+            self.history_length = 5
+            self.flatten_history_dim = True
+            self.enable_corruption = False
+            self.concatenate_terms = True
+
+    critic: CriticCfg = CriticCfg()
+
+    @configclass
     class PrivilegedCfg(ObsGroup):
         """Current simulator state available only to the training critic."""
 
         base_lin_vel = ObsTerm(func=mdp.base_lin_vel)
+        base_height = ObsTerm(func=mdp.base_height)
+        foot_height = ObsTerm(
+            func=mdp.foot_height,
+            params={"asset_cfg": SceneEntityCfg("robot", body_names=["L_Foot_Link", "R_Foot_Link"])},
+        )
+        foot_contact = ObsTerm(
+            func=mdp.foot_contact_flag,
+            params={
+                "sensor_cfg": SceneEntityCfg(
+                    "contact_forces",
+                    body_names=["L_Foot_Link", "R_Foot_Link"],
+                )
+            },
+        )
+        foot_air_time = ObsTerm(
+            func=mdp.foot_current_air_time,
+            params={
+                "sensor_cfg": SceneEntityCfg(
+                    "contact_forces",
+                    body_names=["L_Foot_Link", "R_Foot_Link"],
+                )
+            },
+        )
 
         def __post_init__(self):
             """Configure the uncorrupted current-state observation."""
@@ -179,6 +234,11 @@ class RoK4RewardsCfg(RewardsCfg):
         weight=1.0,
         params={"command_name": "base_velocity", "std": 0.5},
     )
+    base_height_l2 = RewTerm(
+        func=mdp.base_height_relative_l2,
+        weight=-1.0,
+        params={"target_height": 0.907},
+    )
     feet_air_time = RewTerm(
         func=mdp.feet_air_time_touchdown_biped,
         weight=0.5,
@@ -186,6 +246,21 @@ class RoK4RewardsCfg(RewardsCfg):
             "command_name": "base_velocity",
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["L_Foot_Link", "R_Foot_Link"]),
             "threshold": 0.65,
+        },
+    )
+    feet_clearance = RewTerm(
+        func=mdp.feet_swing_clearance_exp,
+        weight=0.2,
+        params={
+            "command_name": "base_velocity",
+            "target_height": 0.10,
+            "std": 0.05,
+            "velocity_scale": 0.20,
+            "asset_cfg": SceneEntityCfg("robot", body_names=["L_Foot_Link", "R_Foot_Link"]),
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces",
+                body_names=["L_Foot_Link", "R_Foot_Link"],
+            ),
         },
     )
     no_jumps = RewTerm(
@@ -353,8 +428,8 @@ class RoK4FlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.scene.height_scanner = None
         self.curriculum.terrain_levels = None
 
-        # The actor retains the 48-value, five-frame actuator-space history (240 values). The critic receives that
-        # same history plus the current three-value base linear velocity from the privileged observation group.
+        # The actor retains its noisy 240-value history. The critic receives a separate clean 240-value history plus
+        # ten current privileged values: base velocity/height and bilateral foot height/contact/air-time state.
 
         # Events/randomization. The DR values live in domain_randomization_cfg.py for easier tuning.
         apply_rok4_domain_randomization(self)

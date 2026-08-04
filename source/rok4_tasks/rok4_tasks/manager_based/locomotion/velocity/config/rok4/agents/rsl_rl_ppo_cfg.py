@@ -20,7 +20,7 @@ class RoK4FlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     max_iterations = 5000
     save_interval = 50
     experiment_name = "rok4_flat"
-    obs_groups = {"policy": ["policy"], "critic": ["policy", "privileged"]}
+    obs_groups = {"policy": ["policy"], "critic": ["critic", "privileged"]}
     # Match the Isaac Gym/RL-Games setup: clip policy actions before the environment applies action scale.
     clip_actions = 1.0
     # Initial RoK4 baseline: RoK4-oriented network/normalization settings with G1-style PPO algorithm values.

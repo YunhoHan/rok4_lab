@@ -28,9 +28,10 @@ class _ManagerTermBaseStub:
 
 
 class _SceneStub(dict):
-    def __init__(self, entities: dict, sensors: dict):
+    def __init__(self, entities: dict, sensors: dict, env_origins: torch.Tensor | None = None):
         super().__init__(entities)
         self.sensors = sensors
+        self.env_origins = env_origins
 
 
 def _identity_quat_apply(_quat: torch.Tensor, vectors: torch.Tensor) -> torch.Tensor:
@@ -160,6 +161,102 @@ def test_feet_air_time_rewards_single_touchdown_once_and_masks_small_commands() 
     )
 
     torch.testing.assert_close(reward, torch.tensor([0.65, 0.40, 0.0, 0.0, 0.0]))
+
+
+def test_base_height_uses_environment_relative_world_height() -> None:
+    """Base-height error must be independent of each environment's world offset."""
+    env_origins = torch.tensor([[0.0, 0.0, 0.0], [2.0, 1.0, 1.0], [4.0, 2.0, 2.0]])
+    root_pos_w = env_origins.clone()
+    root_pos_w[:, 2] += torch.tensor([0.907, 0.957, 0.807])
+    asset = SimpleNamespace(data=SimpleNamespace(root_pos_w=root_pos_w))
+    env = SimpleNamespace(
+        scene=_SceneStub(entities={"robot": asset}, sensors={}, env_origins=env_origins),
+    )
+
+    penalty = _REWARDS.base_height_relative_l2(
+        env,
+        target_height=0.907,
+        asset_cfg=_SceneEntityCfgStub("robot"),
+    )
+
+    torch.testing.assert_close(penalty, torch.tensor([0.0, 0.0025, 0.01]))
+
+
+def test_feet_swing_clearance_rewards_valid_moving_swing_feet() -> None:
+    """Clearance reward must gate height shaping by speed, swing state, and standing role."""
+    env_origins = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 1.0],
+            [2.0, 0.0, 2.0],
+            [3.0, 0.0, 3.0],
+            [4.0, 0.0, 4.0],
+        ]
+    )
+    relative_heights = torch.tensor(
+        [
+            [0.10, 0.004],
+            [0.15, 0.004],
+            [0.10, 0.10],
+            [0.10, 0.004],
+            [0.10, 0.004],
+        ]
+    )
+    body_pos_w = torch.zeros((5, 2, 3))
+    body_pos_w[..., 2] = relative_heights + env_origins[:, 2].unsqueeze(-1)
+    body_lin_vel_w = torch.zeros((5, 2, 3))
+    body_lin_vel_w[:, 0, 0] = 0.20
+    body_lin_vel_w[2, 1, 0] = 0.40
+    asset = SimpleNamespace(
+        data=SimpleNamespace(
+            body_pos_w=body_pos_w,
+            body_lin_vel_w=body_lin_vel_w,
+        )
+    )
+    contact_sensor = SimpleNamespace(
+        data=SimpleNamespace(
+            current_air_time=torch.tensor(
+                [
+                    [0.30, 0.00],
+                    [0.30, 0.00],
+                    [0.30, 0.40],
+                    [0.70, 0.00],
+                    [0.30, 0.00],
+                ]
+            )
+        )
+    )
+    command_term = SimpleNamespace(is_standing_env=torch.tensor([False, False, False, False, True]))
+    env = SimpleNamespace(
+        scene=_SceneStub(
+            entities={"robot": asset},
+            sensors={"contact_forces": contact_sensor},
+            env_origins=env_origins,
+        ),
+        command_manager=SimpleNamespace(get_term=lambda _name: command_term),
+    )
+
+    reward = _REWARDS.feet_swing_clearance_exp(
+        env,
+        command_name="base_velocity",
+        target_height=0.10,
+        std=0.05,
+        velocity_scale=0.20,
+        asset_cfg=_SceneEntityCfgStub("robot"),
+        sensor_cfg=_SceneEntityCfgStub("contact_forces"),
+    )
+
+    tanh_one = torch.tanh(torch.tensor(1.0))
+    expected = torch.tensor(
+        [
+            tanh_one,
+            tanh_one * torch.exp(torch.tensor(-1.0)),
+            0.5 * (tanh_one + torch.tanh(torch.tensor(2.0))),
+            tanh_one,
+            0.0,
+        ]
+    )
+    torch.testing.assert_close(reward, expected)
 
 
 def test_feet_swing_roll_penalizes_only_airborne_feet(monkeypatch) -> None:

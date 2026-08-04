@@ -4,6 +4,11 @@
 
 ### Changed
 
+- Changed the asymmetric critic from the actor's noisy 240D policy history plus 3D base velocity to a separate clean
+  240D proprioceptive history plus 10 current privileged values: base velocity/height and bilateral foot
+  height/contact/current-air-time state. The actor and exported policy remain 240D.
+- Extended symmetry augmentation to mirror the clean critic history and the 10D privileged state by preserving base
+  height, reflecting lateral base velocity, and swapping bilateral foot values.
 - Recorded the 20k directional-gait reference run and its 10k/15k/20k TensorBoard comparison, and documented that
   the next critic-only privileged-observation experiment starts fresh on a separate branch without merging the
   existing baseline branches.
@@ -62,6 +67,9 @@
 
 ### Added
 
+- Added a flat-ground base-height penalty with target `0.907 m` and weight `-1.0`.
+- Added a standing-masked swing-foot clearance reward with target `0.10 m`, height standard deviation `0.05 m`,
+  `tanh(v_xy / 0.20)` speed gating, and weight `0.2`.
 - Added a dedicated Korean observation-noise, reset-randomization, and physics-DR document covering sampling cadence,
   randomization granularity, normalization differences, Train/Play/Teleop behavior, and deferred experiments.
 - Added a Play/Teleop velocity monitor showing the selected environment's scaled command alongside measured yaw-frame
