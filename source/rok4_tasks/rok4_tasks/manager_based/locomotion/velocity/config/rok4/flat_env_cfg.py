@@ -194,22 +194,22 @@ class RoK4CommandsCfg(CommandsCfg):
         heading_command=False,
         debug_vis=True,
         periodic_freeze_enabled=True,
-        mixed_env_ratio=0.45,
+        mixed_env_ratio=0.35,
         standing_env_ratio=0.05,
         walking_env_ratio=0.05,
-        x_env_ratio=0.10,
+        x_env_ratio=0.20,
         fast_forward_env_ratio=0.05,
         y_env_ratio=0.10,
         yaw_env_ratio=0.10,
         x_yaw_env_ratio=0.10,
         periodic_freeze_interval_s=10.0,
         periodic_freeze_duration_range_s=(1.5, 3.0),
-        always_walking_min_lin_vel=0.15,
-        dedicated_x_min_abs_vel=0.15,
+        always_walking_min_lin_vel=0.10,
+        dedicated_x_min_abs_vel=0.10,
         dedicated_x_max_abs_vel=0.30,
         fast_forward_min_vel=0.30,
-        dedicated_y_min_abs_vel=0.15,
-        dedicated_yaw_min_abs_vel=0.15,
+        dedicated_y_min_abs_vel=0.10,
+        dedicated_yaw_min_abs_vel=0.10,
         ranges=mdp.RoK4PeriodicFreezeVelocityCommandCfg.Ranges(
             lin_vel_x=ROK4_LIN_VEL_X_RANGE,
             lin_vel_y=ROK4_LIN_VEL_Y_RANGE,
@@ -240,12 +240,17 @@ class RoK4RewardsCfg(RewardsCfg):
         params={"target_height": 0.907},
     )
     feet_air_time = RewTerm(
-        func=mdp.feet_air_time_touchdown_biped,
-        weight=0.5,
+        func=mdp.FeetAirTimeTouchdownBiped,
+        weight=2.0,
         params={
             "command_name": "base_velocity",
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["L_Foot_Link", "R_Foot_Link"]),
-            "threshold": 0.65,
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces",
+                body_names=["L_Foot_Link", "R_Foot_Link"],
+                preserve_order=True,
+            ),
+            "target_air_time": 0.50,
+            "command_threshold": 0.05,
         },
     )
     feet_clearance = RewTerm(
@@ -253,9 +258,9 @@ class RoK4RewardsCfg(RewardsCfg):
         weight=0.2,
         params={
             "command_name": "base_velocity",
-            "target_height": 0.10,
-            "std": 0.05,
-            "velocity_scale": 0.20,
+            "target_height": 0.054,
+            "std": 0.04,
+            "velocity_scale": 0.50,
             "asset_cfg": SceneEntityCfg("robot", body_names=["L_Foot_Link", "R_Foot_Link"]),
             "sensor_cfg": SceneEntityCfg(
                 "contact_forces",
@@ -282,10 +287,36 @@ class RoK4RewardsCfg(RewardsCfg):
             "asset_cfg": SceneEntityCfg("robot", body_names=["L_Foot_Link", "R_Foot_Link"]),
         },
     )
+    feet_touchdown_velocity = RewTerm(
+        func=mdp.FeetTouchdownVelocityL2,
+        weight=-10.0,
+        params={
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces",
+                body_names=["L_Foot_Link", "R_Foot_Link"],
+            ),
+            "asset_cfg": SceneEntityCfg("robot", body_names=["L_Foot_Link", "R_Foot_Link"]),
+            "safe_landing_velocity": 0.0,
+        },
+    )
+    feet_contact_velocity = None
+    feet_contact_force = None
+    feet_touchdown_acc = None
     feet_flat_orientation_l2 = None
     feet_swing_roll_l2 = RewTerm(
         func=mdp.feet_swing_roll_l2,
         weight=-1.0,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=["L_Foot_Link", "R_Foot_Link"]),
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces",
+                body_names=["L_Foot_Link", "R_Foot_Link"],
+            ),
+        },
+    )
+    feet_swing_pitch_l2 = RewTerm(
+        func=mdp.feet_swing_pitch_l2,
+        weight=-0.1,
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=["L_Foot_Link", "R_Foot_Link"]),
             "sensor_cfg": SceneEntityCfg(
@@ -331,7 +362,7 @@ class RoK4RewardsCfg(RewardsCfg):
     )
     joint_deviation_hip_pitch = RewTerm(
         func=mdp.joint_deviation_l1,
-        weight=-0.01,
+        weight=-0.005,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Hip_Pitch_Joint"])},
     )
     joint_deviation_torso = RewTerm(
@@ -366,8 +397,8 @@ class RoK4RewardsCfg(RewardsCfg):
         weight=-1.0e-5,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=ROK4_JOINT_ORDER, preserve_order=True)},
     )
-    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.005)
-    second_action_rate_l2 = RewTerm(func=mdp.second_action_rate_l2, weight=-0.0005)
+    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
+    second_action_rate_l2 = RewTerm(func=mdp.second_action_rate_l2, weight=-0.005)
 
 
 @configclass

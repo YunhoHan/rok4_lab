@@ -99,6 +99,12 @@ parser.add_argument(
     default=0.05,
     help="Normalized gamepad dead zone in the range [0, 1].",
 )
+parser.add_argument(
+    "--teleop_keyboard_step",
+    type=float,
+    default=0.05,
+    help="Keyboard command increment per key press [m/s for linear axes, rad/s for yaw].",
+)
 '''
         source = _replace_once(
             source,
@@ -110,6 +116,8 @@ parser.add_argument(
 
         torch_import = "import torch\n"
         teleop_imports = '''from isaaclab.devices import Se2Gamepad, Se2GamepadCfg, Se2Keyboard, Se2KeyboardCfg
+
+from _teleop import IncrementalKeyboardCommand
 
 from rok4_tasks.manager_based.locomotion.velocity.config.rok4.flat_env_cfg import (
     ROK4_ANG_VEL_Z_RANGE,
@@ -200,7 +208,13 @@ def _scale_teleop_command(raw_command: torch.Tensor, invert_lateral_and_yaw: boo
         dead_zone=args_cli.teleop_dead_zone,
     )
     teleop_reset_request = _TeleopResetRequest()
+    keyboard_command = None
     if args_cli.teleop_device == "keyboard":
+        keyboard_command = IncrementalKeyboardCommand(
+            step=args_cli.teleop_keyboard_step,
+            command_ranges=(ROK4_LIN_VEL_X_RANGE, ROK4_LIN_VEL_Y_RANGE, ROK4_ANG_VEL_Z_RANGE),
+        )
+        keyboard_command.bind(teleop_interface)
         teleop_interface.add_callback("R", teleop_reset_request.request)
     base_velocity_command = env.unwrapped.command_manager.get_term("base_velocity")
     command_display_window = getattr(env.unwrapped, "_window", None)
@@ -221,16 +235,22 @@ def _scale_teleop_command(raw_command: torch.Tensor, invert_lateral_and_yaw: boo
         inference_marker = "        # run everything in inference mode\n        with torch.inference_mode():\n"
         command_update = '''        if teleop_reset_request.consume():
             teleop_interface.reset()
+            if keyboard_command is not None:
+                keyboard_command.reset()
             with torch.inference_mode():
                 obs, _ = env.reset()
                 reset_dones = torch.ones(env.num_envs, dtype=torch.bool, device=env.unwrapped.device)
                 policy_nn.reset(reset_dones)
             print("[INFO] Teleoperation environment reset.")
-        raw_teleop_command = teleop_interface.advance()
-        teleop_command = _scale_teleop_command(
-            raw_teleop_command,
-            invert_lateral_and_yaw=args_cli.teleop_device == "gamepad",
-        )
+        if keyboard_command is None:
+            raw_teleop_command = teleop_interface.advance()
+            teleop_command = _scale_teleop_command(raw_teleop_command, invert_lateral_and_yaw=True)
+        else:
+            teleop_command = torch.tensor(
+                keyboard_command.command,
+                dtype=torch.float32,
+                device=env.unwrapped.device,
+            )
         base_velocity_command.vel_command_b[:] = teleop_command
         if command_display_window is not None:
             command_display_window.update_command_display()

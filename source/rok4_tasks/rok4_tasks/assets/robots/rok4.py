@@ -52,40 +52,40 @@ ROK4_ADAPT_LINK_BETA = 0.06
 """ADAPT differential link length [m]."""
 
 ROK4_ACTUATOR_KP_VALUES = [
-    250.0,
-    250.0,
-    250.0,
-    250.0,
+    240.0,
+    240.0,
+    160.0,
+    160.0,
     80.0,
     80.0,
-    250.0,
-    250.0,
-    250.0,
-    250.0,
+    240.0,
+    240.0,
+    160.0,
+    160.0,
     80.0,
     80.0,
     100.0,
 ]
 ROK4_ACTUATOR_KP = _make_joint_dict(ROK4_ACTUATOR_KP_VALUES)
-"""Isaac Gym RoK4 gains applied by the ADAPT actuator-space PD model."""
+"""RoK4 compliance gains applied by the ADAPT actuator-space PD model."""
 
 ROK4_ACTUATOR_KD_VALUES = [
-    12.5,
-    12.5,
-    12.5,
-    12.5,
-    7.5,
-    7.5,
-    12.5,
-    12.5,
-    12.5,
-    12.5,
-    7.5,
-    7.5,
+    12.0,
+    12.0,
+    8.0,
+    8.0,
+    8.0,
+    8.0,
+    12.0,
+    12.0,
+    8.0,
+    8.0,
+    8.0,
+    8.0,
     5.0,
 ]
 ROK4_ACTUATOR_KD = _make_joint_dict(ROK4_ACTUATOR_KD_VALUES)
-"""Isaac Gym RoK4 damping gains applied in actuator coordinates."""
+"""RoK4 compliance damping gains applied in actuator coordinates."""
 
 ROK4_JOINT_TORQUE_LIMIT_VALUES = [
     150.0,
@@ -144,6 +144,9 @@ ROK4_ACTUATOR_TORQUE_LIMIT_FACTOR = 0.9
 
 ROK4_ACTUATOR_VELOCITY_LIMIT_FACTOR = 0.9
 """Factor applied to actuator mechanical velocity maxima."""
+
+ROK4_ACTUATOR_COMMAND_DELAY_STEPS = 2
+"""Fixed target-command delay; two 2 ms physics steps equal the measured 4 ms delay."""
 
 # Compatibility aliases only; ROK4_TRAIN_CFG uses the ROK4_ACTUATOR_* names below.
 ROK4_KP = ROK4_ACTUATOR_KP
@@ -268,6 +271,8 @@ ROK4_TRAIN_CFG = ArticulationCfg(
             actuator_velocity_limit=ROK4_ACTUATOR_VELOCITY_LIMIT_VALUES,
             torque_limit_factor=ROK4_ACTUATOR_TORQUE_LIMIT_FACTOR,
             velocity_limit_factor=ROK4_ACTUATOR_VELOCITY_LIMIT_FACTOR,
+            min_delay=ROK4_ACTUATOR_COMMAND_DELAY_STEPS,
+            max_delay=ROK4_ACTUATOR_COMMAND_DELAY_STEPS,
             # PD gains are indexed in actuator coordinates; PhysX joint drives remain disabled.
             stiffness=ROK4_ACTUATOR_KP,
             damping=ROK4_ACTUATOR_KD,

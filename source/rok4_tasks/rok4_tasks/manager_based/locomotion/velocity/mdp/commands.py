@@ -350,7 +350,7 @@ class RoK4PeriodicFreezeVelocityCommandCfg(UniformVelocityCommandCfg):
     periodic_freeze_enabled: bool = True
     """Whether to enable training-only episode roles and asynchronous standing windows."""
 
-    mixed_env_ratio: float = 0.45
+    mixed_env_ratio: float = 0.35
     """Probability that an environment alternates between moving and standing during an episode."""
 
     standing_env_ratio: float = 0.05
@@ -359,7 +359,7 @@ class RoK4PeriodicFreezeVelocityCommandCfg(UniformVelocityCommandCfg):
     walking_env_ratio: float = 0.05
     """Probability that an environment receives only moving commands throughout an episode."""
 
-    x_env_ratio: float = 0.10
+    x_env_ratio: float = 0.20
     """Probability of symmetric low-speed forward/backward commands with only base-frame ``vx`` active."""
 
     fast_forward_env_ratio: float = 0.05
@@ -380,10 +380,10 @@ class RoK4PeriodicFreezeVelocityCommandCfg(UniformVelocityCommandCfg):
     periodic_freeze_duration_range_s: tuple[float, float] = (1.5, 3.0)
     """Uniform range of per-environment standing durations [s]."""
 
-    always_walking_min_lin_vel: float = 0.15
+    always_walking_min_lin_vel: float = 0.10
     """Minimum planar speed command accepted for always-walking environments [m/s]."""
 
-    dedicated_x_min_abs_vel: float = 0.15
+    dedicated_x_min_abs_vel: float = 0.10
     """Minimum absolute ``vx`` sampled by the ``x`` and ``x_yaw`` roles [m/s]."""
 
     dedicated_x_max_abs_vel: float = 0.30
@@ -392,8 +392,8 @@ class RoK4PeriodicFreezeVelocityCommandCfg(UniformVelocityCommandCfg):
     fast_forward_min_vel: float = 0.30
     """Minimum ``vx`` sampled by the forward-only role [m/s]."""
 
-    dedicated_y_min_abs_vel: float = 0.15
+    dedicated_y_min_abs_vel: float = 0.10
     """Minimum absolute ``vy`` sampled by the ``y`` role [m/s]."""
 
-    dedicated_yaw_min_abs_vel: float = 0.15
+    dedicated_yaw_min_abs_vel: float = 0.10
     """Minimum absolute ``wz`` sampled by the ``yaw`` and ``x_yaw`` roles [rad/s]."""

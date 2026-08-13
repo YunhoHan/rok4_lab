@@ -6,7 +6,7 @@ from dataclasses import MISSING
 
 import torch
 
-from isaaclab.actuators import IdealPDActuator, IdealPDActuatorCfg
+from isaaclab.actuators import DelayedPDActuator, DelayedPDActuatorCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.types import ArticulationActions
 
@@ -103,8 +103,8 @@ class RoK4AdaptTransmission:
         return mapped
 
 
-class RoK4AdaptActuator(IdealPDActuator):
-    r"""Explicit actuator-space PD model for the RoK4 ADAPT transmission.
+class RoK4AdaptActuator(DelayedPDActuator):
+    r"""Delayed explicit actuator-space PD model for the RoK4 ADAPT transmission.
 
     Joint targets from Isaac Lab are converted to actuator targets. PD torques are
     computed and clipped in actuator coordinates before being mapped back to the
@@ -127,6 +127,11 @@ class RoK4AdaptActuator(IdealPDActuator):
             raise ValueError("torque_limit_factor must be in (0, 1].")
         if not 0.0 < cfg.velocity_limit_factor <= 1.0:
             raise ValueError("velocity_limit_factor must be in (0, 1].")
+        if cfg.min_delay < 0 or cfg.max_delay < cfg.min_delay:
+            raise ValueError(
+                "Actuator command delay must satisfy 0 <= min_delay <= max_delay, received "
+                f"{cfg.min_delay} and {cfg.max_delay}."
+            )
 
         self.transmission = RoK4AdaptTransmission(
             link_alpha=cfg.link_alpha,
@@ -162,12 +167,13 @@ class RoK4AdaptActuator(IdealPDActuator):
         joint_pos: torch.Tensor,
         joint_vel: torch.Tensor,
     ) -> ArticulationActions:
-        """Compute actuator PD torque and return its joint-space equivalent."""
+        """Delay commands, compute ADAPT-space PD torque, and return joint effort."""
         if control_action.joint_positions is None:
             raise ValueError("RoK4 ADAPT actuator requires joint-position targets.")
 
+        delayed_joint_pos_target = self.positions_delay_buffer.compute(control_action.joint_positions)
         joint_pos_canonical = self._model_to_canonical(joint_pos)
-        joint_pos_target_canonical = self._model_to_canonical(control_action.joint_positions)
+        joint_pos_target_canonical = self._model_to_canonical(delayed_joint_pos_target)
         actuator_pos = self.transmission.joint_to_actuator_position(joint_pos_canonical)
         actuator_pos_target = self.transmission.joint_to_actuator_position(joint_pos_target_canonical)
 
@@ -176,13 +182,17 @@ class RoK4AdaptActuator(IdealPDActuator):
         if control_action.joint_velocities is None:
             actuator_vel_target = torch.zeros_like(actuator_vel)
         else:
-            joint_vel_target_canonical = self._model_to_canonical(control_action.joint_velocities)
+            delayed_joint_vel_target = self.velocities_delay_buffer.compute(
+                control_action.joint_velocities
+            )
+            joint_vel_target_canonical = self._model_to_canonical(delayed_joint_vel_target)
             actuator_vel_target = self.transmission.joint_to_actuator_velocity(joint_vel_target_canonical)
 
         if control_action.joint_efforts is None:
             actuator_effort_ff = torch.zeros_like(actuator_pos)
         else:
-            joint_effort_ff_canonical = self._model_to_canonical(control_action.joint_efforts)
+            delayed_joint_effort_target = self.efforts_delay_buffer.compute(control_action.joint_efforts)
+            joint_effort_ff_canonical = self._model_to_canonical(delayed_joint_effort_target)
             actuator_effort_ff = self.transmission.joint_to_actuator_torque(joint_effort_ff_canonical)
 
         stiffness = self._model_to_canonical(self.stiffness)
@@ -230,7 +240,7 @@ class RoK4AdaptActuator(IdealPDActuator):
 
 
 @configclass
-class RoK4AdaptActuatorCfg(IdealPDActuatorCfg):
+class RoK4AdaptActuatorCfg(DelayedPDActuatorCfg):
     """Configuration for :class:`RoK4AdaptActuator`."""
 
     class_type: type = RoK4AdaptActuator

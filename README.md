@@ -38,12 +38,14 @@ Core inheritance and configuration relationships:
 ```text
 Isaac Lab
   ├─ IdealPDActuator
-  │    └─ RoK4AdaptActuator
-  │         ├─ contains RoK4AdaptTransmission
-  │         └─ overrides actuator-space compute()
+  │    └─ DelayedPDActuator
+  │         └─ RoK4AdaptActuator
+  │              ├─ contains RoK4AdaptTransmission
+  │              └─ overrides actuator-space compute()
   ├─ IdealPDActuatorCfg
-  │    └─ RoK4AdaptActuatorCfg
-  │         └─ instantiated by rok4.py inside ROK4_TRAIN_CFG
+  │    └─ DelayedPDActuatorCfg
+  │         └─ RoK4AdaptActuatorCfg
+  │              └─ instantiated by rok4.py inside ROK4_TRAIN_CFG
   ├─ ActionTerm
   │    └─ RoK4ActuatorPositionAction
   └─ LocomotionVelocityRoughEnvCfg
@@ -285,9 +287,28 @@ to the explicit actuator model. It is not sent directly to a PhysX position driv
 `RoK4AdaptActuator.compute()` reads `q_target` and the current joint state, converts them to actuator coordinates,
 computes and clips `tau_psi`, maps it to `tau_q`, clears the position target, and returns only joint effort to PhysX.
 
-The current compliance experiment keeps the first four actuator gains of each leg at `Kp=250, Kd=12.5` and lowers
-the final coupled actuator pair to `Kp=80, Kd=7.5`. The torso-yaw gain remains `Kp=100, Kd=5`. These are
-actuator-space gains applied to `psi`, not direct joint-space gains.
+Before ADAPT conversion, the actuator passes `q_target` through the position `DelayBuffer` inherited from Isaac Lab's
+`DelayedPDActuator`, with
+`min_delay=max_delay=2` physics steps. At the current `2 ms` physics period this reproduces the measured fixed
+`4 ms` command-path delay. Current `q` and `q_dot` feedback are not delayed, so this models target communication and
+application latency rather than a stale encoder feedback loop. The buffer is cleared on each environment reset and
+holds the first available target while its two-sample history fills. This actuator-side state is not part of the
+240D Actor observation or the exported ONNX policy.
+
+`DelayedPDActuator` also owns the velocity-target and feed-forward-effort delay buffers and reset logic. The current
+position-action task leaves those two command tensors at zero, so their delayed values remain zero. RoK4 overrides
+`compute()` instead of calling the parent's ordinary joint-space PD implementation: only buffer ownership and reset
+behavior are inherited, while ADAPT conversion, actuator-space PD, actuator torque clipping, and joint-effort mapping
+remain RoK4-specific.
+
+The current compliance experiment uses `Kp/Kd=240/12` for hip yaw/roll,
+`160/8` for the first ADAPT-coupled pair associated with hip pitch/knee, and `80/8` for the final ankle-side pair.
+The torso-yaw gain remains `100/5`. These are diagonal actuator-space gains applied to `psi`, not direct joint-space
+gains. The resulting joint-space gain is `K_q=J^-T K_psi J^-1`, so knee and ankle-pitch errors remain coupled while
+the sagittal chain and ankle stiffness retain the experimentally stable real-robot range. The per-leg actuator-space
+ratios are `20:1, 20:1, 20:1, 20:1, 10:1, 10:1`; ADAPT coupling makes the effective joint-space knee diagonal ratio
+`15:1`. The touchdown-force implementation remains available for comparison, but the current reward configuration
+sets the term to `None`; GRF is inspected through debug visualization instead of shaping this experiment.
 
 Self-collision is enabled in the RoK4 articulation config through `enabled_self_collisions=True`.
 
@@ -330,13 +351,18 @@ The RoK4 contact sensor adds a local debug view without modifying Isaac Lab. In 
 
 - a blue arrow for the left-foot world-frame total ground reaction force,
 - a green arrow for the right-foot world-frame total ground reaction force,
-- a `RoK4 Contact Forces` panel with the left/right force magnitudes in newtons.
+- a `RoK4 Contact Forces` panel with the left/right force magnitudes in newtons,
+- a RoK4-specific two-series plot retaining a fixed 3.0-second, 301-sample history of left/right `|F|`, with a fixed
+  `0-4000 N` vertical axis, 0.1-second vertical grid lines, and labeled 0.5-second elapsed physics-time ticks. The
+  elapsed time remains monotonic across environment resets and does not use Isaac Sim's looping timeline range.
 
 For each foot, the visualizer adds the ground-filtered world-frame normal force and tangential contact force reported by
 PhysX. Arrow direction follows this total `[Fx, Fy, Fz]` vector, while arrow length and the numeric panel use
 `sqrt(Fx^2 + Fy^2 + Fz^2)`. The arrow origin is shifted along the force direction so its tail starts just above the foot
 instead of clipping into the ground. This is one resultant GRF arrow per foot, not separate arrows for each axis and not
-a six-axis ankle force/torque sensor. The visualizer is disabled by default and does not run in normal headless training.
+a six-axis ankle force/torque sensor. The graph samples the latest env-0 sensor value at the rendering update rate; it is
+not a 500 Hz physics-substep impact trace. The visualizer is disabled by default and does not run in normal headless
+training. The panel intentionally exposes no filtering, integration, derivative, autoscale, or editable-limit controls.
 
 ### Manual Push Test
 
@@ -407,10 +433,15 @@ ONNX/TorchScript policy is called outside Isaac Lab train/play, clamp the policy
 `ROK4_ACTUATOR_ACTION_SCALE` and before saving it as the next `last_action`.
 
 The action smoothness rewards use clipped raw policy-action differences, matching the G1 first-order convention.
-`action_rate_l2` and `second_action_rate_l2` use weights `-0.005` and `-0.0005`; the second-order term is kept at 10% of
-the first-order weight so it damps high-frequency action changes without dominating swing motion. Action scaling remains
+`action_rate_l2` and `second_action_rate_l2` use weights `-0.01` and `-0.005`, matching the previous Gym first-to-second
+order ratio while strengthening both terms over the earlier Lab configuration. Action scaling remains
 part of actuator-target generation but is not applied by either smoothness reward. Hip-pitch and knee action indices
 `[2, 3, 8, 9]` retain the RoK4-specific `0.5` squared-error multiplier.
+
+The reward functions do not clamp actions internally. In the standard RoK4 RSL-RL train/play path,
+`clip_actions=1.0` clamps policy output before `ActionManager`, so the effective reward input is still the clipped raw
+action. This differs from K1 Rev1, whose runner leaves `clip_actions=None` and therefore evaluates unclipped raw-action
+differences.
 
 The torque, velocity, and acceleration penalties now operate in actuator coordinates, matching the previous Isaac Gym
 RoK4 basis. All 13 actuators contribute; hip-pitch and knee indices `[2, 3, 8, 9]` use a `0.5` multiplier.
@@ -474,17 +505,18 @@ episode reset, each environment independently receives one role for that episode
 
 | Code role | Motion meaning | Ratio |
 | --- | --- | ---: |
-| `mixed` | unconstrained `vx`, `vy`, and `wz` | 45% |
+| `mixed` | unconstrained `vx`, `vy`, and `wz` | 35% |
 | `standing` | exact-zero command for the full episode | 5% |
-| `walking` | continuously moving mixed command without periodic freeze | 5% |
-| `x` | symmetric low-speed `vx=+/-[0.15, 0.30] m/s` | 10% |
+| `walking` | continuously moving mixed command with `norm([vx, vy]) >= 0.10 m/s` | 5% |
+| `x` | symmetric low-speed `vx=+/-[0.10, 0.30] m/s` | 20% |
 | `fast_forward` | forward-only `vx=[0.30, 0.85] m/s` | 5% |
 | `y` | lateral left/right motion with only `vy` active | 10% |
 | `yaw` | clockwise/counter-clockwise turning with only `wz` active | 10% |
 | `x_yaw` | symmetric low-speed sagittal motion and turning with `vy=0` | 10% |
 
 The signs inside the `x`, `y`, and `yaw` roles are sampled with equal probability. The `x` and `x_yaw` roles limit
-`|vx|` to `[0.15, 0.30] m/s`, so `+0.3` and `-0.3 m/s` occupy the same dedicated training range. The two signs of
+`|vx|` to `[0.10, 0.30] m/s`, so `+0.3` and `-0.3 m/s` occupy the same dedicated training range. Dedicated `y` and
+`yaw` commands likewise use minimum magnitudes of `0.10 m/s` and `0.10 rad/s`. The two signs of
 `vx` and `wz` are sampled independently in `x_yaw`, giving the four forward/backward and clockwise/counter-clockwise
 combinations. The separate `fast_forward` role retains the full positive range up to `0.85 m/s`.
 
@@ -515,25 +547,64 @@ contains one push, while an environment that terminates before `10 s` may receiv
 freeze phase are sampled independently, a push can occur while moving, during exact-zero standing, or around a command
 transition. Play and Teleop disable this automatic push event and provide the manual `RoK4 Push Test` UI instead.
 
-The RoK4-local touchdown feet-air-time reward uses `threshold=0.65 s` and `weight=0.5`. It reads each foot's completed
-`last_air_time` only when exactly one foot reports first contact, clamps that completed swing to `0.65 s`, and pays it
-once on that touchdown step. It returns zero during swing, continued support, simultaneous two-foot touchdown, and
-planar commands at or below `0.1 m/s`. Holding one foot in the air beyond `0.65 s` therefore produces no repeated reward;
-the next valid touchdown has a maximum pre-`dt` contribution of `0.65 * 0.5 = 0.325`. Because this reward is event-based,
-its TensorBoard magnitude is not directly comparable with the previous dense per-step feet-air-time term.
+The RoK4-local touchdown feet-air-time reward uses `target_air_time=0.50 s` and `weight=2.0`. It reads each foot's
+completed `last_air_time` only when exactly one foot reports first contact and pays `T - 0.50` once on that touchdown
+step. It returns zero during swing, continued support, simultaneous two-foot touchdown, and planar commands at or below
+`0.05 m/s`. Touchdowns shorter than `0.50 s` are penalized and longer ones are rewarded. There is no maximum-reward
+air-time cap; velocity tracking, `no_jumps`, and the other gait terms must therefore balance excessively long single
+support. Because this reward is event-based, its TensorBoard magnitude is not directly comparable with the previous
+dense, squared, or capped touchdown feet-air-time terms.
+
+With the `0.01 s` RoK4 policy interval, the signed event slope is `2.0 * 0.01 = 0.02`. This matches K1's
+`1.0 * 0.02 = 0.02` event slope while retaining RoK4's longer `0.50 s` zero crossing, simultaneous-touchdown mask,
+and separate `no_jumps` penalty.
+
+The active term uses the stateful `FeetAirTimeTouchdownBiped` class so the same valid touchdown mask owns both the
+reward and its physical-unit mean-air-time statistic. The stateless `feet_air_time_touchdown_biped` function remains
+available when aggregation is unnecessary. The Reward Manager's standard `Episode_Reward/feet_air_time` scalar is
+the weighted reward contribution, not a time measurement.
 
 This branch adds two height terms without enabling a height scanner. `base_height_l2` uses target `0.907 m` and
 weight `-1.0`, measuring root world Z relative to each flat environment origin. `feet_clearance` uses weight `+0.2`
 and rewards valid swing feet with
-`tanh(||v_xy|| / 0.20) * exp(-(h - 0.10)^2 / 0.05^2)`. It is zero in standing environments and while neither foot is
-in swing. The clearance height is the `Foot_Link` body-origin Z relative to the environment origin, not
-a collision-point or ray-scanner measurement; its approximately `4 mm` sole offset is intentionally left uncorrected
-for this first flat-ground experiment.
+`tanh(v_progress / 0.50) * exp(-(h - 0.054)^2 / 0.04^2)`, where `v_progress` is the non-negative swing-foot speed
+along the commanded planar direction in the robot yaw frame. Pure-yaw commands retain the original horizontal-speed
+magnitude gate because their feet move in opposite directions. The term is zero in standing environments and while
+neither foot is in swing. The clearance height is the `Foot_Link` body-origin Z relative to the environment origin, not
+a collision-point or ray-scanner measurement. Its `0.054 m` target explicitly combines the desired `0.050 m` sole
+clearance with the measured `0.004 m` vertical offset from the sole to the body origin.
 
 The `no_jumps` penalty uses Isaac Lab's `mdp.desired_contacts` with weight `-2.0` and a `1.0 N` force threshold. It
 checks the recent contact-force history of both feet and returns a penalty only when neither foot has a qualifying
 contact. This preserves normal one-foot support and toe-off while discouraging a true flight phase. It does not
 enforce left/right alternation or limit how long one foot may remain the support foot.
+
+The RoK4-local `feet_touchdown_acc` function follows the ROBOTIS K1 event formulation and remains available for
+comparison, but its reward term is currently `None`. The `touchdownacc50` experiment used `threshold=50 m/s^2` and
+`weight=-0.002`; its episode penalty decreased mainly as touchdown frequency fell, while MuJoCo and hardware landing
+impact remained visibly hard. `compute_first_contact(step_dt)` spans the full `10 ms` policy interval, whereas
+`body_lin_acc_w` supplies the acceleration at reward evaluation after the final physics substep, so an earlier
+`2 ms` contact peak can be missed. A future soft-landing experiment should use a temporally aligned pre-touchdown
+vertical-velocity or contact-force-history signal instead.
+
+The current soft-landing baseline uses a stateful, event-only `feet_touchdown_velocity` term with weight `-10.0`.
+It stores each Foot body's world-Z velocity from the preceding policy step. At first contact, it applies
+`relu(-v_z_prev)^2` only when the previous sample was airborne. This avoids shaping the entire approach or
+established stance. `feet_contact_force` is now `None`: GRF remains available in the debug visualization, but it no
+longer shapes learning. The earlier Gym-compatible continuous `feet_contact_velocity_l2` function also remains
+disabled.
+
+The validated reference is run
+`2026-08-12_23-45-39_privileged250_gain240_160_80_air050_w2_tdvel10_ar01_ar2_005_noforce_delay4ms_fresh20k`,
+checkpoint `model_19999.pt`. Its final touchdown metric showed a mean pre-touchdown downward speed near `0.044 m/s`
+while preserving velocity tracking and increasing mean completed air time. Checkpoints remain under the external
+Isaac Lab log directory and are not committed to this repository.
+
+The two active stateful touchdown terms retain GPU episode sums and event counts and publish two event-weighted means
+when environments reset: `Metrics/feet_touchdown/mean_pre_touchdown_vertical_speed` [m/s] and
+`Metrics/feet_touchdown/mean_air_time` [s]. These are direct physical measurements over detected touchdowns, unlike
+`Episode_Reward/*`, and add no per-step GPU-to-CPU logging synchronization. These choices affect training rewards and
+diagnostics only; they do not change observations, Actor/Critic dimensions, checkpoints, or ONNX interfaces.
 
 The root `flat_orientation_l2` penalty uses weight `-5.0`. This intentionally large step from the previous `-2.0`
 experiment tests whether excessive body roll is the cause of one-foot lateral hopping and also exposes any loss of
@@ -545,7 +616,7 @@ make lateral foot placement depend on both named axes, so this paired experiment
 allowing the legs to generate lateral steps. The signed anti-cross reward remains active, but it does not impose a
 maximum stance width; excessive widening must therefore be checked during playback.
 
-A separate hip-pitch deviation term uses weight `-0.01`. Its weaker, independently logged penalty mildly limits
+A separate hip-pitch deviation term uses weight `-0.005`. Its weaker, independently logged penalty mildly limits
 excessive whole-leg sagittal swing without applying the `-0.05` hip-yaw/hip-roll constraint to the primary fore-aft
 gait joint. This is a global default-pose deviation penalty, not a swing-phase knee-flexion target.
 
@@ -555,9 +626,10 @@ toe-off and terrain-normal alignment. The current experiment instead relies on t
 for passive contact adaptation and on `stand_still_joint_deviation_l1` for exact-zero-command posture stability.
 
 The active `feet_swing_roll_l2` term uses weight `-1.0` to discourage inward or outward sole roll only while a foot
-is airborne. It rotates each foot's local `+Z` sole normal into that foot's yaw frame and penalizes only its lateral
-component. Swing-foot pitch and yaw remain unconstrained, so toe-off and fore-aft foot recovery are still available;
-feet in contact receive no contribution from this term.
+is airborne. The companion `feet_swing_pitch_l2` term applies the same yaw-removed sole-normal calculation to the
+forward component with weight `-0.1`. This mild one-tenth pitch penalty discourages persistent toe-up recovery without
+forcing the swing sole fully level; foot yaw remains unconstrained, and feet in contact receive no contribution from
+either term.
 
 The `feet_lateral_separation_l2` anti-cross reward is active with `minimum_width=0.16 m` and `weight=-2.0`. It rotates
 the left-minus-right foot position into the base yaw frame and preserves the lateral sign, so a narrow stance receives
@@ -763,14 +835,17 @@ Keyboard input uses the same script and command pipeline:
 ./isaaclab.sh -p ${ROK4LAB_DIR}/scripts/rsl_rl/play_teleop.py \
   --task RoK4-Isaac-Velocity-Flat-Teleop-v0 \
   --teleop_device keyboard \
+  --teleop_keyboard_step 0.05 \
   --checkpoint /path/to/model.pt \
   --real-time
 ```
 
 Use Up/Down for forward/backward, Left/Right for left/right lateral motion, `Z`/`X` for positive/negative yaw,
 `L` to reset only the keyboard command, and `R` to reset the simulated environment and policy state. Click the Isaac
-Sim viewport before pressing the keys so it receives keyboard events. Each motion key commands the corresponding
-training-range endpoint while held; releasing it removes that component. The `R` callback queues a one-shot request;
-the inference loop then clears the device command, resets the environment under `torch.inference_mode()`, and resets
-the policy state. The teleoperation command is written once per 100 Hz policy loop; the policy observes the new
-command on the following loop, giving one policy-period (`10 ms`) command latency.
+Sim viewport before pressing the keys so it receives keyboard events. Each key press accumulates `0.05 m/s` on a
+linear axis or `0.05 rad/s` on yaw by default. Releasing a key preserves the command, and pressing the opposite key
+reduces that component by the same increment. Commands are clamped to the policy training ranges. The
+`--teleop_keyboard_step` option changes the common numerical increment. The `R` callback queues a one-shot request;
+the inference loop then clears the accumulated command, resets the environment under `torch.inference_mode()`, and
+resets the policy state. The teleoperation command is written once per 100 Hz policy loop; the policy observes the
+new command on the following loop, giving one policy-period (`10 ms`) command latency.

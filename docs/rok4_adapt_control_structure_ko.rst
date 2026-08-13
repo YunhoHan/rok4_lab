@@ -2,7 +2,7 @@ RoK4 ADAPT Action/Actuator 제어 구조 문서
 ================================================================================
 
 :작성일: 2026-07-16
-:최종 업데이트: 2026-07-30
+:최종 업데이트: 2026-08-11
 :대상 저장소: RoK4 repository root (``${ROK4_LAB_ROOT}``)
 :기준 환경: Isaac Lab v2.3.2, Isaac Sim 5.1.0, ``env_isaaclab``
 
@@ -45,6 +45,8 @@ pre-domain-randomization 및 pre-observation-noise-tuning reference다.
 * policy는 actuator torque가 아니라 normalized actuator position offset을 출력한다.
 * ``actions.py`` 가 기록하는 ``q_target`` 은 PhysX position drive 명령이 아니라 explicit actuator의 입력이다.
 * ``compute()`` 의 ``joint_pos`` 와 ``joint_vel`` 은 action이 아니라 PhysX가 계산한 현재 robot state다.
+* 실측 ``4 ms`` 지연은 command target에 2 physics step 적용하고 현재 state feedback은 지연하지 않는다.
+  현재 position-action task에서 실질적으로 변하는 command는 ``q_target`` 이다.
 * 현재 velocity target은 사용되지 않는 변수가 아니라 값이 0인 damping 목표다.
 * ``control_action.joint_velocities`` 는 표준 runtime 입력에서는 ``None`` 이 아니라 zero tensor다.
 * ``compute()`` 출력에서 position/velocity를 ``None`` 으로 만드는 것은 PhysX drive를 끄기 위한 별도 단계다.
@@ -83,8 +85,9 @@ transmission 객체를 참조한다.
      └─ RoK4ActuatorPositionAction                 [actions.py]
 
    Isaac Lab IdealPDActuator
-     └─ RoK4AdaptActuator                          [rok4_adapt.py]
-          └─ contains RoK4AdaptTransmission
+     └─ DelayedPDActuator
+          └─ RoK4AdaptActuator                    [rok4_adapt.py]
+               └─ contains RoK4AdaptTransmission
 
    Runtime reference
      RoK4ActuatorPositionAction.__init__()
@@ -199,6 +202,99 @@ Row-vector batch 코드에서는 다음과 같다.
      - ``tau_psi = J.T tau_q``
      - ``tau_q_row @ J``
 
+Actuator gain에서 유효 joint gain 유도
+--------------------------------------------------------------------------------
+
+현재 explicit PD의 position error를 column vector로 쓰면 actuator torque는 다음과 같다.
+
+.. math::
+
+   e_\psi = \psi_d-\psi, \qquad
+   \tau_\psi = K_\psi e_\psi
+
+Position 관계 ``q=J psi`` 를 target과 current state에 각각 적용하면 joint error는
+``e_q=J e_psi`` 이며, 따라서 다음 관계를 얻는다.
+
+.. math::
+
+   e_\psi = J^{-1}e_q
+
+Torque 변환의 방향은 position 변환과 다르다. Virtual work 또는 instantaneous power 보존식은 다음과 같다.
+
+.. math::
+
+   \tau_q^T\dot q=\tau_\psi^T\dot\psi,
+   \qquad \dot q=J\dot\psi
+
+이를 대입하면 임의의 ``psi_dot`` 에 대해 ``J^T tau_q=tau_psi`` 여야 하므로 다음 torque 변환을 얻는다.
+
+.. math::
+
+   \tau_q=J^{-T}\tau_\psi
+
+Actuator PD와 position-error 변환을 이 식에 대입하면 다음과 같다.
+
+.. math::
+
+   \tau_q
+   =J^{-T}K_\psi J^{-1}e_q
+   =K_qe_q
+
+따라서 actuator-space diagonal gain이 만드는 유효 joint-space stiffness와 damping은 다음과 같다.
+
+.. math::
+
+   \boxed{K_q=J^{-T}K_\psi J^{-1}},
+   \qquad
+   \boxed{D_q=J^{-T}D_\psi J^{-1}}
+
+반대로 원하는 diagonal joint gain을 먼저 정하면 양쪽에 ``J.T`` 와 ``J`` 를 곱해 actuator-space gain을
+역설계할 수 있다.
+
+.. math::
+
+   \boxed{K_\psi=J^T K_q J},
+   \qquad
+   \boxed{D_\psi=J^T D_q J}
+
+그러나 diagonal ``K_q`` 로부터 계산한 ``K_psi`` 는 일반적으로 off-diagonal 항을 포함하는 full matrix다.
+각 actuator torque가 다른 actuator error에도 의존하므로 중앙집중식 matrix PD가 필요하다. 반대로 현재처럼
+``K_psi`` 를 diagonal로 유지하면 actuator별 독립 PD와 actuator limit을 그대로 구현할 수 있지만, 변환된
+``K_q`` 에 ADAPT joint coupling이 남는다. 일반적인 ADAPT 행렬에서는 두 좌표계의 gain을 동시에 diagonal로
+만들 수 없다.
+
+현재 구현은 실제 actuator별 low-level PD, actuator-space policy action/observation, actuator torque clipping과
+같은 구조를 유지하기 위해 diagonal ``K_psi`` 를 사용한다. 원하는 ``K_q`` 는 gain 해석과 설계 기준으로만
+사용하며 full-matrix actuator PD는 적용하지 않는다.
+
+다음 compliance 실험의 한쪽 coupled actuator block은
+``K_psi=diag(160,160,80,80)``, ``D_psi=diag(8,8,8,8)`` 이다. Joint 순서는
+``[hip_pitch, knee_pitch, ankle_pitch, ankle_roll]`` 이며 변환 결과는 근사적으로 다음과 같다.
+
+.. code-block:: text
+
+   K_q = [ 320,   0,   0,     0     ]
+         [   0, 480, 160,     0     ]
+         [   0, 160, 160,     0     ]
+         [   0,   0,   0,   107.69  ]
+
+   D_q = [  16,  0,  0,    0    ]
+         [   0, 32, 16,    0    ]
+         [   0, 16, 16,    0    ]
+         [   0,  0,  0,   10.77 ]
+
+Actuator-space 기준 Kp/Kd 비율은 hip yaw/roll ``20:1``, coupled hip-pitch/knee pair ``20:1``,
+ankle-side pair ``10:1``, torso yaw ``20:1`` 이다. ADAPT coupling 때문에 joint-space 대각항의 비율은
+hip pitch ``20:1``, knee ``15:1``, ankle pitch/roll ``10:1`` 로 나타난다. 이 설정은 실기에서 저주파
+관절 흔들림이 없었던 ``160/10, 80/7.5`` profile에 가까운 stiffness를 복원하면서 hip-pitch damping은
+조금 낮추고 ankle damping은 조금 높인 절충안이다. Force penalty는 first contact 뒤
+100 ms 구간을 계속 관찰하여 초기 충격과 뒤따르는 sole slap을 모두 포함한다.
+
+따라서 hip pitch와 knee/ankle pitch를 독립 gain으로 해석하면 안 된다. 예를 들어 knee torque에는 knee error의
+대각항 ``480`` 뿐 아니라 ankle-pitch error의 교차항 ``160`` 이 함께 들어간다. Equal actuator pair를 사용하는
+이유도 중요하다. 첫 pair의 gain이 다르면 그 차이만큼 hip-pitch/knee 교차항이 새로 생기고, 마지막 pair의
+gain이 다르면 knee/ankle-pitch와 ankle-roll 사이에 교차항이 생긴다.
+
 Policy step의 action 처리
 --------------------------------------------------------------------------------
 
@@ -255,6 +351,7 @@ interface가 articulation joint target buffer를 통해 custom actuator에 targe
        -> joint_pos_target buffer
        -> Articulation._apply_actuator_model()
        -> RoK4AdaptActuator.compute()
+       -> q_target DelayBuffer (2 physics steps = 4 ms)
        -> q_target -> psi_target
 
 겉으로는 왕복 변환처럼 보이지만 선형이고 invertible한 같은 ``J`` 를 공유하므로 원래 ``psi_target`` 이 복원된다.
@@ -280,6 +377,7 @@ Physics는 500 Hz로 실행되고 ``decimation=5`` 이므로 하나의 policy ta
               |
               v
    RoK4AdaptActuator.compute()
+     -> q_target을 2 physics step 지연
      -> canonical ADAPT 순서로 reorder
      -> q, q_target       -> psi, psi_target
      -> q_dot             -> psi_dot
@@ -289,6 +387,35 @@ Physics는 500 Hz로 실행되고 ``decimation=5`` 이므로 하나의 policy ta
      -> tau_q = J^-T tau_psi_applied
      -> USD model order로 복원
      -> PhysX joint effort 반환
+
+4 ms actuator target delay
+--------------------------------------------------------------------------------
+
+``ROK4_ACTUATOR_COMMAND_DELAY_STEPS=2`` 이며 ``RoK4AdaptActuatorCfg`` 의 ``min_delay`` 와 ``max_delay`` 에
+모두 이 값을 넣는다. 현재 physics period가 ``0.002 s`` 이므로 물리 시간 지연은 다음과 같다.
+
+.. math::
+
+   T_{delay}=2\times0.002=0.004\ \mathrm{s}
+
+각 environment의 position target은 부모 ``DelayedPDActuator`` 가 생성한 ``positions_delay_buffer`` 에
+physics step마다 들어간다. 이번 설정은
+``min_delay=max_delay`` 이므로 reset마다 표본화 코드는 실행되지만 모든 environment가 동일하게 2-step 지연을
+사용한다. Reset 시 history를 비우며 history가 채워지는 첫 두 step에는 최초 target을 유지하므로 zero target이
+갑자기 삽입되지 않는다.
+
+``DelayedPDActuator`` 는 position, velocity, feed-forward effort command용 buffer 세 개와 reset 로직을
+보유한다. 현재 position-action task에서 실질적인 명령은
+``control_action.joint_positions`` 인 ``q_target`` 이고 velocity target과 feed-forward effort target은 zero tensor이므로
+각 buffer를 통과해도 zero로 남는다. 현재 PhysX ``q`` 와 ``q_dot`` 은 최신값을 사용하고, 지연된
+``q_target`` 을 ADAPT actuator target ``psi_target`` 으로 바꾼 뒤 기존 actuator-space PD와 torque clip을
+그대로 수행한다.
+
+RoK4는 부모의 일반 joint-space PD ``compute()`` 를 호출하지 않고 자신의 ``compute()`` 를 재정의한다.
+따라서 부모에서 재사용하는 부분은 delay buffer 생성과 reset이고, ADAPT 변환, actuator-space PD,
+actuator torque clip, joint effort 복원은 RoK4 구현이다. 이는 command 전달/적용 지연이지 encoder feedback,
+torque-output, Actor observation 지연이 아니다. ONNX 안에도 buffer가 포함되지 않으며 실기에는
+실제 구동계의 4 ms 지연이 존재한다고 가정한다.
 
 ``compute()`` 입력 변수의 출처
 --------------------------------------------------------------------------------
@@ -300,14 +427,14 @@ Physics는 500 Hz로 실행되고 ``decimation=5`` 이므로 하나의 policy ta
      - 현재 RoK4 task의 값
      - 출처와 의미
    * - ``control_action.joint_positions``
-     - ``q_target`` tensor
-     - ``actions.py`` 가 ``joint_pos_target`` buffer에 기록한 목표 joint position
+     - 현재 ``q_target`` tensor
+     - ``actions.py`` 가 ``joint_pos_target`` buffer에 기록하며, actuator 내부에서 2 physics step 지연 후 PD에 사용
    * - ``control_action.joint_velocities``
      - zero tensor
-     - Isaac Lab이 초기화한 ``joint_vel_target`` buffer; 현재 action term은 이 buffer를 수정하지 않음
+     - Isaac Lab이 초기화한 ``joint_vel_target`` buffer; 현재 action term은 이 buffer를 수정하지 않으며 inherited velocity delay buffer를 통과해도 zero
    * - ``control_action.joint_efforts``
      - zero tensor
-     - Isaac Lab이 초기화한 feedforward ``joint_effort_target`` buffer
+     - Isaac Lab이 초기화한 feedforward ``joint_effort_target`` buffer; inherited effort delay buffer를 통과해도 zero
    * - ``joint_pos``
      - 현재 ``q`` tensor
      - PhysX simulation의 현재 joint position state; action 값이 아님
@@ -380,16 +507,17 @@ Actuator PD의 실제 수식과 output
    tau_psi_applied   = clip(tau_psi_requested, -tau_limit, +tau_limit)
    tau_q_applied     = J^-T tau_psi_applied
 
-현재 gain은 Isaac Gym RoK4의 canonical actuator 순서를 사용하되, 수동적인 toe-off와 지형 적응성을 시험하기
-위해 각 다리의 마지막 coupled actuator pair를 낮춘다. 같은 숫자를 joint-space에 직접 적용하는 것이 아니라
-위 수식의 ``Kp`` 와 ``Kd`` 로 사용한다.
+현재 gain은 canonical actuator 순서에서 hip yaw/roll의 lateral stiffness를 유지하고, ADAPT로 결합된
+sagittal chain과 ankle-side pair를 함께 낮춰 착지 compliance를 시험한다. 같은 숫자를 joint-space에 직접
+적용하는 것이 아니라 위 수식의 ``Kp`` 와 ``Kd`` 로 사용한다. 가운데 actuator pair는 ADAPT 행렬을 통해
+ankle pitch에도 기여하므로 특정 joint 하나만 독립적으로 부드럽게 만드는 설정은 아니다.
 
 .. code-block:: text
 
-   Left leg actuator Kp:  [250, 250, 250, 250, 80, 80]
-   Left leg actuator Kd:  [12.5, 12.5, 12.5, 12.5, 7.5, 7.5]
-   Right leg actuator Kp: [250, 250, 250, 250, 80, 80]
-   Right leg actuator Kd: [12.5, 12.5, 12.5, 12.5, 7.5, 7.5]
+   Left leg actuator Kp:  [240, 240, 120, 120, 40, 40]
+   Left leg actuator Kd:  [12,  12,  12,  12,  4,  4]
+   Right leg actuator Kp: [240, 240, 120, 120, 40, 40]
+   Right leg actuator Kd: [12,  12,  12,  12,  4,  4]
    Torso yaw actuator:    Kp=100, Kd=5
 
 Custom actuator는 두 종류의 torque를 별도로 보관한다.

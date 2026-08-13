@@ -836,7 +836,7 @@ span.boxed, span.framebox {
 <dd><p>2026-07-15</p>
 </dd>
 <dt>최종 업데이트</dt>
-<dd><p>2026-08-04</p>
+<dd><p>2026-08-12</p>
 </dd>
 <dt>대상 저장소</dt>
 <dd><p>RoK4 repository root (<span class="docutils literal">${ROK4_LAB_ROOT}</span>)</p>
@@ -934,7 +934,7 @@ checkpoint 호환성이 없다.</p>
                 rok4/
                   __init__.py        # Gym task 등록
                   flat_env_cfg.py    # RoK4 Flat env/reward/action/obs 정의
-                  contact_force_visualizer.py # 발 접촉력 화살표/숫자 debug view
+                  contact_force_visualizer.py # 발 접촉력 화살표/숫자/그래프 debug view
                   push_test_window.py # Play/Teleop command/실제 속도 숫자 표시와 수동 push UI
                   domain_randomization_cfg.py # RoK4 DR 범위와 event mode 정의
                   agents/
@@ -996,20 +996,22 @@ manager_based/locomotion/velocity/config/rok4/__init__.py
   │                   └─ torque/velocity limit factors
   │
   ├─ IdealPDActuatorCfg
-  │    └─ 자식(상속): RoK4AdaptActuatorCfg                 [rok4_adapt.py]
-  │         └─ class_type = RoK4AdaptActuator
+  │    └─ DelayedPDActuatorCfg
+  │         └─ 자식(상속): RoK4AdaptActuatorCfg          [rok4_adapt.py]
+  │              └─ class_type = RoK4AdaptActuator
   │
   ├─ IdealPDActuator
-  │    └─ 자식(상속): RoK4AdaptActuator                    [rok4_adapt.py]
-  │         ├─ 포함: RoK4AdaptTransmission
-  │         │    ├─ q = J psi
-  │         │    ├─ psi = J^-1 q
-  │         │    └─ tau_q = J^-T tau_psi
-  │         └─ override: compute()
-  │              ├─ joint state -&gt; actuator state
-  │              ├─ actuator-space explicit PD
-  │              ├─ actuator torque limit clip
-  │              └─ actuator torque -&gt; PhysX joint torque
+  │    └─ DelayedPDActuator
+  │         └─ 자식(상속): RoK4AdaptActuator             [rok4_adapt.py]
+  │              ├─ 포함: RoK4AdaptTransmission
+  │              │    ├─ q = J psi
+  │              │    ├─ psi = J^-1 q
+  │              │    └─ tau_q = J^-T tau_psi
+  │              └─ override: compute()
+  │                   ├─ joint state -&gt; actuator state
+  │                   ├─ actuator-space explicit PD
+  │                   ├─ actuator torque limit clip
+  │                   └─ actuator torque -&gt; PhysX joint torque
   │
   ├─ ActionTermCfg
   │    └─ 자식(상속): RoK4ActuatorPositionActionCfg        [mdp/actions.py]
@@ -1073,7 +1075,8 @@ RoK4 debug/verification
   ├─ ContactSensor
   │    └─ 자식(상속): RoK4ContactForceVisualizer          [contact_force_visualizer.py]
   │         ├─ env-0 좌우 발 world-frame GRF 화살표
-  │         └─ 좌우 발 force magnitude 숫자 panel
+  │         ├─ 좌우 발 force magnitude 숫자 panel
+  │         └─ 좌우 ``|F|`` 최근 300 UI sample live plot과 simulation-time X축
   ├─ ManagerBasedRLEnvWindow
   │    └─ 자식(상속): RoK4PushTestWindow                   [push_test_window.py]
   │         ├─ 선택 env의 command/실제 vx/vy/vz/wz/|vxy| 숫자 표시
@@ -1115,12 +1118,12 @@ RoK4 debug/verification
 </thead>
 <tbody>
 <tr><td><p>class 상속</p></td>
-<td><p><span class="docutils literal">RoK4AdaptActuator(IdealPDActuator)</span></p></td>
-<td><p>부모 actuator의 초기화, gain/effort buffer, Isaac Lab actuator interface를 물려받고 <span class="docutils literal">compute()</span> 를 재정의</p></td>
+<td><p><span class="docutils literal">RoK4AdaptActuator(DelayedPDActuator)</span></p></td>
+<td><p>부모의 delay buffer/reset과 actuator interface를 물려받고 ADAPT-space <span class="docutils literal">compute()</span> 를 재정의</p></td>
 </tr>
 <tr><td><p>config class 상속</p></td>
-<td><p><span class="docutils literal">RoK4AdaptActuatorCfg(IdealPDActuatorCfg)</span></p></td>
-<td><p>부모 config의 <span class="docutils literal">joint_names_expr</span>, <span class="docutils literal">stiffness</span>, <span class="docutils literal">damping</span> 같은 field에 ADAPT field를 추가</p></td>
+<td><p><span class="docutils literal">RoK4AdaptActuatorCfg(DelayedPDActuatorCfg)</span></p></td>
+<td><p>부모 config의 gain과 <span class="docutils literal">min_delay</span>/<span class="docutils literal">max_delay</span> field에 ADAPT field를 추가</p></td>
 </tr>
 <tr><td><p>config 객체 생성/override</p></td>
 <td><p><span class="docutils literal">RoK4AdaptActuatorCfg(link_alpha=ROK4_ADAPT_LINK_ALPHA, <span class="pre">...)</span></span></p></td>
@@ -1165,14 +1168,15 @@ Isaac Lab config가 joint name으로 안전하게 resolve하도록 dictionary로
   -&gt; _make_joint_dict(...)
   -&gt; ROK4_ACTUATOR_KP / ROK4_ACTUATOR_KD
   -&gt; RoK4AdaptActuatorCfg(stiffness=..., damping=...)
-  -&gt; IdealPDActuator 초기화 buffer
+  -&gt; DelayedPDActuator 초기화: gain/effort state + command DelayBuffer
   -&gt; RoK4AdaptActuator.compute()에서 canonical actuator 순서로 변환
   -&gt; tau_psi = Kp (psi_target - psi) - Kd psi_dot</code></pre>
-<p>현재 actuator-interface 설정은 Isaac Gym RoK4의 앞쪽 네 actuator gain을 유지하고, 수동적인 toe-off와 지형
-적응성을 시험하기 위해 각 다리의 마지막 coupled actuator pair만 낮춘다. 이 값은 joint-space gain이 아니며
-<span class="docutils literal">RoK4AdaptActuator.compute()</span> 의 <span class="docutils literal">psi</span> 오차와 속도에 적용된다.</p>
-<pre class="code text literal-block"><code>한쪽 다리 Kp: [250, 250, 250, 250,  80,  80]
-한쪽 다리 Kd: [12.5, 12.5, 12.5, 12.5, 7.5, 7.5]
+<p>현재 actuator-interface 설정은 hip yaw/roll의 좌우 stiffness는 대부분 유지하면서 ADAPT-coupled
+hip pitch/knee 계열을 더 낮춰 착지 compliance를 시험한다. 이 값은 joint-space gain이 아니며
+<span class="docutils literal">RoK4AdaptActuator.compute()</span> 의 <span class="docutils literal">psi</span> 오차와 속도에 적용된다. 가운데 pair는 ADAPT 행렬을 통해
+ankle pitch에도 기여한다.</p>
+<pre class="code text literal-block"><code>한쪽 다리 Kp: [240, 240, 120, 120, 40, 40]
+한쪽 다리 Kd: [12,  12,  12,  12,  4,  4]
 Torso yaw:     Kp=100, Kd=5</code></pre>
 <p><span class="docutils literal">ROK4_KP</span> 와 <span class="docutils literal">ROK4_KD</span> 는 이전 이름을 import하는 코드의 호환 alias다. 현재 <span class="docutils literal">ROK4_TRAIN_CFG</span> 의 실제
 제어 경로는 <span class="docutils literal">ROK4_ACTUATOR_KP</span> 와 <span class="docutils literal">ROK4_ACTUATOR_KD</span> 를 직접 사용한다.</p>
@@ -1369,7 +1373,7 @@ Critic은 같은 물리량을 별도로 계산하지만 noise를 선언하지 �
 </table>
 <p>Foot height는 ray-based height scanner나 collision-point query가 아니다. 현재 평지에서는 <span class="docutils literal">Foot_Link</span> 원점이
 발바닥 중심보다 약 <span class="docutils literal">0.004 m</span> 위라는 고정 offset을 포함한 clearance proxy다. 이 4 mm는 현재 clearance reward의
-<span class="docutils literal">std=0.05 m</span> 보다 충분히 작으므로 별도 보정하지 않는다.</p>
+<span class="docutils literal">std=0.04 m</span> 보다 충분히 작으므로 별도 보정하지 않는다.</p>
 <p>PPO runner의 <span class="docutils literal">obs_groups</span> 는 actor에 <span class="docutils literal">[&quot;policy&quot;]</span>, critic에 <span class="docutils literal">[&quot;critic&quot;, &quot;privileged&quot;]</span> 를 연결한다.
 따라서 actor 입력은 기존과 같은 240차원이고 critic 입력은 <span class="docutils literal">240 + 10 = 250</span> 차원이다. Privileged 정보와 clean
 critic history는 inference policy나 ONNX actor 입력에 포함되지 않는다. Critic 첫 입력층이 달라지므로 243D critic
@@ -1406,7 +1410,7 @@ default state를 뺀 뒤 actuator 좌표로 변환한다. Position은 gait-ready
 </tr>
 <tr><td><p><span class="docutils literal">contact_force_visualizer.py</span></p></td>
 <td><p><span class="docutils literal">ContactSensor</span> 확장</p></td>
-<td><p>env-0 좌우 발의 world-frame GRF vector를 화살표로 그리고 force magnitude를 숫자로 표시</p></td>
+<td><p>env-0 좌우 발의 world-frame GRF vector를 화살표로 그리고 force magnitude를 확대된 숫자와 simulation-time X축 live plot으로 표시</p></td>
 </tr>
 <tr><td><p><span class="docutils literal">mdp/__init__.py</span></p></td>
 <td><p>mdp re-export</p></td>
@@ -1595,12 +1599,20 @@ Articulation이 target buffer와 현재 joint state를 <span class="docutils lit
   q_target을 joint-position-target buffer에 기록
     -&gt; Isaac Lab Articulation._apply_actuator_model()
     -&gt; RoK4AdaptActuator.compute(q_target, q, q_dot)
-         ├─ q_target, q, q_dot -&gt; psi_target, psi, psi_dot
+         ├─ q_target DelayBuffer: 2 physics steps = 4 ms
+         ├─ delayed q_target, q, q_dot -&gt; psi_target, psi, psi_dot
          ├─ actuator PD로 tau_psi 계산
          ├─ actuator 최대 torque * 0.9로 tau_psi clip
          ├─ tau_q = J^-T tau_psi
          └─ position/velocity target 제거 + joint effort만 반환
     -&gt; PhysX에는 tau_q joint effort가 입력됨</code></pre>
+<p>실측 actuator command-path 지연은 <span class="docutils literal">ROK4_ACTUATOR_COMMAND_DELAY_STEPS=2</span> 로 고정한다. 현재 physics period
+<span class="docutils literal">0.002 s</span> 에서 <span class="docutils literal">4 ms</span> 이며 <span class="docutils literal">DelayedPDActuator</span> 가 생성한 position/velocity/effort command buffer와
+reset을 그대로 사용한다. 현재 task의 실질적인 명령은 position target이며 velocity/effort target은
+zero tensor이다. RoK4는 부모의 joint-space PD <span class="docutils literal">compute()</span> 를 호출하지 않고, 지연된 target을
+ADAPT-space PD에 넣는 자신의 <span class="docutils literal">compute()</span> 를 사용한다. 현재 <span class="docutils literal">q</span>, <span class="docutils literal">q_dot</span> feedback과 Actor observation은
+지연하지 않는다. Environment reset 시 target history를 비우고 history가 부족한 초기 step은 가장 최근
+target을 반환하므로 임의의 zero target이 삽입되지 않는다.</p>
 <p>따라서 policy action의 의미는 actuator position target이지만 simulation에 최종 입력되는 제어량은 ADAPT 변환을
 거친 joint torque다. PhysX의 <span class="docutils literal">effort_limit_sim</span> 은 joint mechanical maximum
 <span class="docutils literal">[150,150,300,480,180,180] N m</span> 와 torso <span class="docutils literal">150 N m</span> 를 factor 없이 사용한다. 이는 마지막 solver 안전
@@ -1614,7 +1626,9 @@ action이라는 점이다. motor target만 scale, default actuator pose, ADAPT m
 checkpoint를 이 브랜치에서 resume/play하지 말고 actuator-interface 학습을 새로 시작해야 한다.</p>
 </div>
 <p><span class="docutils literal">action_rate_l2</span> 와 <span class="docutils literal">second_action_rate_l2</span> reward는 observation의 <span class="docutils literal">last_action</span> 과 같은
-<span class="docutils literal">clipped_raw_action</span> 좌표에서 각각 1차와 2차 차분을 계산한다. Action scale은 actuator target 생성에만
+<span class="docutils literal">clipped_raw_action</span> 좌표에서 각각 1차와 2차 차분을 계산하고 weight <span class="docutils literal"><span class="pre">-0.01</span></span>, <span class="docutils literal"><span class="pre">-0.005</span></span> 를 사용한다.
+Reward 함수 자체는 clamp하지 않지만 RoK4 RSL-RL runner의 <span class="docutils literal">clip_actions=1.0</span> 이 ActionManager 이전에
+정책 출력을 제한한다. Action scale은 actuator target 생성에만
 사용하며 두 smoothness reward에는 적용하지 않는다. 다만 Hip Pitch/Knee action index <span class="docutils literal">2,3,8,9</span> 는 RoK4의
 동적 보행 자유도를 위해 squared-error weight를 <span class="docutils literal">0.5</span> 로 완화한다.</p>
 <p><span class="docutils literal">ROK4_ACTUATOR_ACTION_SCALE</span> 은 기존 Isaac Gym RoK4의 actuator action scale과 동일하다. 좌측 다리, 우측 다리,
@@ -1645,10 +1659,10 @@ position soft limit은 추가하지 않는다. 변환된 joint torque에 대한 
 <span class="docutils literal">RoK4PeriodicFreezeVelocityCommandCfg</span> 로 교체한다. 일반 command resampling interval은 부모와 같은
 고정 <span class="docutils literal">(10.0, 10.0) s</span> 를 사용한다. 각 episode reset에서 환경은 확률적으로 다음 역할 중 하나를 받고,
 해당 episode 동안 역할을 유지한다.</p>
-<pre class="code text literal-block"><code>45% mixed        : vx, vy, wz 전체 표본화
+<pre class="code text literal-block"><code>35% mixed        : vx, vy, wz 전체 표본화
  5% standing     : episode 전체 exact-zero command
- 5% walking      : freeze 없는 mixed moving command
-10% x            : 저속 대칭 전후진, vx=+/-[0.15, 0.30] m/s
+ 5% walking      : freeze 없는 mixed moving command, planar norm &gt;= 0.10 m/s
+20% x            : 저속 대칭 전후진, vx=+/-[0.10, 0.30] m/s
  5% fast_forward : 고속 전진, vx=[0.30, 0.85] m/s
 10% y            : lateral 좌/우 이동, vy만 활성
 10% yaw          : 시계/반시계 회전, wz만 활성
@@ -1656,14 +1670,14 @@ position soft limit은 추가하지 않는다. 변환된 joint torque에 대한 
 <p>코드의 역할 이름은 command vector의 축에 직접 대응하도록 <span class="docutils literal">x</span>, <span class="docutils literal">y</span>, <span class="docutils literal">yaw</span>, <span class="docutils literal">x_yaw</span> 를 사용한다.
 문서의 보행 의미로는 <span class="docutils literal">x</span> 가 sagittal 전후진, <span class="docutils literal">y</span> 가 lateral 좌우 이동이다. <span class="docutils literal">x</span>, <span class="docutils literal">y</span>, <span class="docutils literal">yaw</span> 내부의
 양/음 부호는 각각 50:50 확률로 표본화한다. <span class="docutils literal">x</span> 와 <span class="docutils literal">x_yaw</span> 의 <span class="docutils literal">vx</span> 는
-<span class="docutils literal"><span class="pre">+/-Uniform(0.15,</span> 0.30) m/s</span> 로 제한하여 <span class="docutils literal">+0.3</span> 과 <span class="docutils literal"><span class="pre">-0.3</span> m/s</span> 가 같은 전용 학습 범위에 놓이게 한다.
+<span class="docutils literal"><span class="pre">+/-Uniform(0.10,</span> 0.30) m/s</span> 로 제한하여 <span class="docutils literal">+0.3</span> 과 <span class="docutils literal"><span class="pre">-0.3</span> m/s</span> 가 같은 전용 학습 범위에 놓이게 한다.
 <span class="docutils literal">x_yaw</span> 는 <span class="docutils literal">vx</span> 와 <span class="docutils literal">wz</span> 부호를 독립적으로 표본화하므로 전진/후진과 시계/반시계 회전의 네 조합을 만든다.
 별도 <span class="docutils literal">fast_forward</span> 역할은 <span class="docutils literal">Uniform(0.30, 0.85) m/s</span> 로 기존 고속 전진 능력을 유지한다. <span class="docutils literal">vy</span> 의 최소
-절댓값은 <span class="docutils literal">0.15 m/s</span>, <span class="docutils literal">wz</span> 는 <span class="docutils literal">0.15 rad/s</span> 이다.</p>
+절댓값은 <span class="docutils literal">0.10 m/s</span>, <span class="docutils literal">wz</span> 는 <span class="docutils literal">0.10 rad/s</span> 이다.</p>
 <p><span class="docutils literal">mixed</span>, <span class="docutils literal">x</span>, <span class="docutils literal">fast_forward</span>, <span class="docutils literal">y</span>, <span class="docutils literal">yaw</span>, <span class="docutils literal">x_yaw</span> 환경은 <span class="docutils literal">10.0 s</span> cycle 안에서 서로 다른 random phase로 시작한다.
 각 환경은 독립적으로 <span class="docutils literal">Uniform(1.5, 3.0) s</span> standing duration을 표본화하므로 모든 환경이 동시에 멈추지
 않는다. 이 여섯 역할의 비율 합은 90%이므로 기존과 같은 90% population에서 moving-to-standing transition을
-학습한다. <span class="docutils literal">standing</span> 은 항상 exact zero이고, <span class="docutils literal">walking</span> 은 freeze 없이 planar command norm이 <span class="docutils literal">0.15 m/s</span>
+학습한다. <span class="docutils literal">standing</span> 은 항상 exact zero이고, <span class="docutils literal">walking</span> 은 freeze 없이 planar command norm이 <span class="docutils literal">0.10 m/s</span>
 이상일 때까지 다시 표본화한다. 평균 freeze duration <span class="docutils literal">2.25 s</span> 를 기준으로 하면 전체 time sample은 대략
 standing 25%, moving 75%가 된다.</p>
 <p>Episode 중 일반 <span class="docutils literal">10.0 s</span> command resampling과 freeze 종료 resampling은 현재 역할을 유지한 채 그 역할
@@ -1744,17 +1758,52 @@ timeout된다. 즉 초기 episode phase를 명시적으로 randomize하지는 �
 global t=3 s  : env A early termination -&gt; A counter=0, freeze phase와 push timer 재표본화
 global t=20 s : 생존한 env B timeout/reset
 global t=23 s : env A가 3 s 이후 20 s 생존했다면 timeout/reset</code></pre>
-<p>RoK4-local <span class="docutils literal">feet_air_time_touchdown_biped</span> 는 <span class="docutils literal">threshold=0.65 s</span>, <span class="docutils literal">weight=0.5</span> 를 사용한다. Contact sensor의
-<span class="docutils literal">last_air_time</span> 을 읽어 정확히 한 발이 first contact가 된 step에만 완료된 swing time을 한 번 지급한다.
-Raw reward는 <span class="docutils literal">min(last_air_time, 0.65)</span> 이며, swing 중, 계속된 지지, 양발 동시 first contact, planar command
-norm <span class="docutils literal">0.1 m/s</span> 이하에서는 0이다. 따라서 한 발을 <span class="docutils literal">0.65 s</span> 보다 오래 들어도 반복 보상은 없고 다음 유효
-착지에서 최대 pre-<span class="docutils literal">dt</span> 항목 <span class="docutils literal">0.65 * 0.5 = 0.325</span> 를 한 번만 받는다. Event 기반 값이므로 이전 dense
-per-step <span class="docutils literal">feet_air_time_positive_biped</span> 의 TensorBoard 크기와 직접 비교하지 않는다.</p>
+<p>RoK4-local <span class="docutils literal">feet_air_time_touchdown_biped</span> 함수는 <span class="docutils literal">target_air_time=0.50 s</span>, <span class="docutils literal">weight=2.0</span> 을 사용한다.
+Contact sensor의 <span class="docutils literal">last_air_time</span> 을 읽어 정확히 한 발이 first contact가 된 step에만
+<span class="docutils literal">last_air_time - 0.50</span> 을 한 번 지급한다. Swing 중, 계속된 지지, 양발 동시 first contact, planar command
+norm <span class="docutils literal">0.05 m/s</span> 이하에서는 0이다. <span class="docutils literal">0.50 s</span> 보다 짧은 완료 swing에는 음수, 그보다 긴 완료 swing에는
+양수를 반환한다. 최대 보상 air-time cap은 없으므로 긴 single support는 velocity tracking과 <span class="docutils literal">no_jumps</span> 등
+다른 gait term이 함께 제한한다. Event 기반 값이므로 이전 dense, squared 또는 capped touchdown air-time의
+TensorBoard 크기와 직접 비교하지 않는다.</p>
+<p>현재 활성 air-time term은 stateful <span class="docutils literal">FeetAirTimeTouchdownBiped</span> class다. Reward와 동일한 single-touchdown 및
+moving-command mask로 완료된 <span class="docutils literal">last_air_time</span> 을 누적하여 아래 물리 단위 metric으로 기록한다. Aggregation이
+필요 없는 비교 실험을 위해 stateless <span class="docutils literal">feet_air_time_touchdown_biped</span> 함수도 남긴다. Reward Manager의
+<span class="docutils literal">Episode_Reward/feet_air_time</span> 은 weighted reward sum이므로 실제 평균 air time과 같지 않다.</p>
+<p>Policy interval이 <span class="docutils literal">0.01 s</span> 이므로 touchdown error의 event 기울기는 <span class="docutils literal">2.0 * 0.01 = 0.02</span> 다. 이는
+K1의 <span class="docutils literal">weight=1.0</span>, policy interval <span class="docutils literal">0.02 s</span> 와 같은 기울기지만, RoK4는 더 긴 <span class="docutils literal">0.50 s</span> zero crossing,
+양발 동시 touchdown 제외, 별도 <span class="docutils literal">no_jumps</span> penalty를 유지한다.</p>
 <p><span class="docutils literal">no_jumps</span> 는 Isaac Lab 공통 <span class="docutils literal">mdp.desired_contacts</span> 를 <span class="docutils literal"><span class="pre">weight=-2.0</span></span> 과 force <span class="docutils literal">threshold=1.0 N</span> 으로
 사용한다. 좌우 Foot의 최근 5개 contact-force sample 중 어느 쪽에도 threshold를 넘는 접촉이 없을 때만 raw
 penalty <span class="docutils literal">1</span> 을 반환한다. 따라서 정상 single stance와 toe-off는 허용하고 양발이 동시에 뜬 flight phase만
 억제한다. 두 velocity-tracking term의 최대 pre-<span class="docutils literal">dt</span> 합 <span class="docutils literal">+2.0</span> 을 flight 구간에서 상쇄하는 첫 실험값이며,
 좌우 교대 순서나 한 발 지지의 최대 시간을 직접 강제하지 않는다.</p>
+<p><span class="docutils literal">feet_touchdown_acc</span> 함수는 ROBOTIS K1의 event penalty와 동일하게 first-contact 발의 world-frame
+선형가속도 초과량을 계산하지만, 현재 reward term은 <span class="docutils literal">None</span> 이다. <span class="docutils literal">touchdownacc50</span> 실험에서는
+<span class="docutils literal">threshold=50 m/s^2</span>, <span class="docutils literal"><span class="pre">weight=-0.002</span></span> 를 사용했으나 MuJoCo와 실기에서 쾅 찍는 착지가 유지되었다.
+<span class="docutils literal">compute_first_contact(step_dt)</span> 는 최근 <span class="docutils literal">10 ms</span> 내 접촉을 검출하지만 reward가 읽는 <span class="docutils literal">body_lin_acc_w</span> 는
+5번째 physics substep 이후의 최신 가속도이므로, 앞선 <span class="docutils literal">2 ms</span> substep에서 발생한 충격 peak와 시간적으로
+어긋날 수 있다. 함수와 단위 테스트는 비교용으로 남긴다. 현재 soft-landing 실험은 stateful
+<span class="docutils literal">FeetTouchdownVelocityL2</span> 를 활성화한다. 이전 policy step에서 공중이었던 발의 world-Z 속도를 저장하고,
+first contact가 발생하면 <span class="docutils literal"><span class="pre">relu(-v_z_prev)^2</span></span> 를 사건당 한 번 계산해 weight <span class="docutils literal"><span class="pre">-10.0</span></span> 을 적용한다.
+접근 중과 계속된 stance에는 영향을 주지 않으며 reset 직후 이전 sample이 없는 초기 접촉도 제외한다.
+<span class="docutils literal">FeetContactForceL2</span> class는 first contact부터 <span class="docutils literal">0.10 s</span> 동안 filtered world-frame 접촉 합력
+<span class="docutils literal"><span class="pre">||[F_x,F_y,F_z]||</span></span> 의 최대값을 누적하는 비교 구현으로 남아 있다. 하지만 현재 reward config는
+<span class="docutils literal">feet_contact_force=None</span> 이므로 GRF가 학습을 shaping하지 않는다. 접촉력은 Contact Forces debug
+visualization에서만 확인한다.</p>
+<p>검증된 기준 checkpoint는
+<span class="docutils literal"><span class="pre">2026-08-12_23-45-39_privileged250_gain240_160_80_air050_w2_tdvel10_ar01_ar2_005_noforce_delay4ms_fresh20k/model_19999.pt</span></span>
+다. 이 checkpoint는 평균 착지 직전 하강속도를 약 <span class="docutils literal">0.044 m/s</span> 로 낮추면서 velocity tracking과 평균 완료
+air time을 유지했다. Log/checkpoint는 Isaac Lab log directory에 보존하고 Git에는 코드와 설정만 기록한다.
+기존 Gym 호환 continuous <span class="docutils literal">feet_contact_velocity_l2</span> 함수는 비교용으로
+남아 있지만 Reward Manager term은 <span class="docutils literal">None</span> 이다.</p>
+<p>두 활성 stateful term은 각각 air time과 착지 직전 속도의 episode 합과 touchdown 횟수를 GPU tensor로
+누적하고 environment reset 시 다음
+event-weighted 평균을 TensorBoard에 기록한다.</p>
+<ul class="simple">
+<li><p><span class="docutils literal">Metrics/feet_touchdown/mean_pre_touchdown_vertical_speed</span>: 직전 airborne sample의 평균 하강속도 크기 [m/s]</p></li>
+<li><p><span class="docutils literal">Metrics/feet_touchdown/mean_air_time</span>: touchdown에서 완료된 평균 <span class="docutils literal">last_air_time</span> [s]</p></li>
+</ul>
+<p>두 값은 reward 가중치나 <span class="docutils literal">dt</span> 가 적용되지 않은 물리량이며 매 step CPU 동기화를 만들지 않는다.</p>
 <p>Play 환경은 현재 standing 검증을 위해 <span class="docutils literal">lin_vel_x=0.0 m/s</span>, <span class="docutils literal">lin_vel_y=0.0 m/s</span>,
 <span class="docutils literal">ang_vel_z=0.0 rad/s</span> 로 고정한다. Teleop 환경은 자동 표본화를 끄고 사용자가 입력한 base-frame
 <span class="docutils literal">[lin_vel_x, lin_vel_y, ang_vel_z]</span> 를 command buffer에 직접 기록한다. Play와 이를 상속하는 Teleop은
@@ -2332,10 +2381,22 @@ Teleop은 env가 하나이므로 항상 env 0이다. 학습 중 부모 <span cla
 <li><p>왼발: 파란색 world-frame 전체 지면반력 화살표</p></li>
 <li><p>오른발: 초록색 world-frame 전체 지면반력 화살표</p></li>
 <li><p><span class="docutils literal">RoK4 Contact Forces</span> 창: 좌우 발의 <span class="docutils literal">|F|</span> 를 newton 단위 숫자로 표시</p></li>
+<li><p>같은 창의 live plot: 좌우 <span class="docutils literal">|F|</span> 최근 3.0초, 301개 sample을 두 개의 선으로 표시</p></li>
+<li><p>live plot X축: <span class="docutils literal">0.1 s</span> 간격 세로 grid와 <span class="docutils literal">0.5 s</span> 간격 숫자로 누적 physics time [s]를 표시</p></li>
 </ul>
-<p>Isaac Sim UI의 <span class="docutils literal">Scene Debug Visualization</span> 에서 <span class="docutils literal">Contact Forces</span> 를 체크하면 화살표와 숫자 창이 함께
-켜지고, 체크를 해제하면 함께 숨겨진다. Flat task의 지면 collision prim을 filter로 지정하고 PhysX가 별도로
-제공하는 world-frame 법선 접촉력과 접선 접촉력을 발별로 더한다.</p>
+<p>Isaac Sim UI의 <span class="docutils literal">Scene Debug Visualization</span> 에서 <span class="docutils literal">Contact Forces</span> 를 체크하면 화살표, 숫자, live plot이
+함께 켜지고, 체크를 해제하면 함께 숨겨진다. Flat task의 지면 collision prim을 filter로 지정하고 PhysX가
+별도로 제공하는 world-frame 법선 접촉력과 접선 접촉력을 발별로 더한다.</p>
+<p>창 기본 크기는 <span class="docutils literal">600 x 650</span> 이며 제목, 좌우 force 숫자, X/Y축 label을 읽기 쉬운 크기로 표시한다. 행 간격과
+내부 여백을 줄이고 좌우 force 숫자 및 범례를 가까이 묶어 viewport를 덜 가린다. Y축은 <span class="docutils literal">0~4000 N</span> 고정
+범위와 <span class="docutils literal">1000 N</span> 간격 눈금을 사용한다. Isaac Lab <span class="docutils literal">LiveLinePlot</span> 은 불필요한 filter, integration,
+derivative, autoscale, editable-limit UI를 자동으로 붙이므로 사용하지 않는다. RoK4 전용 graph는 두 개의
+force trace와 다섯 개의 고정 Y-grid를 동일한 <span class="docutils literal">omni.ui.Plot</span> 좌표계로 겹쳐 그린다. 따라서 force 선과
+<span class="docutils literal">0/1000/2000/3000/4000 N</span> 눈금이 정확히 일치한다. X축 세로 grid도 같은 <span class="docutils literal">omni.ui.Plot</span> 좌표계에서
+histogram line으로 그린다. 최근 3.0초를 <span class="docutils literal">0.1 s</span> 간격 minor tick 30개로 나누고, 매 <span class="docutils literal">0.5 s</span> major
+tick에는 더 밝은 선과 시간 숫자를 표시한다. X축 시간은 ContactSensor의 누적 physics time으로 계산한다.
+환경 reset으로 센서 timestamp가 0으로 돌아가더라도 이전 elapsed time에 새 timestamp를 이어 붙이므로
+1초 timeline 구간이나 episode reset에서 0으로 반복되지 않는다.</p>
 <div class="formula">
 <b>F</b><span class="scripts"><sup class="script"><i>w</i></sup><sub class="script"><i>GRF</i></sub></span> = <b>F</b><span class="scripts"><sup class="script"><i>w</i></sup><sub class="script"><i>normal</i></sub></span> + <b>F</b><span class="scripts"><sup class="script"><i>w</i></sup><sub class="script"><i>tangential</i></sub></span> = [<i>F</i><span class="scripts"><sup class="script"><i>w</i></sup><sub class="script"><i>x</i></sub></span>, <i>F</i><span class="scripts"><sup class="script"><i>w</i></sup><sub class="script"><i>y</i></sub></span>, <i>F</i><span class="scripts"><sup class="script"><i>w</i></sup><sub class="script"><i>z</i></sub></span>]
 </div>
@@ -2347,7 +2408,8 @@ Teleop은 env가 하나이므로 항상 env 0이다. 학습 중 부모 <span cla
 <p>이 값은 발과 지면 사이의 전체 접촉 합력이며, 발목에 설치한 6축 F/T sensor의
 <span class="docutils literal">[Fx, Fy, Fz, Mx, My, Mz]</span> 출력은 아니다. 4096-env 학습에서 불필요한 GPU-to-CPU/UI 비용이 발생하지
 않도록 debug view 기본값은 off이며, 켰을 때도 환경 0만 시각화한다. 구현과 설정은 모두 <span class="docutils literal">rok4_lab</span> 안에
-있고 Isaac Lab 원본은 수정하지 않는다.</p>
+있고 Isaac Lab 원본은 수정하지 않는다. Live plot은 render update마다 최신 sensor sample을 추가하므로
+60 Hz rendering에서는 최근 약 5초를 보여주지만, 500 Hz physics substep impact peak를 보존하는 graph는 아니다.</p>
 </section>
 <section id="scripts-rsl-rl-play-teleop-py">
 <h3><span class="docutils literal">scripts/rsl_rl/play_teleop.py</span></h3>
@@ -2369,6 +2431,7 @@ Teleop은 env가 하나이므로 항상 env 0이다. 학습 중 부모 <span cla
 <pre class="code bash literal-block"><code>./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4_LAB_ROOT</span><span class="literal string interpol">}</span>/scripts/rsl_rl/play_teleop.py <span class="literal string escape">\
 </span>  --task RoK4-Isaac-Velocity-Flat-Teleop-v0 <span class="literal string escape">\
 </span>  --teleop_device keyboard <span class="literal string escape">\
+</span>  --teleop_keyboard_step <span class="literal number">0</span>.05 <span class="literal string escape">\
 </span>  --checkpoint /path/to/model.pt <span class="literal string escape">\
 </span>  --real-time</code></pre>
 <p>Keyboard는 Up/Down으로 전진/후진, Left/Right로 좌/우 횡이동, <span class="docutils literal">Z</span>/<span class="docutils literal">X</span> 로 양/음 yaw를 명령한다. <span class="docutils literal">L</span> 은
@@ -2376,8 +2439,10 @@ keyboard command만 <span class="docutils literal">[0,0,0]</span> 으로 초기�
 loop가 device command, simulation environment, policy state를 함께 초기화한다. Environment tensor는 기존
 play loop의 <span class="docutils literal">env.step()</span> 에서 inference tensor로 생성되므로 수동 <span class="docutils literal">env.reset()</span> 도 반드시
 <span class="docutils literal">torch.inference_mode()</span> 안에서 실행한다. 그렇지 않으면 inference tensor inplace-update 예외로 play가
-종료된다. 키 입력 전에 Isaac Sim viewport를 클릭해 keyboard focus를 주어야 한다. 각 motion key를 누르는 동안
-해당 축은 학습 command 범위의 끝값을 사용하고, 키를 놓으면 그 축 command가 제거된다.</p>
+종료된다. 키 입력 전에 Isaac Sim viewport를 클릭해 keyboard focus를 주어야 한다. 각 key press는 기본적으로
+선속도 축을 <span class="docutils literal">0.05 m/s</span>, yaw를 <span class="docutils literal">0.05 rad/s</span> 씩 누적한다. 키를 놓아도 command는 유지되고 반대 방향 key를
+누르면 같은 크기만큼 감소한다. 누적값은 각 축의 학습 command 범위에서 clamp되며,
+<span class="docutils literal"><span class="pre">--teleop_keyboard_step</span></span> 으로 공통 수치 increment를 변경할 수 있다.</p>
 <p>Teleop command는 100 Hz play loop 시작 시 command buffer에 기록된다. 다만 그 시점의 policy observation은
 직전 environment step에서 이미 생성되어 있으므로 현재 action에는 직전 command observation이 사용된다. 새
 command는 이어지는 step 후 observation을 통해 다음 policy loop에서 보이며, 수동 입력부터 policy 반영까지 최대
@@ -2605,6 +2670,7 @@ rendering으로 인해 GPU·학습시간·저장공간 overhead가 추가된다.
 <pre class="code bash literal-block"><code>./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4_LAB_ROOT</span><span class="literal string interpol">}</span>/scripts/rsl_rl/play_teleop.py <span class="literal string escape">\
 </span>  --task RoK4-Isaac-Velocity-Flat-Teleop-v0 <span class="literal string escape">\
 </span>  --teleop_device keyboard <span class="literal string escape">\
+</span>  --teleop_keyboard_step <span class="literal number">0</span>.05 <span class="literal string escape">\
 </span>  --checkpoint /path/to/model.pt <span class="literal string escape">\
 </span>  --real-time</code></pre>
 </section>

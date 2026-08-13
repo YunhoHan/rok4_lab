@@ -833,7 +833,7 @@ span.boxed, span.framebox {
 <h1 class="title">RoK4 Reward Structure</h1>
 
 <p>작성일: 2026-07-15
-최종 업데이트: 2026-08-04</p>
+최종 업데이트: 2026-08-12</p>
 <style>
 @media print {
   @page {
@@ -974,8 +974,13 @@ Isaac Lab 원본 source를 수정하지 않는다. Isaac Lab의 부모 class와 
                        ├─ feet_clearance
                        ├─ no_jumps
                        ├─ feet_slide
+                       ├─ feet_touchdown_velocity
+                       ├─ feet_contact_velocity (현재 None: 비활성)
+                       ├─ feet_contact_force (현재 None: 비활성)
+                       ├─ feet_touchdown_acc (현재 None: 비활성)
                        ├─ feet_flat_orientation_l2 (현재 None: 비활성)
-                       ├─ feet_swing_roll_l2 (swing 중 roll만 억제)
+                       ├─ feet_swing_roll_l2 (swing 중 roll 억제)
+                       ├─ feet_swing_pitch_l2 (swing 중 pitch를 약하게 억제)
                        ├─ feet_stance_width_l2 (현재 None: 비활성)
                        ├─ feet_lateral_separation_l2 (signed lateral anti-cross)
                        ├─ stand_still_joint_deviation_l1
@@ -1028,12 +1033,17 @@ RoK4 전용 weighting을 쓰는 계산식은 <span class="docutils literal">velo
 <section id="action-rate-reward-action">
 <h3>Action-rate reward의 action 기준</h3>
 <p>현재 RoK4Lab의 <span class="docutils literal">action_rate_l2</span> 와 <span class="docutils literal">second_action_rate_l2</span> 는 <span class="docutils literal">env.action_manager.action</span> 을 기준으로
-현재 action과 history의 차분을 만든다. 이 action buffer는 scale 적용 전 clipped raw policy action이며,
-reward도 이 raw 차분의 weighted 제곱합을 계산한다. Action scale은 적용하지 않지만 Hip Pitch/Knee에 해당하는
+현재 action과 history의 차분을 만든다. Reward 함수는 별도 clamp를 하지 않는다. 하지만 표준 RoK4 RSL-RL
+경로에서는 <span class="docutils literal">clip_actions=1.0</span> wrapper가 ActionManager 이전에 정책 출력을 제한하므로 이 action buffer는
+scale 적용 전 clipped raw policy action이다. Reward는 이 raw 차분의 weighted 제곱합을 계산한다.
+Action scale은 적용하지 않지만 Hip Pitch/Knee에 해당하는
 index <span class="docutils literal">2,3,8,9</span> 의 제곱 오차에는 RoK4 전용 완화 weight <span class="docutils literal">0.5</span> 를 적용한다.</p>
-<p>다만 <span class="docutils literal">RoK4FlatPPORunnerCfg</span> 에서 <span class="docutils literal">clip_actions = 1.0</span> 을 명시하므로 Isaac Lab <span class="docutils literal">train.py</span> 와 <span class="docutils literal">play.py</span> 를
+<p><span class="docutils literal">RoK4FlatPPORunnerCfg</span> 에서 <span class="docutils literal">clip_actions = 1.0</span> 을 명시하므로 Isaac Lab <span class="docutils literal">train.py</span> 와 <span class="docutils literal">play.py</span> 를
 통해 실행할 때는 <span class="docutils literal">RslRlVecEnvWrapper</span> 가 action을 먼저 <span class="docutils literal"><span class="pre">[-1,</span> 1]</span> 로 clamp한다. 따라서 reward가 보는 action은
 wrapper에서 <span class="docutils literal"><span class="pre">[-1,</span> 1]</span> 로 잘린 raw actuator action이다.</p>
+<p>ROBOTIS K1 Rev1의 reward 함수도 별도 clamp 없이 <span class="docutils literal">ActionManager.action</span> 을 읽지만, K1 runner에는
+<span class="docutils literal">clip_actions</span> 설정이 없어 기본값 <span class="docutils literal">None</span> 을 사용한다. 따라서 K1은 unclipped raw action 차분, RoK4 표준
+학습은 wrapper-clipped raw action 차분이라는 차이가 있다.</p>
 <pre class="code text literal-block"><code>actor output
   -&gt; clip_actions = 1.0
   -&gt; clipped_raw_actuator_action
@@ -1195,16 +1205,16 @@ TensorBoard의 <span class="docutils literal"><span class="pre">Loss/kl``(iterat
 <td><p>root world Z에서 각 environment origin Z를 뺀 base height가 gait-ready IK 기준 높이와 달라지는 정도를 제곱 penalty로 만든다.</p></td>
 </tr>
 <tr><td><p><span class="docutils literal">feet_air_time</span></p></td>
-<td><p><span class="docutils literal">mdp.feet_air_time_touchdown_biped</span></p></td>
-<td><p><span class="docutils literal">0.5</span></p></td>
-<td><p>feet: <span class="docutils literal">L_Foot_Link</span>, <span class="docutils literal">R_Foot_Link</span>; <span class="docutils literal">threshold=0.65</span></p></td>
-<td><p>정확히 한 발이 first contact가 된 step에 완료된 air-time을 최대 <span class="docutils literal">0.65</span> 까지 한 번 지급한다. 계속 한 발을 들거나 지지하는 동안에는 반복 지급하지 않는다.</p></td>
+<td><p><span class="docutils literal">mdp.FeetAirTimeTouchdownBiped</span></p></td>
+<td><p><span class="docutils literal">2.0</span></p></td>
+<td><p>feet: <span class="docutils literal">L_Foot_Link</span>, <span class="docutils literal">R_Foot_Link</span>; <span class="docutils literal">target_air_time=0.50 s</span>, <span class="docutils literal">command_threshold=0.05 m/s</span></p></td>
+<td><p>정확히 한 발이 first contact가 된 step에 완료된 air-time의 <span class="docutils literal">T - 0.50</span> 을 한 번 지급하고 같은 유효 touchdown의 실제 <span class="docutils literal">T</span> 를 metric으로 누적한다. 최대 보상 cap은 없으며 stateless 함수 버전도 비교용으로 남아 있다.</p></td>
 </tr>
 <tr><td><p><span class="docutils literal">feet_clearance</span></p></td>
 <td><p><span class="docutils literal">mdp.feet_swing_clearance_exp</span></p></td>
 <td><p><span class="docutils literal">0.2</span></p></td>
-<td><p>target <span class="docutils literal">0.10 m</span>, std <span class="docutils literal">0.05 m</span>, velocity scale <span class="docutils literal">0.20 m/s</span></p></td>
-<td><p>standing이 아닌 환경에서 움직이는 swing Foot 원점이 목표 높이에 가까우면 dense positive reward를 준다. Air-time 길이는 이 term에서 제한하지 않고 touchdown reward가 별도로 담당한다.</p></td>
+<td><p>Foot body-origin target <span class="docutils literal">0.054 m</span> (sole clearance <span class="docutils literal">0.050 m</span> + origin offset <span class="docutils literal">0.004 m</span>), std <span class="docutils literal">0.04 m</span>, velocity scale <span class="docutils literal">0.50 m/s</span></p></td>
+<td><p>선형 명령에서는 yaw frame의 command 방향으로 진행하는 swing Foot 속도만 <span class="docutils literal">tanh</span> gate에 사용한다. 높이 Gaussian은 유지하며, 양발 진행 방향이 반대인 pure-yaw에서는 기존 XY 속도 크기를 사용한다. Air-time 길이는 touchdown reward가 별도로 담당한다.</p></td>
 </tr>
 <tr><td><p><span class="docutils literal">no_jumps</span></p></td>
 <td><p><span class="docutils literal">mdp.desired_contacts</span></p></td>
@@ -1218,6 +1228,30 @@ TensorBoard의 <span class="docutils literal"><span class="pre">Loss/kl``(iterat
 <td><p>feet: <span class="docutils literal">L_Foot_Link</span>, <span class="docutils literal">R_Foot_Link</span></p></td>
 <td><p>지면 접촉 중인 발이 미끄러지는 것을 줄인다.</p></td>
 </tr>
+<tr><td><p><span class="docutils literal">feet_touchdown_velocity</span></p></td>
+<td><p><span class="docutils literal">mdp.FeetTouchdownVelocityL2</span></p></td>
+<td><p><span class="docutils literal"><span class="pre">-10.0</span></span></p></td>
+<td><p>safe landing velocity <span class="docutils literal">0.0 m/s</span></p></td>
+<td><p>이전 policy step의 공중 발 world-Z 속도를 저장한다. First contact가 발생하면 하강속도 크기의 제곱 <span class="docutils literal"><span class="pre">relu(-v_z_prev)^2</span></span> 을 사건당 한 번 penalty로 만든다.</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">feet_contact_velocity</span></p></td>
+<td><p><span class="docutils literal">mdp.feet_contact_velocity_l2</span></p></td>
+<td><p><span class="docutils literal">None</span> (현재 비활성)</p></td>
+<td><p>실험값: landing height <span class="docutils literal">0.03 m</span>, approach threshold <span class="docutils literal"><span class="pre">-0.6</span> m/s</span>, impact threshold <span class="docutils literal">0.0 m/s</span>, weight <span class="docutils literal"><span class="pre">-10.0</span></span></p></td>
+<td><p>기존 Gym의 접근/착지 velocity penalty 함수는 비교용으로 남아 있지만, 접근 구간까지 shaping해 보행 형태가 변한 실험 이후 활성 term에서 제외했다.</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">feet_contact_force</span></p></td>
+<td><p><span class="docutils literal">mdp.FeetContactForceL2</span></p></td>
+<td><p><span class="docutils literal">None</span> (현재 비활성)</p></td>
+<td><p>후속 비교 실험값: force limit <span class="docutils literal">1.2 x randomized body weight</span>, landing window <span class="docutils literal">0.10 s</span>, weight <span class="docutils literal"><span class="pre">-0.05</span></span></p></td>
+<td><p>함수는 비교용으로 남아 있으나 현재 학습 reward에는 연결하지 않는다. GRF는 debug visualization에서만 확인한다.</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">feet_touchdown_acc</span></p></td>
+<td><p><span class="docutils literal">mdp.feet_touchdown_acc</span></p></td>
+<td><p><span class="docutils literal">None</span> (현재 비활성)</p></td>
+<td><p>실험값: acceleration threshold <span class="docutils literal">50 m/s^2</span>, weight <span class="docutils literal"><span class="pre">-0.002</span></span></p></td>
+<td><p>ROBOTIS K1과 같은 함수는 남아 있지만 <span class="docutils literal">touchdownacc50</span> 실험에서 MuJoCo와 실기 착지 충격이 개선되지 않아 비활성화했다. First-contact의 10 ms 판정 구간과 마지막 2 ms physics sample의 가속도 시점이 일치하지 않을 수 있다.</p></td>
+</tr>
 <tr><td><p><span class="docutils literal">feet_flat_orientation_l2</span></p></td>
 <td><p><span class="docutils literal">mdp.feet_flat_orientation_l2</span></p></td>
 <td><p><span class="docutils literal">None</span> (현재 비활성)</p></td>
@@ -1228,7 +1262,13 @@ TensorBoard의 <span class="docutils literal"><span class="pre">Loss/kl``(iterat
 <td><p><span class="docutils literal">mdp.feet_swing_roll_l2</span></p></td>
 <td><p><span class="docutils literal"><span class="pre">-1.0</span></span></p></td>
 <td><p>좌우 Foot body quaternion과 contact sensor</p></td>
-<td><p>공중에 있는 발의 local <span class="docutils literal">+Z</span> 법선을 각 Foot 자체의 yaw frame으로 변환하고 lateral 성분의 제곱만 계산한다. 따라서 swing-foot의 안쪽/바깥쪽 roll은 억제하지만 pitch, yaw, toe-off와 지지 발 자세는 제한하지 않는다.</p></td>
+<td><p>공중에 있는 발의 local <span class="docutils literal">+Z</span> 법선을 각 Foot 자체의 yaw frame으로 변환하고 lateral 성분의 제곱만 계산한다. 따라서 swing-foot의 안쪽/바깥쪽 roll을 억제하고 지지 발 자세는 제한하지 않는다.</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">feet_swing_pitch_l2</span></p></td>
+<td><p><span class="docutils literal">mdp.feet_swing_pitch_l2</span></p></td>
+<td><p><span class="docutils literal"><span class="pre">-0.1</span></span></p></td>
+<td><p>좌우 Foot body quaternion과 contact sensor</p></td>
+<td><p>같은 yaw-removed sole normal의 forward 성분 제곱을 swing 발에만 적용한다. Roll 항의 1/10 가중치로 지속적인 toe-up을 약하게 억제하되 toe-off와 전후 swing 적응은 허용한다.</p></td>
 </tr>
 <tr><td><p><span class="docutils literal">feet_stance_width_l2</span></p></td>
 <td><p><span class="docutils literal">mdp.feet_stance_width_l2</span></p></td>
@@ -1268,7 +1308,7 @@ TensorBoard의 <span class="docutils literal"><span class="pre">Loss/kl``(iterat
 </tr>
 <tr><td><p><span class="docutils literal">joint_deviation_hip_pitch</span></p></td>
 <td><p><span class="docutils literal">mdp.joint_deviation_l1</span></p></td>
-<td><p><span class="docutils literal"><span class="pre">-0.01</span></span></p></td>
+<td><p><span class="docutils literal"><span class="pre">-0.005</span></span></p></td>
 <td><p><span class="docutils literal">.*_Hip_Pitch_Joint</span></p></td>
 <td><p>전후진 보폭을 만드는 핵심 관절을 yaw/roll과 같은 강도로 묶지 않으면서, default pose에서 과도하게 벗어나 다리 전체를 크게 휘두르는 전략을 약하게 억제한다. Swing phase나 무릎 굽힘을 직접 판정하는 reward는 아니다.</p></td>
 </tr>
@@ -1310,15 +1350,15 @@ TensorBoard의 <span class="docutils literal"><span class="pre">Loss/kl``(iterat
 </tr>
 <tr><td><p><span class="docutils literal">action_rate_l2</span></p></td>
 <td><p><span class="docutils literal">mdp.action_rate_l2</span></p></td>
-<td><p><span class="docutils literal"><span class="pre">-0.005</span></span></p></td>
+<td><p><span class="docutils literal"><span class="pre">-0.01</span></span></p></td>
 <td><p>clipped raw action 전체 13차원; index <span class="docutils literal">2,3,8,9</span> weight <span class="docutils literal">0.5</span></p></td>
 <td><p><span class="docutils literal">a_t - <span class="pre">a_{t-1}</span></span> 의 weighted 제곱합을 줄인다. Action scale은 적용하지 않는다.</p></td>
 </tr>
 <tr><td><p><span class="docutils literal">second_action_rate_l2</span></p></td>
 <td><p><span class="docutils literal">mdp.second_action_rate_l2</span></p></td>
-<td><p><span class="docutils literal"><span class="pre">-0.0005</span></span></p></td>
+<td><p><span class="docutils literal"><span class="pre">-0.005</span></span></p></td>
 <td><p>clipped raw action 전체 13차원; index <span class="docutils literal">2,3,8,9</span> weight <span class="docutils literal">0.5</span></p></td>
-<td><p>raw action의 2차 차분, 즉 <span class="docutils literal">a_t - 2 <span class="pre">a_{t-1}</span> + <span class="pre">a_{t-2}</span></span> 의 weighted 제곱합으로 action jerk를 약하게 완화한다.
+<td><p>raw action의 2차 차분, 즉 <span class="docutils literal">a_t - 2 <span class="pre">a_{t-1}</span> + <span class="pre">a_{t-2}</span></span> 의 weighted 제곱합으로 action curvature를 완화한다.
 reset 직후 첫 두 policy step은 history가 부족하므로 0으로 처리한다.</p></td>
 </tr>
 </tbody>
@@ -1418,11 +1458,11 @@ reset 직후 첫 두 policy step은 history가 부족하므로 0으로 처리한
 </tr>
 <tr><td><p><span class="docutils literal">feet_air_time_touchdown_biped</span></p></td>
 <td><p>RoK4 local mdp</p></td>
-<td><p>정확히 한 발이 first contact가 된 순간 <span class="docutils literal">min(last_air_time, threshold)</span> 를 한 번 반환하며, 작은 command와 양발 동시 touchdown은 0이 된다.</p></td>
+<td><p>정확히 한 발이 first contact가 된 순간 <span class="docutils literal">last_air_time - target_air_time</span> 을 한 번 반환하는 상한 없는 stateless 함수다.</p></td>
 </tr>
 <tr><td><p><span class="docutils literal">feet_swing_clearance_exp</span></p></td>
 <td><p>RoK4 local mdp</p></td>
-<td><p>유효 swing Foot별 <span class="docutils literal">tanh(v_xy/0.20) <span class="pre">exp(-(h-0.10)^2/0.05^2)</span></span> 를 평균하며 standing에서는 0이다.</p></td>
+<td><p>선형 명령에서는 유효 swing Foot별 <span class="docutils literal"><span class="pre">tanh(relu(v_foot,yaw·unit(command_xy))/0.50)</span> <span class="pre">exp(-(h-0.054)^2/0.04^2)</span></span> 를 평균한다. Pure-yaw에서는 <span class="docutils literal">v_xy</span> 크기를 사용하고 standing에서는 0이다.</p></td>
 </tr>
 <tr><td><p><span class="docutils literal">desired_contacts</span></p></td>
 <td><p>Isaac Lab 공통</p></td>
@@ -1431,6 +1471,22 @@ reset 직후 첫 두 policy step은 history가 부족하므로 0으로 처리한
 <tr><td><p><span class="docutils literal">feet_slide</span></p></td>
 <td><p>locomotion mdp</p></td>
 <td><p>접촉 중인 foot의 horizontal linear velocity norm을 penalty로 계산한다.</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">feet_contact_velocity_l2</span></p></td>
+<td><p>RoK4 local mdp</p></td>
+<td><p>비활성 비교용 함수다. 접촉 전에는 <span class="docutils literal">I(h&lt;0.03) <span class="pre">I(v_z&lt;-0.6)</span> v_z^2</span>, first contact에서는 <span class="docutils literal">I(v_z&lt;0) v_z^2</span> 를 발별로 합산한다.</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">feet_contact_force_l2</span></p></td>
+<td><p>RoK4 local mdp</p></td>
+<td><p>비활성 비교용 함수다. 5-sample 법선력 history의 peak에 대해 <span class="docutils literal">sum(w_contact <span class="pre">(relu(F_peak-1000)/1000)^2)</span></span> 를 반환한다. <span class="docutils literal">w_contact</span> 는 stance <span class="docutils literal">0.15</span>, first contact <span class="docutils literal">1.0</span> 이다.</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">FeetTouchdownVelocityL2</span></p></td>
+<td><p>RoK4 local mdp</p></td>
+<td><p>이전 policy sample의 공중 발 하강속도 <span class="docutils literal"><span class="pre">s=relu(-v_z,previous)</span></span> 를 저장하고, first contact에서만 <span class="docutils literal">sum(s^2)</span> 를 반환한다. Reward Manager reset 시 history를 무효화해 초기 접촉을 제외한다.</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">feet_touchdown_acc</span></p></td>
+<td><p>RoK4 local mdp</p></td>
+<td><p>first-contact인 발에 대해서만 <span class="docutils literal"><span class="pre">relu(||a_foot,w||</span> - threshold)</span> 를 합산하는 ROBOTIS K1 호환 함수다. 현재 Reward Manager term은 <span class="docutils literal">None</span> 이며 함수와 단위 테스트만 비교용으로 유지한다.</p></td>
 </tr>
 <tr><td><p><span class="docutils literal">lin_vel_z_l2</span></p></td>
 <td><p>Isaac Lab 공통</p></td>
@@ -1466,11 +1522,11 @@ reset 직후 첫 두 policy step은 history가 부족하므로 0으로 처리한
 </tr>
 <tr><td><p><span class="docutils literal">action_rate_l2</span></p></td>
 <td><p>RoK4 로컬 mdp</p></td>
-<td><p>현재 clipped raw action과 이전 action 차이의 weighted squared sum. Index <span class="docutils literal">2,3,8,9</span> 는 weight <span class="docutils literal">0.5</span>.</p></td>
+<td><p>현재 raw action과 이전 action 차이의 weighted squared sum. 함수 내부 clamp는 없지만 표준 RoK4 runner가 입력을 먼저 <span class="docutils literal"><span class="pre">[-1,1]</span></span> 로 제한한다. Index <span class="docutils literal">2,3,8,9</span> 는 weight <span class="docutils literal">0.5</span>.</p></td>
 </tr>
 <tr><td><p><span class="docutils literal">second_action_rate_l2</span></p></td>
 <td><p>RoK4 로컬 mdp</p></td>
-<td><p>clipped raw action의 2차 차분 weighted squared sum. Index <span class="docutils literal">2,3,8,9</span> 는 weight <span class="docutils literal">0.5</span>.</p></td>
+<td><p>raw action의 2차 차분 weighted squared sum. 표준 RoK4 runner 경로에서는 wrapper-clipped raw action이다. Index <span class="docutils literal">2,3,8,9</span> 는 weight <span class="docutils literal">0.5</span>.</p></td>
 </tr>
 <tr><td><p><span class="docutils literal">joint_deviation_l1</span></p></td>
 <td><p>Isaac Lab 공통</p></td>
@@ -1503,10 +1559,10 @@ reset 직후 첫 두 policy step은 history가 부족하므로 0으로 처리한
 <span class="name">ang_vel_z</span> <span class="operator">=</span> <span class="punctuation">(</span><span class="operator">-</span><span class="literal number float">0.6</span><span class="punctuation">,</span> <span class="literal number float">0.6</span><span class="punctuation">)</span></code></pre>
 <p><span class="docutils literal">RoK4PeriodicFreezeVelocityCommand</span> 는 episode reset마다 환경 역할을 다음 확률로 표본화한다.</p>
 <ol class="arabic simple">
-<li><p>45% <span class="docutils literal">mixed</span>: <span class="docutils literal">vx</span>, <span class="docutils literal">vy</span>, <span class="docutils literal">wz</span> 를 모두 표본화한다.</p></li>
+<li><p>35% <span class="docutils literal">mixed</span>: <span class="docutils literal">vx</span>, <span class="docutils literal">vy</span>, <span class="docutils literal">wz</span> 를 모두 표본화한다.</p></li>
 <li><p>5% <span class="docutils literal">standing</span>: episode 동안 exact-zero command를 유지한다.</p></li>
-<li><p>5% <span class="docutils literal">walking</span>: planar command norm <span class="docutils literal">0.15 m/s</span> 이상만 사용하고 freeze하지 않는다.</p></li>
-<li><p>10% <span class="docutils literal">x</span>: <span class="docutils literal"><span class="pre">vx=+/-Uniform(0.15,</span> 0.30) m/s</span> 저속 대칭 전후진만 표본화한다.</p></li>
+<li><p>5% <span class="docutils literal">walking</span>: planar command norm <span class="docutils literal">0.10 m/s</span> 이상만 사용하고 freeze하지 않는다.</p></li>
+<li><p>20% <span class="docutils literal">x</span>: <span class="docutils literal"><span class="pre">vx=+/-Uniform(0.10,</span> 0.30) m/s</span> 저속 대칭 전후진만 표본화한다.</p></li>
 <li><p>5% <span class="docutils literal">fast_forward</span>: <span class="docutils literal">vx=Uniform(0.30, 0.85) m/s</span> 고속 전진만 표본화한다.</p></li>
 <li><p>10% <span class="docutils literal">y</span>: lateral 좌/우 command만 표본화한다.</p></li>
 <li><p>10% <span class="docutils literal">yaw</span>: 시계/반시계 yaw-rate command만 표본화한다.</p></li>
@@ -1514,9 +1570,9 @@ reset 직후 첫 두 policy step은 history가 부족하므로 0으로 처리한
 </ol>
 <p>코드에서는 command 축과 직접 대응하는 <span class="docutils literal">x/y/yaw/x_yaw</span> 이름을 사용한다. 각 단일 축 역할은 양/음 부호를
 50:50 확률로 표본화하며 <span class="docutils literal">x_yaw</span> 의 두 부호는 독립적으로 표본화한다. <span class="docutils literal">x</span> 와 <span class="docutils literal">x_yaw</span> 의 <span class="docutils literal">vx</span> 는
-절댓값 <span class="docutils literal">0.15~0.30 m/s</span> 로 대칭이고, <span class="docutils literal">fast_forward</span> 가 <span class="docutils literal">0.30~0.85 m/s</span> 를 별도로 담당한다. <span class="docutils literal">vy</span> 의
-최소 절댓값은 <span class="docutils literal">0.15 m/s</span>, <span class="docutils literal">wz</span> 는 <span class="docutils literal">0.15 rad/s</span> 이다. 4096개 환경에서 각 10% 역할은 평균 약 410개이고,
-각 부호는 평균 약 205개이므로 이전 Gym의 방향별 200개 population과 비슷한 표본 규모다.</p>
+절댓값 <span class="docutils literal">0.10~0.30 m/s</span> 로 대칭이고, <span class="docutils literal">fast_forward</span> 가 <span class="docutils literal">0.30~0.85 m/s</span> 를 별도로 담당한다. <span class="docutils literal">vy</span> 의
+최소 절댓값은 <span class="docutils literal">0.10 m/s</span>, <span class="docutils literal">wz</span> 는 <span class="docutils literal">0.10 rad/s</span> 이다. 4096개 환경에서 20% <span class="docutils literal">x</span> 역할은 평균 약 819개이고,
+각 부호는 평균 약 410개다. 나머지 10% 전용 역할은 각각 평균 약 410개다.</p>
 <p><span class="docutils literal">mixed/x/fast_forward/y/yaw/x_yaw</span> 의 비율 합 90%는 <span class="docutils literal">10.0 s</span> cycle과 환경별 <span class="docutils literal">Uniform(1.5, 3.0) s</span> freeze duration을
 사용한다. Random initial phase와 독립 duration 때문에 같은 PPO batch에서 moving, standing, transition을
 동시에 관측한다. Episode 중 command를 다시 표본화할 때는 역할을 유지하며, reset 때 역할 자체를 다시 무작위로
@@ -1540,7 +1596,7 @@ push 시간을 <span class="docutils literal">Uniform(10, 15) s</span> 로 표�
 전체 13관절을 default pose 근처로 유지한다. 현재 weight는 <span class="docutils literal"><span class="pre">-0.2</span></span> 이다. <span class="docutils literal"><span class="pre">-1.0</span></span> 실험은 안정적인 양발
 standing을 만들었지만 feet-air-time 감소와 foot-slide 증가가 관측되어 보행 자유도를 회복하도록 완화했다.</p>
 <p>이 command는 <span class="docutils literal">track_lin_vel_xy_exp</span>, <span class="docutils literal">track_ang_vel_z_exp</span>, <span class="docutils literal">feet_air_time</span> 에 직접 영향을 준다. 특히
-<span class="docutils literal">feet_air_time_touchdown_biped</span> 는 x/y command norm이 <span class="docutils literal">0.1</span> 이하이면 reward를 0으로 만든다. 즉 거의 정지
+<span class="docutils literal">FeetAirTimeTouchdownBiped</span> 는 x/y command norm이 <span class="docutils literal">0.05</span> 이하이면 reward를 0으로 만든다. 즉 거의 정지
 명령에서는 stepping reward가 강하게 작동하지 않는다.</p>
 <p><span class="docutils literal">UniformVelocityCommand</span> 가 반환하는 <span class="docutils literal">[lin_vel_x, lin_vel_y, ang_vel_z]</span> 는 robot base frame 기준
 command다. 따라서 양의 <span class="docutils literal">lin_vel_x</span> 는 로봇이 현재 바라보는 방향의 전진, 양의 <span class="docutils literal">lin_vel_y</span> 는 로봇 기준
@@ -1553,12 +1609,20 @@ roll/pitch를 제외한 yaw 회전만 역변환한 gravity-aligned yaw frame 속
 학습, Gym, Teleop, ROS <span class="docutils literal">cmd_vel</span> 과 실물 적용에서 policy가 받는 세 번째 command는 모두 같은 의미의 목표
 yaw angular velocity다. Navigation에서 목표 world heading이 필요하면 policy 외부의 상위 controller가
 heading error를 <span class="docutils literal">wz</span> 로 변환해 이 동일한 velocity interface에 전달한다.</p>
-<p>현재 <span class="docutils literal">feet_air_time</span> 은 느리고 긴 step을 유도하기 위해 <span class="docutils literal">threshold=0.65 s</span>, <span class="docutils literal">weight=0.5</span> 를 사용한다.
-정확히 한 발이 first contact가 된 policy step에 그 발의 완료된 <span class="docutils literal">last_air_time</span> 을 읽고
-<span class="docutils literal">min(last_air_time, 0.65)</span> 를 한 번 반환한다. 양발이 같은 step에 first contact가 되거나 planar command norm이
-<span class="docutils literal">0.1 m/s</span> 이하이면 0이다. 따라서 최대 pre-<span class="docutils literal">dt</span> event 크기는 <span class="docutils literal">0.65 * 0.5 = 0.325</span> 이지만, 한 발 지지를
-계속 유지하거나 air-time이 <span class="docutils literal">0.65 s</span> 를 넘는 동안에는 추가 reward를 받지 않는다. 이 sparse event term의
-TensorBoard 값은 이전 dense per-step term과 직접 비교할 수 없다.</p>
+<p>현재 <span class="docutils literal">feet_air_time</span> 은 느리고 긴 step을 유도하기 위해 <span class="docutils literal">target_air_time=0.50 s</span>, <span class="docutils literal">weight=2.0</span> 을
+사용한다. 정확히 한 발이 first contact가 된 policy step에 그 발의 완료된 <span class="docutils literal">last_air_time</span> 을 읽고
+<span class="docutils literal">last_air_time - 0.50</span> 을 한 번 반환한다. 양발이 같은 step에 first contact가 되거나 planar command norm이
+<span class="docutils literal">0.05 m/s</span> 이하이면 0이다. 따라서 <span class="docutils literal">T=0.30 s</span> 는 raw <span class="docutils literal"><span class="pre">-0.20</span></span>, <span class="docutils literal">T=0.50 s</span> 는 <span class="docutils literal">0</span>, <span class="docutils literal">T=0.75 s</span> 는
+raw <span class="docutils literal">+0.25</span> 이다. Reward Manager가 적용하는 pre-<span class="docutils literal">dt</span> weighted event는 각각 raw 값에 <span class="docutils literal">2.0</span> 을 곱한다.
+Policy interval <span class="docutils literal">0.01 s</span> 까지 포함한 touchdown-error 기울기는 <span class="docutils literal">0.02</span> 로, K1의 <span class="docutils literal">1.0 * 0.02</span> 와 같다.</p>
+<p>이 signed touchdown shaping은 짧은 잔걸음을 단순히 적게 보상하는 대신 직접 penalty화한다. 반면
+최대 보상 air-time cap이 없으므로 <span class="docutils literal">0.75 s</span> 를 초과한 완료 swing도 더 큰 양수를 받는다. 한 발을 오래 드는
+전략은 velocity tracking, <span class="docutils literal">no_jumps</span> 와 기타 gait term이 함께 제한해야 한다.
+이 sparse event term의 TensorBoard 값은 이전 dense 또는 squared touchdown term과 직접 비교할 수 없다.</p>
+<p>현재 활성 term은 stateful <span class="docutils literal">FeetAirTimeTouchdownBiped</span> class다. Reward Manager가 기록하는
+<span class="docutils literal">Episode_Reward/feet_air_time</span> 은 episode 동안 합산된 weighted reward이므로 실제 평균 air time 자체와
+같지 않다. Class는 touchdown event의 <span class="docutils literal">last_air_time</span> 합과 event count를 GPU tensor로 누적하고 reset 때
+<span class="docutils literal">Metrics/feet_touchdown/mean_air_time</span> [s]를 기록한다.</p>
 <p><span class="docutils literal">base_height_l2</span> 는 평지에서 height scanner 없이 각 environment origin을 지면 기준으로 사용한다.</p>
 <div class="formula">
 <i>p</i><sub><i>base</i> − <i>height</i></sub> = <span class="symbol">(</span><i>z</i><sub><i>base</i>, <i>w</i></sub> − <i>z</i><sub><i>origin</i>, <i>w</i></sub> − 0.907<span class="symbol">)</span><sup>2</sup>
@@ -1569,18 +1633,20 @@ TensorBoard 값은 이전 dense per-step term과 직접 비교할 수 없다.</p
 <p><span class="docutils literal">feet_clearance</span> 는 touchdown event가 아니라 swing 중 매 policy step 계산하는 dense positive reward다. 유효한
 Foot 집합을 <span class="docutils literal">S</span> 라고 하면 raw reward는 다음과 같다.</p>
 <div class="formula">
-<i>r</i><sub><i>clear</i></sub> = <span class="fraction"><span class="ignored">(</span><span class="numerator">1</span><span class="ignored">)/(</span><span class="denominator">|<i>S</i>|</span><span class="ignored">)</span></span><span class="limits"><sup class="limit"> </sup><span class="limit">⎲</span><span class="limit">⎳</span><sub class="limit"><i>i</i> ∈ <i>S</i></sub></span>tanh<span class="array"><span class="arrayrow"><span class="bracket align-left">⎛</span></span><span class="arrayrow"><span class="bracket align-left">⎝</span></span></span><span class="fraction"><span class="ignored">(</span><span class="numerator">∥<i>v</i><sub><i>i</i>, <i>xy</i></sub>∥</span><span class="ignored">)/(</span><span class="denominator">0.20</span><span class="ignored">)</span></span><span class="array"><span class="arrayrow"><span class="bracket align-right">⎞</span></span><span class="arrayrow"><span class="bracket align-right">⎠</span></span></span>exp<span class="array"><span class="arrayrow"><span class="bracket align-left">⎛</span></span><span class="arrayrow"><span class="bracket align-left">⎝</span></span></span> − <span class="fraction"><span class="ignored">(</span><span class="numerator">(<i>h</i><sub><i>i</i></sub> − 0.10)<sup>2</sup></span><span class="ignored">)/(</span><span class="denominator">0.05<sup>2</sup></span><span class="ignored">)</span></span><span class="array"><span class="arrayrow"><span class="bracket align-right">⎞</span></span><span class="arrayrow"><span class="bracket align-right">⎠</span></span></span>
+<i>r</i><sub><i>clear</i></sub> = <span class="fraction"><span class="ignored">(</span><span class="numerator">1</span><span class="ignored">)/(</span><span class="denominator">|<i>S</i>|</span><span class="ignored">)</span></span><span class="limits"><sup class="limit"> </sup><span class="limit">⎲</span><span class="limit">⎳</span><sub class="limit"><i>i</i> ∈ <i>S</i></sub></span>tanh<span class="array"><span class="arrayrow"><span class="bracket align-left">⎛</span></span><span class="arrayrow"><span class="bracket align-left">⎝</span></span></span><span class="fraction"><span class="ignored">(</span><span class="numerator">∥<i>v</i><sub><i>i</i>, <i>xy</i></sub>∥</span><span class="ignored">)/(</span><span class="denominator">0.50</span><span class="ignored">)</span></span><span class="array"><span class="arrayrow"><span class="bracket align-right">⎞</span></span><span class="arrayrow"><span class="bracket align-right">⎠</span></span></span>exp<span class="array"><span class="arrayrow"><span class="bracket align-left">⎛</span></span><span class="arrayrow"><span class="bracket align-left">⎝</span></span></span> − <span class="fraction"><span class="ignored">(</span><span class="numerator">(<i>h</i><sub><i>i</i></sub> − 0.054)<sup>2</sup></span><span class="ignored">)/(</span><span class="denominator">0.04<sup>2</sup></span><span class="ignored">)</span></span><span class="array"><span class="arrayrow"><span class="bracket align-right">⎞</span></span><span class="arrayrow"><span class="bracket align-right">⎠</span></span></span>
 </div>
 <p>여기서 <span class="docutils literal">h_i = z_FootLink,i,w - z_origin,w</span> 이고 <span class="docutils literal">v_i,xy</span> 는 Foot body의 world-frame planar speed다.
 <span class="docutils literal">S</span> 에는 <span class="docutils literal">current_air_time &gt; 0</span> 이고 command generator의 <span class="docutils literal">is_standing_env=False</span> 인 발만 포함된다.
 유효한 발이 없으면 0이다. 두 발이 동시에 유효해도 합이 아니라 평균하므로 raw 최대값은 1 미만이다. Weight는
 <span class="docutils literal">+0.2</span> 이다.</p>
 <p>현재 <span class="docutils literal">Foot_Link</span> 원점은 약 8 mm 발 두께의 가운데에 있어 실제 sole보다 약 4 mm 높다. 따라서 이 <span class="docutils literal">h_i</span> 는
-정확한 collision-point clearance가 아니라 평지용 body-origin proxy다. <span class="docutils literal">std=0.05 m</span> 기준에서 4 mm offset의
-목표점 reward는 <span class="docutils literal"><span class="pre">exp(-(0.004/0.05)^2)</span> ~= 0.994</span> 이므로 첫 실험에서는 offset 보정이나 height scanner를
-추가하지 않는다. 속도 gate는 높이 목표에 도달했더라도 거의 정지한 발이 점수를 받는 것을 막는다. 예를 들어
-<span class="docutils literal">v_xy=0.10 m/s</span> 에서는 <span class="docutils literal">tanh(0.5) ~= 0.462</span>, <span class="docutils literal">0.20 m/s</span> 에서는 <span class="docutils literal">tanh(1) ~= 0.762</span> 이며 고속에서는
-부드럽게 1에 포화된다.</p>
+정확한 collision-point clearance가 아니라 평지용 body-origin proxy다. 목표 <span class="docutils literal">0.054 m</span> 는 원하는 sole
+clearance <span class="docutils literal">0.050 m</span> 에 이 origin offset <span class="docutils literal">0.004 m</span> 를 더한 값이다. <span class="docutils literal">std=0.04 m</span> 기준에서 4 mm offset의
+차이는 target 자체에 명시적으로 반영했으며, 평지에서는 environment origin이 지면 높이와 같으므로 별도 height
+scanner를 추가하지 않는다. 속도 gate는 높이 목표에 도달했더라도 거의 정지한 발이 점수를 받는 것을 막는다. 예를 들어
+<span class="docutils literal">v_xy=0.10 m/s</span> 에서는 <span class="docutils literal">tanh(0.2) ~= 0.197</span>, <span class="docutils literal">0.20 m/s</span> 에서는 <span class="docutils literal">tanh(0.4) ~= 0.380</span>,
+<span class="docutils literal">0.50 m/s</span> 에서는 <span class="docutils literal">tanh(1) ~= 0.762</span> 이며 고속에서는 부드럽게 1에 포화된다. 따라서 이전 <span class="docutils literal">0.20 m/s</span>
+scale보다 느린 swing Foot의 clearance shaping을 약하게 만든다.</p>
 <p><span class="docutils literal">no_jumps</span> 는 <span class="docutils literal">mdp.desired_contacts</span> 를 <span class="docutils literal"><span class="pre">weight=-2.0</span></span> 과 force <span class="docutils literal">threshold=1.0 N</span> 으로 사용한다.
 최근 contact-force history에서 좌우 Foot 모두 threshold를 넘지 못한 경우에만 raw value <span class="docutils literal">1</span> 을 반환하므로,
 Reward Manager에서는 해당 양발 flight interval에 음의 점수가 적용된다. 한 발이라도 접촉 중이면 0이므로 정상
@@ -1589,15 +1655,39 @@ single stance와 toe-off는 직접 억제하지 않는다. 또한 이 term만으
 <span class="docutils literal"><span class="pre">-2.0</span></span> 을 첫 실험값으로 사용한다.</p>
 <p><span class="docutils literal">feet_swing_roll_l2</span> 는 <span class="docutils literal"><span class="pre">weight=-1.0</span></span> 로 활성화되어 swing 중 발바닥이 안쪽 또는 바깥쪽으로 말리는
 현상을 억제한다. 각 Foot의 local <span class="docutils literal">+Z</span> 법선을 world frame으로 회전한 뒤 그 Foot 자체의 yaw frame으로 옮기고,
-lateral 성분 <span class="docutils literal">n_y^2 = sin^2(roll)</span> 만 penalty로 반환한다. 따라서 foot yaw나 pitch가 변해도 roll 성분만 분리한다. Contact sensor의
-<span class="docutils literal">current_contact_time</span> 이 0인 발에만 적용하고 swing 발 수로 평균하므로, 지지 발은 0이며 pitch와 yaw도
-직접 제한하지 않는다. 따라서 기존의 비활성 <span class="docutils literal">feet_flat_orientation_l2</span> 와 달리 toe-off나 fore-aft swing
-각도를 평평하게 만들지 않는다.</p>
+lateral 성분 <span class="docutils literal">n_y^2</span> 만 penalty로 반환한다. 새 <span class="docutils literal">feet_swing_pitch_l2</span> 는 같은 벡터의 forward 성분
+<span class="docutils literal">n_x^2</span> 를 사용하되 <span class="docutils literal"><span class="pre">weight=-0.1</span></span> 만 적용하여 지속적인 toe-up을 약하게 억제한다. Contact sensor의
+<span class="docutils literal">current_contact_time</span> 이 0인 발에만 적용하고 swing 발 수로 평균하므로 지지 발은 두 항 모두 0이다.
+Pitch 가중치는 roll의 1/10이므로 비활성 <span class="docutils literal">feet_flat_orientation_l2</span> 처럼 발 전체를 항상 world-up에
+고정하지 않으며, 필요한 toe-off와 sagittal swing을 더 높은 우선순위의 tracking/clearance 항이 사용할 수 있다.</p>
 <p>Contact sensor는 <span class="docutils literal">update_period=0.002 s</span> 와 <span class="docutils literal">history_length=self.decimation=5</span> 를 사용한다. 따라서
-<span class="docutils literal">no_jumps</span>, <span class="docutils literal">feet_slide</span>, <span class="docutils literal">undesired_contacts</span>, <span class="docutils literal">illegal_body_contact</span> 처럼 <span class="docutils literal">net_forces_w_history</span> 를 검사하는
-항목은 최근 policy interval의 5개 physics contact sample을 확인한다. 반면 <span class="docutils literal">feet_air_time_touchdown_biped</span> 는
+<span class="docutils literal">no_jumps</span>, <span class="docutils literal">feet_slide</span>, <span class="docutils literal">undesired_contacts</span>, <span class="docutils literal">illegal_body_contact</span> 처럼 <span class="docutils literal">net_forces_w_history</span> 를
+검사하는 항목은 최근 policy interval의 5개 physics contact sample을 확인한다. 비활성 비교용
+<span class="docutils literal">feet_contact_force_l2</span> 도 ground-filtered <span class="docutils literal">force_matrix_w_history</span> 를 같은 방식으로 검사한다. 반면
+활성 <span class="docutils literal">FeetAirTimeTouchdownBiped</span> class와 비교용 <span class="docutils literal">feet_air_time_touchdown_biped</span> 함수는 모두
 <span class="docutils literal">compute_first_contact(env.step_dt)</span> 와 완료된 <span class="docutils literal">last_air_time</span> 을 사용한다.
 이 contact-force history는 policy observation history와 별개의 buffer이다.</p>
+<p>현재 soft-landing 실험은 <span class="docutils literal">FeetTouchdownVelocityL2</span> 만 활성화한다.
+Velocity class는 각 발의 이전 policy step world-Z 속도와 접촉 여부를 저장하고, 이전 sample이
+공중이었던 발에 first contact가 발생할 때만 다음 raw penalty를 반환한다.</p>
+<div class="formula">
+<i>P</i><sub><i>landing</i></sub> = <span class="limits"><sup class="limit"> </sup><span class="limit">⎲</span><span class="limit">⎳</span><sub class="limit"><i>i</i></sub></span><i>I</i><sub><i>first</i>, <i>i</i></sub><i>I</i><sub><i>air</i>, <i>previous</i>, <i>i</i></sub><span class="symbol">[</span>max(0,  − <i>v</i><sub><i>z</i>, <i>previous</i>, <i>i</i></sub>)<span class="symbol">]</span><sup>2</sup>
+</div>
+<p>Reward Manager는 여기에 weight <span class="docutils literal"><span class="pre">-10.0</span></span> 과 <span class="docutils literal">dt=0.01 s</span> 를 적용한다. 따라서 접근 중과 계속된 stance에는
+직접 영향을 주지 않는다. 별도 dead zone은 없지만 L2 특성상 작은 하강속도에는 작은 penalty만 생긴다. Reset
+직후에는 이전 sample이 없으므로 초기 접촉을 제외한다.</p>
+<p>현재 검증 기준은
+<span class="docutils literal"><span class="pre">2026-08-12_23-45-39_privileged250_gain240_160_80_air050_w2_tdvel10_ar01_ar2_005_noforce_delay4ms_fresh20k</span></span>
+의 <span class="docutils literal">model_19999.pt</span> 다. 마지막 checkpoint에서 평균 착지 직전 하강속도는 약 <span class="docutils literal">0.044 m/s</span> 였고 velocity
+tracking과 평균 완료 air time은 유지되었다. 학습 checkpoint는 Isaac Lab log directory에 보존하며 Git에는
+포함하지 않는다.</p>
+<p><span class="docutils literal">FeetContactForceL2</span> class는 비교 실험과 metric 구현을 위해 소스에 남아 있지만 현재 config는
+<span class="docutils literal">feet_contact_force=None</span> 이다. 따라서 GRF는 Reward Manager에서 학습을 shaping하지 않고 debug
+visualization에서만 확인한다.</p>
+<p>Air-time과 touchdown velocity class는 episode 누적값과 event count를 GPU tensor로 유지하고,
+환경 reset 때 <span class="docutils literal">Metrics/feet_touchdown/*</span> 의 event-weighted 평균을 기록한다. 기존 Gym 호환 stateless
+<span class="docutils literal">feet_contact_velocity_l2</span> 와 <span class="docutils literal">feet_contact_force_l2</span> 함수는 비교용으로 남아 있지만 현재 Reward Manager
+term에는 연결하지 않는다.</p>
 <p>Play 환경은 현재 standing 검증을 위해 <span class="docutils literal">lin_vel_x=0.0 m/s</span> 를 사용하고 lateral/yaw command도 0으로 고정한다. 별도의 Teleop 환경은
 긴 resampling interval을 사용하고, gamepad 또는 keyboard의
 <span class="docutils literal">[lin_vel_x, lin_vel_y, ang_vel_z]</span> 를 동일한 base-frame command buffer에 직접 기록한다. 입력은 학습 범위
@@ -1662,15 +1752,21 @@ freeze를 비활성화한다.</p>
 </tbody>
 </table>
 <p>이 scalar는 발의 평균 air-time 초 단위 값이 아니다. Reward Manager가 기록하는 episode-normalized 값에는
-policy <span class="docutils literal">dt=0.01 s</span>, reward <span class="docutils literal">weight=0.5</span>, 유효 touchdown 빈도, 완료된 air-time, planar moving-command
+policy <span class="docutils literal">dt=0.01 s</span>, reward <span class="docutils literal">weight=2.0</span>, 유효 touchdown 빈도, 완료된 air-time, planar moving-command
 mask가 함께 들어간다. 개념적으로 다음 곱에 가깝다.</p>
 <div class="formula">
-<span class="bar"><i>r</i></span><sub><i>air</i></sub> ≈ 0.01⋅0.5⋅<i>f</i><sub><i>touchdown</i></sub>⋅𝔼[min(<i>T</i><sub><i>air</i></sub>, 0.65)]⋅<i>p</i><sub><i>moving</i></sub>
+<span class="bar"><i>r</i></span><sub><i>air</i></sub> ≈ 0.01⋅2.0⋅<i>f</i><sub><i>touchdown</i></sub>⋅𝔼<span class="symbol">[</span><i>T</i><sub><i>air</i></sub> − 0.50<span class="symbol">]</span>⋅<i>p</i><sub><i>moving</i></sub>
 </div>
 <p>규칙적인 교대 보행에서는 touchdown 빈도와 step air-time이 서로 반비례할 수 있으므로 이 scalar 하나로
 <span class="docutils literal">T_air</span> 을 역산할 수 없다. 또한 10k, 15k, 20k 값이 단조 증가하지 않아도 보행이 악화되었다는 뜻이 아니다.
-정확한 air-time이 필요하면 좌우 발별 touchdown <span class="docutils literal">last_air_time</span> 평균/중앙값/상위 백분위, 초당 touchdown
-횟수, <span class="docutils literal">0.65 s</span> cap 도달 비율을 별도 metric으로 기록해야 한다.</p>
+현재 구현은 정확한 평균 비교를 위해 touchdown <span class="docutils literal">last_air_time</span> 과 착지 직전 수직속도를 event count로 나눈
+물리 단위 TensorBoard metric을 함께 기록한다. 중앙값/상위 백분위와 초당 touchdown 횟수는 아직 집계하지 않는다.</p>
+<ul class="simple">
+<li><p><span class="docutils literal">Metrics/feet_touchdown/mean_pre_touchdown_vertical_speed</span> [m/s]</p></li>
+<li><p><span class="docutils literal">Metrics/feet_touchdown/mean_air_time</span> [s]</p></li>
+</ul>
+<p><span class="docutils literal">FeetContactForceL2</span> 는 비교 구현으로 남아 있지만 현재 reward config에서는 <span class="docutils literal">None</span> 이다. 따라서 GRF는
+학습 신호나 TensorBoard touchdown metric으로 사용하지 않고 Contact Forces debug visualization에서 확인한다.</p>
 </section>
 <section id="id3">
 <h2>현재 설계 의도</h2>
