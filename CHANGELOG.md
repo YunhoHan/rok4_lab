@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Added a Teleop-only orange planar velocity arrow for the Actor's body-frame estimator output, using the same
+  direction and length convention as the existing green command and blue simulator-velocity arrows.
+- Exposed the Actor's internal 3D body-frame base-velocity estimate as the separate ONNX output
+  `estimated_base_lin_vel_b`, alongside the unchanged 13D `actions` output. The deployment input remains 240D,
+  TorchScript remains action-only, and existing estimator checkpoints require only re-export rather than retraining.
+- Kept touchdown-force reward shaping disabled while adding a logging-only force term that records the 100 ms landing
+  peak in TensorBoard and returns an identically zero reward.
 - Raised the event-only touchdown-velocity penalty from `-2.0` to `-10.0` after the stronger setting reduced mean
   pre-touchdown downward speed to approximately `0.044 m/s` without degrading velocity tracking or completed air time.
   Recorded the validated `2026-08-12_23-45-39.../model_19999.pt` configuration as the no-GRF-shaping baseline.
@@ -125,6 +132,11 @@
 
 ### Added
 
+- Added a concurrently supervised command-free base-velocity estimator with a `225 -> 256 -> 128 -> 3` MLP,
+  physical-unit RMSE logging, symmetry-augmented targets, independent optimizer/checkpoint state, and a fused
+  `240 -> 13` JIT/ONNX deployment interface.
+- Added a Korean estimator architecture document covering observation layouts, MSE/RMSE equations, PPO gradient
+  separation, symmetry, checkpoint compatibility, export behavior, and the deferred recovery-gate experiment.
 - Added a two-series live env-0 GRF-magnitude plot to the existing Contact Forces debug panel, retaining 300 rendering
   samples without adding work when sensor debug visualization is disabled.
 - Added Gym-compatible soft-landing penalty functions for excessive downward foot velocity near/at touchdown and foot

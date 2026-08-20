@@ -634,6 +634,41 @@ def test_feet_contact_force_class_uses_body_weight_and_landing_window() -> None:
     assert not torch.any(term._landing_active)
     torch.testing.assert_close(term._landing_peak_force, torch.zeros((2, 2)))
 
+    metric_term = _REWARDS.FeetContactForceL2(
+        SimpleNamespace(
+            params={
+                "sensor_cfg": sensor_cfg,
+                "asset_cfg": asset_cfg,
+                "force_limit_multiplier": 1.5,
+                "landing_window_s": 0.05,
+                "metric_only": True,
+            }
+        ),
+        env,
+    )
+    for force_z, contact_time, first_contact in (
+        (torch.tensor([600.0, 1800.0]), 0.01, True),
+        (torch.tensor([900.0, 1600.0]), 0.03, False),
+        (torch.tensor([1200.0, 2000.0]), 0.05, False),
+    ):
+        contact_sensor.set_step(force_z, contact_time, first_contact=first_contact)
+        metric_value = metric_term(
+            env,
+            sensor_cfg=sensor_cfg,
+            asset_cfg=asset_cfg,
+            force_limit_multiplier=1.5,
+            landing_window_s=0.05,
+            metric_only=True,
+        )
+        torch.testing.assert_close(metric_value, torch.zeros(2))
+
+    assert metric_term._robot_weight is None
+    metric_term.reset(torch.arange(2))
+    torch.testing.assert_close(
+        env.extras["log"]["Metrics/feet_touchdown/mean_peak_normal_force"],
+        torch.tensor(1600.0),
+    )
+
 
 @pytest.mark.parametrize(
     ("function_name", "params", "match"),

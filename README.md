@@ -15,8 +15,10 @@ The previous Sim2Sim-validated reference remains run
 and its exported ONNX separately; exporting another checkpoint rewrites the run's default `exported/policy.onnx`.
 
 The `yunho/privileged-observation` experiment keeps this policy as its parent baseline and extends only the training
-critic. The 240-value actor observation and 13-value actuator action contract remain unchanged, so exported actor
-policies retain the same Sim2Sim/Sim2Real interface.
+critic. The `yunho/concurrent-state-estimator` ONNX policy retains the 240-value observation input and exposes two
+named outputs: the 13-value actuator action and the 3-value body-frame velocity estimate used internally by that
+action. Sim2Sim and Sim2Real consumers should read both outputs, apply only `actions` to the actuators, and log
+`estimated_base_lin_vel_b` for estimator validation.
 
 Previous joint-space reference policy: run `2026-07-15_17-28-41`, checkpoint `model_4999.pt`
 
@@ -57,8 +59,12 @@ Isaac Lab
             └─ ROK4_TRAIN_CFG
 
 RSL-RL
+  ├─ ActorCritic -> RoK4EstimatorActorCritic
+  │    └─ contains 225D -> 3D base-velocity estimator
   ├─ PPO -> RoK4PPO
+  │    └─ separate PPO and estimator optimizers
   └─ OnPolicyRunner -> RoK4OnPolicyRunner
+       └─ estimator metrics, checkpoint state, and fused export
 
 RoK4 local MDP
   ├─ actions.py       raw actuator action -> psi_target -> q_target
@@ -83,8 +89,11 @@ link lengths, gains, and limits, and stores that config object in `ROK4_TRAIN_CF
 the inherited observation-config object as a whole. The resulting frame has 48 values and its five-frame flattened
 history produces the 240-value policy input. Its actuator state terms use `J^-1 (q - q_default)` position and
 `J^-1 (q_dot - q_dot_default)` velocity without a manual observation scale, matching the parent task's relative-state
-naming and centering convention in actuator coordinates. The actor remains blind at 240 noisy-history values. During
-training, the critic receives a separately evaluated clean 240-value history plus ten current privileged values:
+naming and centering convention in actuator coordinates. The external Actor/ONNX input remains 240 noisy-history
+values. On `yunho/concurrent-state-estimator`, an internal 225D command-free MLP estimates the 3D body-frame base
+velocity and concatenates it with the normalized history, so the action MLP consumes 243D without changing the
+deployment input. The ONNX graph returns `actions [1,13]` and `estimated_base_lin_vel_b [1,3]` as separate tensors;
+these are not concatenated into a 16-value output. During training, the critic receives a separately evaluated clean 240-value history plus ten current privileged values:
 `base_lin_vel_b` (3), base height (1), left/right Foot body-origin height (2), contact flags (2), and current air times
 (2). This produces a 250-value asymmetric critic input. The ten privileged values are current-frame state, not a
 five-frame history.
@@ -99,6 +108,7 @@ Project notes are kept in `docs/` as editable RST/HTML files and generated PDFs:
 | `docs/_build/pdf/rok4_reward_structure_ko.pdf` | RoK4 reward terms, inherited reward settings, reward/DR separation, and reward function meanings. |
 | `docs/_build/pdf/rok4_adapt_control_structure_ko.pdf` | ADAPT matrices, action/actuator object relationships, target/state origins, explicit PD call flow, and torque limits. |
 | `docs/_build/pdf/rok4_randomization_and_noise_ko.pdf` | Observation noise, reset randomization, physics DR, sampling cadence, and Train/Play/Teleop differences. |
+| `docs/_build/pdf/rok4_concurrent_state_estimator_ko.pdf` | Concurrent 225D-to-3D base-velocity estimator, PPO gradient separation, symmetry, checkpoints, and the fused two-output ONNX contract. |
 
 The development branches intentionally remain independent:
 
@@ -109,6 +119,7 @@ The development branches intentionally remain independent:
 | `yunho/symmetry-augmentation` | Sim2Sim-validated symmetry and DR baseline. |
 | `yunho/directional-gait-rework` | Touchdown air-time and directional command-role baseline described here. |
 | `yunho/privileged-observation` | Clean critic history, current privileged foot state, and height/clearance reward experiment. |
+| `yunho/concurrent-state-estimator` | Concurrent command-free base-velocity estimator while retaining the 240D deployment input and 250D critic. |
 
 Documentation updates on one branch do not imply merging or moving the other branch pointers.
 
@@ -373,6 +384,12 @@ gravity-aligned yaw frame used by the tracking reward, while measured `wz_world`
 the world vertical axis. The actual display also includes `vz` and measured planar speed. It refreshes at 20 Hz to
 avoid a GPU synchronization on every physics step.
 
+On the concurrent-state-estimator branch, Teleop also draws three planar velocity arrows above the robot. Green is the
+body-frame command, blue is the simulator ground-truth `root_lin_vel_b`, and orange is the estimator output actually
+fed to the Actor. All three use the same XY direction and length scale; the orange arrow is raised by `0.08 m` so a
+close estimate remains visible. The estimator's `vz` is available through the separate ONNX diagnostic output but is
+not included in this planar comparison.
+
 The same window also adds a `RoK4 Push Test` frame. It provides
 `+X`, `-X`, `+Y`, `-Y`, and `Random XY` buttons plus a configurable `Delta velocity [m/s]` value. A click queues one
 world-frame root linear-velocity change and applies it at the next policy-step boundary. This avoids changing simulation
@@ -386,8 +403,9 @@ This control reproduces an impulse-like disturbance by changing root velocity. I
 does not alter the policy command, and is available only through the local `play.py` and `play_teleop.py` wrappers. It
 does not run during training or headless playback. The implementation is entirely inside `rok4_lab`.
 
-The actor observation is proprioceptive and history-based. It does not use camera images, terrain height scans, or
-base linear velocity:
+The external actor observation is proprioceptive and history-based. It does not directly contain camera images,
+terrain height scans, or measured base linear velocity; the concurrent estimator predicts base velocity internally
+from the command-free proprioceptive history:
 
 ```text
 5-step history of:
@@ -828,6 +846,9 @@ stick to the right produces negative lateral/yaw commands, so the robot moves or
 stick command is clamped to `[-1, 1]` and scaled to the training limits: `vx=(-0.3, 0.85) m/s`,
 `vy=(-0.3, 0.3) m/s`, and `wz=(-0.6, 0.6) rad/s`. No ROS 2 bridge, `/joy` subscriber, or IPC process is required for
 this native Isaac Lab input path.
+
+For estimator checkpoints, the viewport shows green command, blue simulator ground-truth, and orange estimated planar
+base-velocity arrows. The orange arrow is diagnostic only and does not change the command, action, or exported policy.
 
 Keyboard input uses the same script and command pipeline:
 

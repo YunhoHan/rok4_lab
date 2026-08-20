@@ -418,7 +418,12 @@ RoK4 전용 Reward Terms
      - ``mdp.FeetContactForceL2``
      - ``None`` (현재 비활성)
      - 후속 비교 실험값: force limit ``1.2 x randomized body weight``, landing window ``0.10 s``, weight ``-0.05``
-     - 함수는 비교용으로 남아 있으나 현재 학습 reward에는 연결하지 않는다. GRF는 debug visualization에서만 확인한다.
+     - 함수는 비교용으로 남아 있으나 현재 학습 reward에는 연결하지 않는다.
+   * - ``feet_contact_force_metrics``
+     - ``mdp.FeetContactForceL2`` (``metric_only=True``)
+     - ``1.0`` (함수 반환값은 항상 0)
+     - landing window ``0.10 s``
+     - Reward Manager가 매 step 호출하여 touchdown peak GRF를 집계하지만 reward 합에는 정확히 0을 더한다. TensorBoard ``Metrics/feet_touchdown/mean_peak_normal_force`` 만 기록한다.
    * - ``feet_touchdown_acc``
      - ``mdp.feet_touchdown_acc``
      - ``None`` (현재 비활성)
@@ -826,9 +831,10 @@ Reward Manager는 여기에 weight ``-10.0`` 과 ``dt=0.01 s`` 를 적용한다.
 tracking과 평균 완료 air time은 유지되었다. 학습 checkpoint는 Isaac Lab log directory에 보존하며 Git에는
 포함하지 않는다.
 
-``FeetContactForceL2`` class는 비교 실험과 metric 구현을 위해 소스에 남아 있지만 현재 config는
-``feet_contact_force=None`` 이다. 따라서 GRF는 Reward Manager에서 학습을 shaping하지 않고 debug
-visualization에서만 확인한다.
+``FeetContactForceL2`` class의 shaping term은 ``feet_contact_force=None`` 이다. 별도
+``feet_contact_force_metrics`` term은 ``metric_only=True`` 와 weight ``1.0`` 으로 매 step 실행되지만 함수가
+항상 0을 반환하므로 total reward와 policy gradient에 영향을 주지 않는다. 이 logging-only term은 touchdown
+후 ``0.10 s`` 동안의 peak GRF를 집계해 TensorBoard에 기록한다.
 
 Air-time과 touchdown velocity class는 episode 누적값과 event count를 GPU tensor로 유지하고,
 환경 reset 때 ``Metrics/feet_touchdown/*`` 의 event-weighted 평균을 기록한다. 기존 Gym 호환 stateless
@@ -911,9 +917,11 @@ mask가 함께 들어간다. 개념적으로 다음 곱에 가깝다.
 
 * ``Metrics/feet_touchdown/mean_pre_touchdown_vertical_speed`` [m/s]
 * ``Metrics/feet_touchdown/mean_air_time`` [s]
+* ``Metrics/feet_touchdown/mean_peak_normal_force`` [N]
 
-``FeetContactForceL2`` 는 비교 구현으로 남아 있지만 현재 reward config에서는 ``None`` 이다. 따라서 GRF는
-학습 신호나 TensorBoard touchdown metric으로 사용하지 않고 Contact Forces debug visualization에서 확인한다.
+``mean_peak_normal_force`` 는 기존 TensorBoard tag 호환을 위해 이름을 유지한다. 실제 집계값은 filtered
+world-frame 접촉 합력 ``||[F_x,F_y,F_z]||`` 의 landing-window peak다. ``feet_contact_force_metrics`` 는
+이 값만 기록하며 reward에는 0을 반환한다.
 
 현재 설계 의도
 ------------------------------------------------------

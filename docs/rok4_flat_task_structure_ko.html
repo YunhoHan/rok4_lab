@@ -836,7 +836,7 @@ span.boxed, span.framebox {
 <dd><p>2026-07-15</p>
 </dd>
 <dt>최종 업데이트</dt>
-<dd><p>2026-08-12</p>
+<dd><p>2026-08-18</p>
 </dd>
 <dt>대상 저장소</dt>
 <dd><p>RoK4 repository root (<span class="docutils literal">${ROK4_LAB_ROOT}</span>)</p>
@@ -876,6 +876,9 @@ RoK4 기준으로 다시 작성했다.</p>
 <p>Observation noise, reset state randomization, physics DR의 정확한 범위와 표본화 시점, Train/Play/Teleop 차이는
 <span class="docutils literal">docs/rok4_randomization_and_noise_ko.rst</span> 와 생성된
 <span class="docutils literal">docs/_build/pdf/rok4_randomization_and_noise_ko.pdf</span> 를 기준 문서로 사용한다.</p>
+<p>Concurrent body-frame base-velocity estimator의 225D 입력, 3D target, PPO gradient 분리, RMSE logging,
+checkpoint와 fused 240D ONNX export는 <span class="docutils literal">docs/rok4_concurrent_state_estimator_ko.rst</span> 와 생성된
+<span class="docutils literal">docs/_build/pdf/rok4_concurrent_state_estimator_ko.pdf</span> 에 정리한다.</p>
 <p>현재 actuator-space 기준 정책은
 <span class="docutils literal"><span class="pre">2026-07-24_19-34-26_symmetry_aug_nojumps2_swing_roll100_fresh/model_9999.pt</span></span> 이며,
 이 문서에서는 이를 experimental <span class="docutils literal">Yunho Symmetry ADAPT v1</span> baseline으로 기록한다. 이 checkpoint를 보존한
@@ -945,7 +948,7 @@ checkpoint 호환성이 없다.</p>
     check_rok4_joint_monkey.py       # joint axis/limit 검사
     rsl_rl/
       _run_isaaclab_rsl.py           # Isaac Lab 원본 train/play wrapper
-      rok4_ppo.py                     # KL logging을 추가한 RoK4 PPO/runner
+      rok4_ppo.py                     # KL + velocity estimator PPO/runner/exporter
       train.py                       # RoK4 task/runner 등록 후 Isaac Lab train 실행
       play.py                        # RoK4 task 등록 후 Isaac Lab play 실행
       play_teleop.py                 # gamepad/keyboard command를 주입하는 teleop 실행</code></pre>
@@ -1038,11 +1041,14 @@ manager_based/locomotion/velocity/config/rok4/__init__.py
        └─ 자식(상속): RoK4TerminationsCfg                  [flat_env_cfg.py]
 
 RSL-RL
+  ├─ ActorCritic
+  │    └─ 자식(상속): RoK4EstimatorActorCritic            [scripts/rsl_rl/rok4_ppo.py]
+  │         └─ 포함: 225D -&gt; 3D base-velocity estimator
   ├─ PPO
   │    └─ 자식(상속): RoK4PPO                             [scripts/rsl_rl/rok4_ppo.py]
   └─ OnPolicyRunner
        └─ 자식(상속): RoK4OnPolicyRunner                  [scripts/rsl_rl/rok4_ppo.py]
-            └─ RoK4PPO 생성 + KL logging
+            └─ RoK4PPO 생성 + KL/estimator logging/checkpoint
 
 RoK4 local MDP
   ├─ actions.py
@@ -1248,7 +1254,9 @@ RoK4OnPolicyRunner
   └─ RoK4PPO 사용
        ├─ upstream PPO update/learning-rate 동작 유지
        ├─ iteration 평균 KL -&gt; Loss/kl
-       └─ iteration 최대 KL -&gt; Loss/kl_max
+       ├─ iteration 최대 KL -&gt; Loss/kl_max
+       ├─ 별도 estimator MSE optimizer/checkpoint
+       └─ base velocity RMSE -&gt; Metrics/estimator/*
 
 RewardTermCfg(func=mdp.xxx)
   ├─ RoK4 로컬 mdp reward 함수 호출
@@ -1375,9 +1383,12 @@ Critic은 같은 물리량을 별도로 계산하지만 noise를 선언하지 �
 발바닥 중심보다 약 <span class="docutils literal">0.004 m</span> 위라는 고정 offset을 포함한 clearance proxy다. 이 4 mm는 현재 clearance reward의
 <span class="docutils literal">std=0.04 m</span> 보다 충분히 작으므로 별도 보정하지 않는다.</p>
 <p>PPO runner의 <span class="docutils literal">obs_groups</span> 는 actor에 <span class="docutils literal">[&quot;policy&quot;]</span>, critic에 <span class="docutils literal">[&quot;critic&quot;, &quot;privileged&quot;]</span> 를 연결한다.
-따라서 actor 입력은 기존과 같은 240차원이고 critic 입력은 <span class="docutils literal">240 + 10 = 250</span> 차원이다. Privileged 정보와 clean
-critic history는 inference policy나 ONNX actor 입력에 포함되지 않는다. Critic 첫 입력층이 달라지므로 243D critic
-checkpoint에서 resume하지 않고 fresh run으로 비교한다.</p>
+따라서 외부 actor observation과 ONNX 입력은 기존과 같은 240차원이고 critic 입력은 <span class="docutils literal">240 + 10 = 250</span> 차원이다.
+<span class="docutils literal"><span class="pre">yunho/concurrent-state-estimator</span></span> 에서는 normalized policy history에서 command <span class="docutils literal">30:45</span> 를 제외한 225D로
+3D base velocity를 추정하고 이를 detach해 240D history와 합친 243D를 내부 action MLP에 넣는다. Privileged
+정보와 clean critic history 자체는 inference/ONNX 입력에 포함되지 않는다. ONNX는 하나의 16D tensor가 아니라
+<span class="docutils literal">actions [1,13]</span> 와 Actor 내부의 동일한 <span class="docutils literal">estimated_base_lin_vel_b [1,3]</span> 를 별도 named output으로 제공한다.
+상세 구조와 Sim2Sim/Sim2Real logging 방법은 estimator 전용 문서를 참조한다.</p>
 <p>현재 <span class="docutils literal">actuator_pos</span> 와 <span class="docutils literal">actuator_vel</span> term은 부모 Isaac Lab의 <span class="docutils literal">joint_pos_rel</span>, <span class="docutils literal">joint_vel_rel</span> 패턴처럼
 default state를 뺀 뒤 actuator 좌표로 변환한다. Position은 gait-ready default pose에서 0이 되고, 현재
 <span class="docutils literal">q_dot_default=0</span> 이므로 velocity 값은 absolute velocity와 수치상 같다. 별도의 수동 observation scale은
@@ -1442,7 +1453,7 @@ default state를 뺀 뒤 actuator 좌표로 변환한다. Position은 gait-ready
 </tr>
 <tr><td><p><span class="docutils literal">scripts/rsl_rl/rok4_ppo.py</span></p></td>
 <td><p>학습 algorithm 확장</p></td>
-<td><p>adaptive learning rate가 계산하는 mini-batch KL의 iteration 평균/최대값을 TensorBoard에 기록</p></td>
+<td><p>KL logging, 225D base-velocity estimator, 별도 MSE optimizer, RMSE/checkpoint와 fused export 제공</p></td>
 </tr>
 <tr><td><p><span class="docutils literal">assets/robots/rok4.py</span></p></td>
 <td><p>robot asset config</p></td>
@@ -1787,9 +1798,10 @@ penalty <span class="docutils literal">1</span> 을 반환한다. 따라서 정�
 first contact가 발생하면 <span class="docutils literal"><span class="pre">relu(-v_z_prev)^2</span></span> 를 사건당 한 번 계산해 weight <span class="docutils literal"><span class="pre">-10.0</span></span> 을 적용한다.
 접근 중과 계속된 stance에는 영향을 주지 않으며 reset 직후 이전 sample이 없는 초기 접촉도 제외한다.
 <span class="docutils literal">FeetContactForceL2</span> class는 first contact부터 <span class="docutils literal">0.10 s</span> 동안 filtered world-frame 접촉 합력
-<span class="docutils literal"><span class="pre">||[F_x,F_y,F_z]||</span></span> 의 최대값을 누적하는 비교 구현으로 남아 있다. 하지만 현재 reward config는
-<span class="docutils literal">feet_contact_force=None</span> 이므로 GRF가 학습을 shaping하지 않는다. 접촉력은 Contact Forces debug
-visualization에서만 확인한다.</p>
+<span class="docutils literal"><span class="pre">||[F_x,F_y,F_z]||</span></span> 의 최대값을 누적한다. 현재 shaping config는 <span class="docutils literal">feet_contact_force=None</span> 이므로 GRF가
+학습을 shaping하지 않는다. 대신 <span class="docutils literal">feet_contact_force_metrics</span> 가 <span class="docutils literal">metric_only=True</span> 로 같은 peak를
+TensorBoard <span class="docutils literal">Metrics/feet_touchdown/mean_peak_normal_force</span> 에 기록하면서 reward에는 항상 0을 반환한다.
+Contact Forces debug visualization도 그대로 사용할 수 있다.</p>
 <p>검증된 기준 checkpoint는
 <span class="docutils literal"><span class="pre">2026-08-12_23-45-39_privileged250_gain240_160_80_air050_w2_tdvel10_ar01_ar2_005_noforce_delay4ms_fresh20k/model_19999.pt</span></span>
 다. 이 checkpoint는 평균 착지 직전 하강속도를 약 <span class="docutils literal">0.044 m/s</span> 로 낮추면서 velocity tracking과 평균 완료
@@ -2274,9 +2286,11 @@ action에 사용한 좌우 index/sign 규칙은 현재 변환과 일치한다. �
 </section>
 <section id="scripts-rsl-rl-rok4-ppo-py">
 <h3><span class="docutils literal">scripts/rsl_rl/rok4_ppo.py</span></h3>
-<p>Isaac Lab 또는 설치된 <span class="docutils literal">rsl_rl</span> 파일을 수정하지 않고 KL을 TensorBoard에 기록하기 위한 RoK4 로컬
-PPO/runner 확장이다. <span class="docutils literal">RoK4PPO</span> 는 upstream PPO의 adaptive KL 계산값을 누적하고,
-<span class="docutils literal">RoK4OnPolicyRunner</span> 는 학습 시 이 PPO를 생성한다.</p>
+<p>Isaac Lab 또는 설치된 <span class="docutils literal">rsl_rl</span> 파일을 수정하지 않고 KL과 concurrent velocity estimator를 제공하는 RoK4 로컬
+PPO/runner 확장이다. <span class="docutils literal">RoK4PPO</span> 는 upstream PPO의 adaptive KL 계산값을 누적하고 estimator를 별도 Adam/MSE로
+학습한다. <span class="docutils literal">RoK4OnPolicyRunner</span> 는 이 PPO를 생성하고 estimator optimizer checkpoint와 physical RMSE를 관리한다.
+Estimator와 fused 240D input, 13D action/3D estimated-velocity ONNX output의 상세 수식은
+<span class="docutils literal">rok4_concurrent_state_estimator_ko.rst</span> 를 참조한다.</p>
 <p>현재 <span class="docutils literal">num_learning_epochs=5</span>, <span class="docutils literal">num_mini_batches=4</span> 이므로 한 PPO iteration에는 20개의 mini-batch KL이
 계산된다.</p>
 <table>
@@ -2317,8 +2331,9 @@ policy가 얼마나 달라졌는지를 측정한다. 기존 TensorBoard event �
 4. 원본의 import isaaclab_tasks 바로 뒤에 import rok4_tasks 삽입
 5. train.py에는 RoK4OnPolicyRunner import/생성을 삽입
 6. teleop이면 device CLI, SE(2) 입력 생성, command update를 play.py에 삽입
-7. keyboard teleop이면 R key의 one-shot environment reset request를 play loop에 삽입
-8. 원본 script를 실행</code></pre>
+7. estimator teleop이면 current observation의 추정 base XY 속도를 주황색 marker로 표시
+8. keyboard teleop이면 R key의 one-shot environment reset request를 play loop에 삽입
+9. 원본 script를 실행</code></pre>
 <p>이 방식의 장점은 Isaac Lab 본체를 수정하지 않는다는 점이다.</p>
 </section>
 <section id="scripts-rsl-rl-train-py">
@@ -2450,6 +2465,17 @@ command는 이어지는 step 후 observation을 통해 다음 policy loop에서 
 <p>Teleop에서도 같은 command/actual 숫자 panel과 <span class="docutils literal">RoK4 Push Test</span> frame이 표시된다. 조이스틱/키보드로 이동
 command를 유지한 상태에서 실제 scale된 command와 로봇의 측정 속도를 비교하고, 마우스로 방향 버튼을 눌러
 command tracking과 외란 복원을 동시에 확인할 수 있다.</p>
+<p>Concurrent estimator checkpoint를 Teleop으로 실행하면 로봇 위의 평면 선속도 화살표가 세 개가 된다.</p>
+<ul class="simple">
+<li><p>녹색: body-frame command <span class="docutils literal">[v_x,v_y]</span></p></li>
+<li><p>파란색: simulator ground truth <span class="docutils literal">root_lin_vel_b[0:2]</span></p></li>
+<li><p>주황색: Actor가 사용한 estimator <span class="docutils literal"><span class="pre">[hat(v_x),hat(v_y)]</span></span></p></li>
+</ul>
+<p>세 값은 같은 body frame이며 robot orientation으로 world에 회전하고, 같은 <span class="docutils literal">3|v_xy|</span> 길이 배율을 사용한다.
+주황색 marker는 기존 두 marker보다 <span class="docutils literal">0.08 m</span> 높여 겹침을 구분한다. <span class="docutils literal">hat(v_z)</span> 는 command에 대응하는 값이
+없으므로 3D 화살표에 섞지 않고 ONNX diagnostic output과 estimator RMSE에서 확인한다. 시각화는 current policy
+observation으로 estimator를 한 번 더 결정적으로 실행하는 진단 경로이며 학습, action, reward 및 ONNX 출력을
+변경하지 않는다. 구현은 <span class="docutils literal">scripts/rsl_rl/_velocity_estimate_visualizer.py</span> 에 있다.</p>
 </section>
 </section>
 <section id="id5">
@@ -2594,10 +2620,10 @@ TensorBoard scalar이며, reward 설정이 다른 run과 <span class="docutils l
 <p>Tracking은 약 15k에서 사실상 plateau에 도달했고, 15k에서 20k 사이에는 sliding, jump, orientation 같은
 contact-related term이 조금 더 정돈되었다. 따라서 현재 기준 checkpoint는 <span class="docutils literal">model_19999.pt</span> 로 보존하되,
 새 실험에서도 <span class="docutils literal">model_9999.pt</span>, <span class="docutils literal">model_14999.pt</span>, <span class="docutils literal">model_19999.pt</span> 를 모두 비교한다.</p>
-<p>현재 <span class="docutils literal"><span class="pre">yunho/privileged-observation</span></span> branch는 위 directional baseline에서 분기하여 critic을 250D로 확장하고,
-동시에 base-height와 swing-clearance reward를 시험한다. Actor의 240차원 입력과 13차원 actuator action contract는
-그대로다. Critic-only 변경과 reward 변경이 함께 들어가므로 baseline과 비교할 때 두 효과가 완전히 분리된 ablation은
-아니며, 기존 checkpoint를 resume하지 않고 fresh <span class="docutils literal">20,000</span> iteration으로 학습한다.</p>
+<p><span class="docutils literal"><span class="pre">yunho/privileged-observation</span></span> branch는 위 directional baseline에서 critic을 250D로 확장한 Sim2Real baseline이다.
+현재 <span class="docutils literal"><span class="pre">yunho/concurrent-state-estimator</span></span> branch는 여기서 다시 분기해 command-free 225D estimator를 추가한다.
+Actor의 외부 240차원 입력과 13차원 actuator action contract, Critic 250D는 유지하며 이전 checkpoint를 resume하지
+않고 fresh 학습한다.</p>
 </section>
 <section id="id8">
 <h2>현재 설계 의도</h2>
@@ -2607,7 +2633,6 @@ contact-related term이 조금 더 정돈되었다. 따라서 현재 기준 chec
 terrain curriculum
 height scanner
 camera observation
-explicit estimator / MLP encoder
 teacher-student distillation
 terrain height scanner / rough-terrain privileged height state</code></pre>
 <p>추후 권장 순서는 다음과 같다.</p>
@@ -2616,7 +2641,9 @@ terrain height scanner / rough-terrain privileged height state</code></pre>
 3. reward, action scale, termination 조정
 4. RoK4 Rough task 추가
 5. weak rough terrain curriculum
-6. estimator 또는 teacher-student 구조 추가</code></pre>
+6. concurrent base-velocity estimator 검증
+7. estimator 기반 stable-standing/recovery gate ablation
+8. 필요 시 teacher-student 구조 추가</code></pre>
 </section>
 <section id="id9">
 <h2>주요 실행 명령어</h2>

@@ -13,6 +13,26 @@ from rok4_tasks.manager_based.locomotion.velocity.mdp.symmetry import compute_sy
 
 
 @configclass
+class RoK4EstimatorActorCriticCfg(RslRlPpoActorCriticCfg):
+    """Actor-critic configuration with a command-free base-velocity estimator."""
+
+    class_name: str = "RoK4EstimatorActorCritic"
+    estimator_hidden_dims: list[int] = [256, 128]
+    estimator_activation: str = "elu"
+    estimator_command_history_start: int = 30
+    estimator_command_history_end: int = 45
+
+
+@configclass
+class RoK4EstimatorPpoAlgorithmCfg(RslRlPpoAlgorithmCfg):
+    """PPO configuration with separately supervised estimator optimization."""
+
+    class_name: str = "RoK4PPO"
+    estimator_learning_rate: float = 1.0e-3
+    estimator_max_grad_norm: float = 1.0
+
+
+@configclass
 class RoK4FlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     """PPO runner configuration for the RoK4 flat velocity task."""
 
@@ -25,7 +45,7 @@ class RoK4FlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     clip_actions = 1.0
     # Initial RoK4 baseline: RoK4-oriented network/normalization settings with G1-style PPO algorithm values.
     # These values are starting points for flat walking, not final tuned parameters.
-    policy = RslRlPpoActorCriticCfg(
+    policy = RoK4EstimatorActorCriticCfg(
         init_noise_std=1.0,
         actor_obs_normalization=True,
         critic_obs_normalization=True,
@@ -33,7 +53,7 @@ class RoK4FlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         critic_hidden_dims=[512, 256, 128],
         activation="elu",
     )
-    algorithm = RslRlPpoAlgorithmCfg(
+    algorithm = RoK4EstimatorPpoAlgorithmCfg(
         value_loss_coef=1.0,
         use_clipped_value_loss=True,
         clip_param=0.2,

@@ -13,6 +13,35 @@ def _replace_once(source: str, marker: str, replacement: str, script_path: Path,
     return source.replace(marker, replacement, 1)
 
 
+def _inject_estimator_visualization(source: str, script_path: Path) -> str:
+    """Inject Teleop estimator visualization using the upstream action-line indentation."""
+    action_statement = "actions = policy(obs)"
+    if source.count(action_statement) != 1:
+        raise RuntimeError(f"Could not uniquely locate the teleoperation policy action in {script_path}.")
+
+    action_offset = source.index(action_statement)
+    line_start = source.rfind("\n", 0, action_offset) + 1
+    indentation = source[line_start:action_offset]
+    if indentation.strip():
+        raise RuntimeError(f"Could not resolve teleoperation policy-step indentation in {script_path}.")
+
+    policy_step_marker = f"{indentation}# agent stepping\n{indentation}{action_statement}\n"
+    policy_step = (
+        f"{indentation}# estimate the velocity seen by the actor and draw its planar component\n"
+        f"{indentation}estimated_base_lin_vel_b = policy_nn.estimate_base_velocity(obs)\n"
+        f"{indentation}estimated_velocity_visualizer.visualize(estimated_base_lin_vel_b)\n"
+        f"{indentation}# agent stepping\n"
+        f"{indentation}{action_statement}\n"
+    )
+    return _replace_once(
+        source,
+        policy_step_marker,
+        policy_step,
+        script_path,
+        "teleoperation policy step",
+    )
+
+
 def _prepare_isaaclab_rsl_source(
     script_path: Path,
     *,
@@ -36,7 +65,12 @@ def _prepare_isaaclab_rsl_source(
         source = _replace_once(
             source,
             runner_import,
-            runner_import + "from rok4_ppo import RoK4OnPolicyRunner\n",
+            runner_import
+            + "from rok4_ppo import (\n"
+            + "    RoK4OnPolicyRunner,\n"
+            + "    export_rok4_policy_as_jit,\n"
+            + "    export_rok4_policy_as_onnx,\n"
+            + ")\n",
             script_path,
             "RSL-RL runner import",
         )
@@ -47,6 +81,31 @@ def _prepare_isaaclab_rsl_source(
             script_path,
             "OnPolicyRunner construction",
         )
+        if script_path.name == "play.py":
+            jit_export_marker = (
+                "export_policy_as_jit(policy_nn, normalizer=normalizer, "
+                "path=export_model_dir, filename=\"policy.pt\")"
+            )
+            source = _replace_once(
+                source,
+                jit_export_marker,
+                "export_rok4_policy_as_jit("
+                "policy_nn, normalizer=normalizer, path=export_model_dir, filename=\"policy.pt\")",
+                script_path,
+                "TorchScript policy export",
+            )
+            onnx_export_marker = (
+                "export_policy_as_onnx(policy_nn, normalizer=normalizer, "
+                "path=export_model_dir, filename=\"policy.onnx\")"
+            )
+            source = _replace_once(
+                source,
+                onnx_export_marker,
+                "export_rok4_policy_as_onnx("
+                "policy_nn, normalizer=normalizer, path=export_model_dir, filename=\"policy.onnx\")",
+                script_path,
+                "ONNX policy export",
+            )
 
     if use_push_ui:
         if script_path.name != "play.py":
@@ -118,6 +177,7 @@ parser.add_argument(
         teleop_imports = '''from isaaclab.devices import Se2Gamepad, Se2GamepadCfg, Se2Keyboard, Se2KeyboardCfg
 
 from _teleop import IncrementalKeyboardCommand
+from _velocity_estimate_visualizer import RoK4EstimatedVelocityVisualizer
 
 from rok4_tasks.manager_based.locomotion.velocity.config.rok4.flat_env_cfg import (
     ROK4_ANG_VEL_Z_RANGE,
@@ -217,6 +277,7 @@ def _scale_teleop_command(raw_command: torch.Tensor, invert_lateral_and_yaw: boo
         keyboard_command.bind(teleop_interface)
         teleop_interface.add_callback("R", teleop_reset_request.request)
     base_velocity_command = env.unwrapped.command_manager.get_term("base_velocity")
+    estimated_velocity_visualizer = RoK4EstimatedVelocityVisualizer(base_velocity_command)
     command_display_window = getattr(env.unwrapped, "_window", None)
     if command_display_window is not None and not hasattr(command_display_window, "update_command_display"):
         command_display_window = None
@@ -262,6 +323,8 @@ def _scale_teleop_command(raw_command: torch.Tensor, invert_lateral_and_yaw: boo
             script_path,
             "inference loop",
         )
+
+        source = _inject_estimator_visualization(source, script_path)
 
     return source
 

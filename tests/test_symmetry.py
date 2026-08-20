@@ -124,3 +124,12 @@ def test_compute_symmetric_states_doubles_actor_critic_batch() -> None:
     )
     torch.testing.assert_close(actions_aug[:4], actions)
     torch.testing.assert_close(actions_aug[4:], _SYMMETRY._mirror_actuator_coordinates(actions))
+
+
+def test_privileged_mirror_reflects_estimator_velocity_target() -> None:
+    """Estimator targets must preserve vx/vz and negate body-frame vy."""
+    privileged = torch.tensor([[1.2, -0.4, 0.3, 0.907, 0.1, 0.2, 1.0, 0.0, 0.0, 0.5]])
+
+    mirrored = _SYMMETRY._mirror_privileged_observation(privileged)
+
+    torch.testing.assert_close(mirrored[:, :3], torch.tensor([[1.2, 0.4, 0.3]]))

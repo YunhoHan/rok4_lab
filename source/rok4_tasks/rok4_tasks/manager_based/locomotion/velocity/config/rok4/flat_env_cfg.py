@@ -301,6 +301,20 @@ class RoK4RewardsCfg(RewardsCfg):
     )
     feet_contact_velocity = None
     feet_contact_force = None
+    feet_contact_force_metrics = RewTerm(
+        func=mdp.FeetContactForceL2,
+        weight=1.0,
+        params={
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces",
+                body_names=["L_Foot_Link", "R_Foot_Link"],
+            ),
+            "asset_cfg": SceneEntityCfg("robot"),
+            "force_limit_multiplier": 1.2,
+            "landing_window_s": 0.10,
+            "metric_only": True,
+        },
+    )
     feet_touchdown_acc = None
     feet_flat_orientation_l2 = None
     feet_swing_roll_l2 = RewTerm(

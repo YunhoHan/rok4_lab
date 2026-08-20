@@ -2,7 +2,7 @@ RoK4 Flat RSL-RL Task 구조 문서
 ========================================================================
 
 :작성일: 2026-07-15
-:최종 업데이트: 2026-08-12
+:최종 업데이트: 2026-08-18
 :대상 저장소: RoK4 repository root (``${ROK4_LAB_ROOT}``)
 :기준 환경: Isaac Lab v2.3.2, Isaac Sim 5.1.0, ``env_isaaclab``
 
@@ -49,6 +49,10 @@ ADAPT 행렬, ``actions.py`` 와 actuator의 객체 관계, ``compute()`` 입력
 Observation noise, reset state randomization, physics DR의 정확한 범위와 표본화 시점, Train/Play/Teleop 차이는
 ``docs/rok4_randomization_and_noise_ko.rst`` 와 생성된
 ``docs/_build/pdf/rok4_randomization_and_noise_ko.pdf`` 를 기준 문서로 사용한다.
+
+Concurrent body-frame base-velocity estimator의 225D 입력, 3D target, PPO gradient 분리, RMSE logging,
+checkpoint와 fused 240D ONNX export는 ``docs/rok4_concurrent_state_estimator_ko.rst`` 와 생성된
+``docs/_build/pdf/rok4_concurrent_state_estimator_ko.pdf`` 에 정리한다.
 
 현재 actuator-space 기준 정책은
 ``2026-07-24_19-34-26_symmetry_aug_nojumps2_swing_roll100_fresh/model_9999.pt`` 이며,
@@ -114,7 +118,7 @@ checkpoint 호환성이 없다.
        check_rok4_joint_monkey.py       # joint axis/limit 검사
        rsl_rl/
          _run_isaaclab_rsl.py           # Isaac Lab 원본 train/play wrapper
-         rok4_ppo.py                     # KL logging을 추가한 RoK4 PPO/runner
+         rok4_ppo.py                     # KL + velocity estimator PPO/runner/exporter
          train.py                       # RoK4 task/runner 등록 후 Isaac Lab train 실행
          play.py                        # RoK4 task 등록 후 Isaac Lab play 실행
          play_teleop.py                 # gamepad/keyboard command를 주입하는 teleop 실행
@@ -217,11 +221,14 @@ RoK4 구조 관계
           └─ 자식(상속): RoK4TerminationsCfg                  [flat_env_cfg.py]
 
    RSL-RL
+     ├─ ActorCritic
+     │    └─ 자식(상속): RoK4EstimatorActorCritic            [scripts/rsl_rl/rok4_ppo.py]
+     │         └─ 포함: 225D -> 3D base-velocity estimator
      ├─ PPO
      │    └─ 자식(상속): RoK4PPO                             [scripts/rsl_rl/rok4_ppo.py]
      └─ OnPolicyRunner
           └─ 자식(상속): RoK4OnPolicyRunner                  [scripts/rsl_rl/rok4_ppo.py]
-               └─ RoK4PPO 생성 + KL logging
+               └─ RoK4PPO 생성 + KL/estimator logging/checkpoint
 
    RoK4 local MDP
      ├─ actions.py
@@ -443,7 +450,9 @@ Actuator torque를 joint torque로 변환한 뒤에는 ``ROK4_JOINT_TORQUE_LIMIT
      └─ RoK4PPO 사용
           ├─ upstream PPO update/learning-rate 동작 유지
           ├─ iteration 평균 KL -> Loss/kl
-          └─ iteration 최대 KL -> Loss/kl_max
+          ├─ iteration 최대 KL -> Loss/kl_max
+          ├─ 별도 estimator MSE optimizer/checkpoint
+          └─ base velocity RMSE -> Metrics/estimator/*
 
    RewardTermCfg(func=mdp.xxx)
      ├─ RoK4 로컬 mdp reward 함수 호출
@@ -549,9 +558,12 @@ Foot height는 ray-based height scanner나 collision-point query가 아니다. �
 ``std=0.04 m`` 보다 충분히 작으므로 별도 보정하지 않는다.
 
 PPO runner의 ``obs_groups`` 는 actor에 ``["policy"]``, critic에 ``["critic", "privileged"]`` 를 연결한다.
-따라서 actor 입력은 기존과 같은 240차원이고 critic 입력은 ``240 + 10 = 250`` 차원이다. Privileged 정보와 clean
-critic history는 inference policy나 ONNX actor 입력에 포함되지 않는다. Critic 첫 입력층이 달라지므로 243D critic
-checkpoint에서 resume하지 않고 fresh run으로 비교한다.
+따라서 외부 actor observation과 ONNX 입력은 기존과 같은 240차원이고 critic 입력은 ``240 + 10 = 250`` 차원이다.
+``yunho/concurrent-state-estimator`` 에서는 normalized policy history에서 command ``30:45`` 를 제외한 225D로
+3D base velocity를 추정하고 이를 detach해 240D history와 합친 243D를 내부 action MLP에 넣는다. Privileged
+정보와 clean critic history 자체는 inference/ONNX 입력에 포함되지 않는다. ONNX는 하나의 16D tensor가 아니라
+``actions [1,13]`` 와 Actor 내부의 동일한 ``estimated_base_lin_vel_b [1,3]`` 를 별도 named output으로 제공한다.
+상세 구조와 Sim2Sim/Sim2Real logging 방법은 estimator 전용 문서를 참조한다.
 
 현재 ``actuator_pos`` 와 ``actuator_vel`` term은 부모 Isaac Lab의 ``joint_pos_rel``, ``joint_vel_rel`` 패턴처럼
 default state를 뺀 뒤 actuator 좌표로 변환한다. Position은 gait-ready default pose에서 0이 되고, 현재
@@ -601,7 +613,7 @@ default state를 뺀 뒤 actuator 좌표로 변환한다. Position은 gait-ready
      - RSL-RL PPO network와 algorithm hyperparameter 설정
    * - ``scripts/rsl_rl/rok4_ppo.py``
      - 학습 algorithm 확장
-     - adaptive learning rate가 계산하는 mini-batch KL의 iteration 평균/최대값을 TensorBoard에 기록
+     - KL logging, 225D base-velocity estimator, 별도 MSE optimizer, RMSE/checkpoint와 fused export 제공
    * - ``assets/robots/rok4.py``
      - robot asset config
      - USD path, initial pose, actuator, joint order, action scale, self-collision 설정 제공
@@ -966,9 +978,10 @@ penalty ``1`` 을 반환한다. 따라서 정상 single stance와 toe-off는 허
 first contact가 발생하면 ``relu(-v_z_prev)^2`` 를 사건당 한 번 계산해 weight ``-10.0`` 을 적용한다.
 접근 중과 계속된 stance에는 영향을 주지 않으며 reset 직후 이전 sample이 없는 초기 접촉도 제외한다.
 ``FeetContactForceL2`` class는 first contact부터 ``0.10 s`` 동안 filtered world-frame 접촉 합력
-``||[F_x,F_y,F_z]||`` 의 최대값을 누적하는 비교 구현으로 남아 있다. 하지만 현재 reward config는
-``feet_contact_force=None`` 이므로 GRF가 학습을 shaping하지 않는다. 접촉력은 Contact Forces debug
-visualization에서만 확인한다.
+``||[F_x,F_y,F_z]||`` 의 최대값을 누적한다. 현재 shaping config는 ``feet_contact_force=None`` 이므로 GRF가
+학습을 shaping하지 않는다. 대신 ``feet_contact_force_metrics`` 가 ``metric_only=True`` 로 같은 peak를
+TensorBoard ``Metrics/feet_touchdown/mean_peak_normal_force`` 에 기록하면서 reward에는 항상 0을 반환한다.
+Contact Forces debug visualization도 그대로 사용할 수 있다.
 
 검증된 기준 checkpoint는
 ``2026-08-12_23-45-39_privileged250_gain240_160_80_air050_w2_tdvel10_ar01_ar2_005_noforce_delay4ms_fresh20k/model_19999.pt``
@@ -1368,9 +1381,11 @@ action에 사용한 좌우 index/sign 규칙은 현재 변환과 일치한다. �
 ``scripts/rsl_rl/rok4_ppo.py``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Isaac Lab 또는 설치된 ``rsl_rl`` 파일을 수정하지 않고 KL을 TensorBoard에 기록하기 위한 RoK4 로컬
-PPO/runner 확장이다. ``RoK4PPO`` 는 upstream PPO의 adaptive KL 계산값을 누적하고,
-``RoK4OnPolicyRunner`` 는 학습 시 이 PPO를 생성한다.
+Isaac Lab 또는 설치된 ``rsl_rl`` 파일을 수정하지 않고 KL과 concurrent velocity estimator를 제공하는 RoK4 로컬
+PPO/runner 확장이다. ``RoK4PPO`` 는 upstream PPO의 adaptive KL 계산값을 누적하고 estimator를 별도 Adam/MSE로
+학습한다. ``RoK4OnPolicyRunner`` 는 이 PPO를 생성하고 estimator optimizer checkpoint와 physical RMSE를 관리한다.
+Estimator와 fused 240D input, 13D action/3D estimated-velocity ONNX output의 상세 수식은
+``rok4_concurrent_state_estimator_ko.rst`` 를 참조한다.
 
 현재 ``num_learning_epochs=5``, ``num_mini_batches=4`` 이므로 한 PPO iteration에는 20개의 mini-batch KL이
 계산된다.
@@ -1407,8 +1422,9 @@ Isaac Lab 원본 ``scripts/reinforcement_learning/rsl_rl/train.py`` 와 ``play.p
    4. 원본의 import isaaclab_tasks 바로 뒤에 import rok4_tasks 삽입
    5. train.py에는 RoK4OnPolicyRunner import/생성을 삽입
    6. teleop이면 device CLI, SE(2) 입력 생성, command update를 play.py에 삽입
-   7. keyboard teleop이면 R key의 one-shot environment reset request를 play loop에 삽입
-   8. 원본 script를 실행
+   7. estimator teleop이면 current observation의 추정 base XY 속도를 주황색 marker로 표시
+   8. keyboard teleop이면 R key의 one-shot environment reset request를 play loop에 삽입
+   9. 원본 script를 실행
 
 이 방식의 장점은 Isaac Lab 본체를 수정하지 않는다는 점이다.
 
@@ -1578,6 +1594,18 @@ Teleop에서도 같은 command/actual 숫자 panel과 ``RoK4 Push Test`` frame�
 command를 유지한 상태에서 실제 scale된 command와 로봇의 측정 속도를 비교하고, 마우스로 방향 버튼을 눌러
 command tracking과 외란 복원을 동시에 확인할 수 있다.
 
+Concurrent estimator checkpoint를 Teleop으로 실행하면 로봇 위의 평면 선속도 화살표가 세 개가 된다.
+
+* 녹색: body-frame command ``[v_x,v_y]``
+* 파란색: simulator ground truth ``root_lin_vel_b[0:2]``
+* 주황색: Actor가 사용한 estimator ``[hat(v_x),hat(v_y)]``
+
+세 값은 같은 body frame이며 robot orientation으로 world에 회전하고, 같은 ``3|v_xy|`` 길이 배율을 사용한다.
+주황색 marker는 기존 두 marker보다 ``0.08 m`` 높여 겹침을 구분한다. ``hat(v_z)`` 는 command에 대응하는 값이
+없으므로 3D 화살표에 섞지 않고 ONNX diagnostic output과 estimator RMSE에서 확인한다. 시각화는 current policy
+observation으로 estimator를 한 번 더 결정적으로 실행하는 진단 경로이며 학습, action, reward 및 ONNX 출력을
+변경하지 않는다. 구현은 ``scripts/rsl_rl/_velocity_estimate_visualizer.py`` 에 있다.
+
 수정된 기존 파일
 --------------------------------------------------------
 
@@ -1714,10 +1742,10 @@ Tracking은 약 15k에서 사실상 plateau에 도달했고, 15k에서 20k 사�
 contact-related term이 조금 더 정돈되었다. 따라서 현재 기준 checkpoint는 ``model_19999.pt`` 로 보존하되,
 새 실험에서도 ``model_9999.pt``, ``model_14999.pt``, ``model_19999.pt`` 를 모두 비교한다.
 
-현재 ``yunho/privileged-observation`` branch는 위 directional baseline에서 분기하여 critic을 250D로 확장하고,
-동시에 base-height와 swing-clearance reward를 시험한다. Actor의 240차원 입력과 13차원 actuator action contract는
-그대로다. Critic-only 변경과 reward 변경이 함께 들어가므로 baseline과 비교할 때 두 효과가 완전히 분리된 ablation은
-아니며, 기존 checkpoint를 resume하지 않고 fresh ``20,000`` iteration으로 학습한다.
+``yunho/privileged-observation`` branch는 위 directional baseline에서 critic을 250D로 확장한 Sim2Real baseline이다.
+현재 ``yunho/concurrent-state-estimator`` branch는 여기서 다시 분기해 command-free 225D estimator를 추가한다.
+Actor의 외부 240차원 입력과 13차원 actuator action contract, Critic 250D는 유지하며 이전 checkpoint를 resume하지
+않고 fresh 학습한다.
 
 현재 설계 의도
 ------------------------------------------------------
@@ -1732,7 +1760,6 @@ contact-related term이 조금 더 정돈되었다. 따라서 현재 기준 chec
    terrain curriculum
    height scanner
    camera observation
-   explicit estimator / MLP encoder
    teacher-student distillation
    terrain height scanner / rough-terrain privileged height state
 
@@ -1745,7 +1772,9 @@ contact-related term이 조금 더 정돈되었다. 따라서 현재 기준 chec
    3. reward, action scale, termination 조정
    4. RoK4 Rough task 추가
    5. weak rough terrain curriculum
-   6. estimator 또는 teacher-student 구조 추가
+   6. concurrent base-velocity estimator 검증
+   7. estimator 기반 stable-standing/recovery gate ablation
+   8. 필요 시 teacher-student 구조 추가
 
 주요 실행 명령어
 --------------------------------------------------------

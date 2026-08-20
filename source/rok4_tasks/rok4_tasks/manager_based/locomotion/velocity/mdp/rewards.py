@@ -355,7 +355,11 @@ def feet_contact_force_l2(
 
 
 class FeetContactForceL2(ManagerTermBase):
-    """Penalize the peak force in an initial landing window and report its event average [N]."""
+    """Track the peak force in an initial landing window and optionally penalize it [N].
+
+    Setting :paramref:`metric_only` to ``True`` preserves the episode metric
+    while returning an identically zero reward value.
+    """
 
     def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
         """Initialize landing-window state and touchdown-force statistics."""
@@ -381,8 +385,9 @@ class FeetContactForceL2(ManagerTermBase):
         asset_cfg: SceneEntityCfg,
         force_limit_multiplier: float = 1.5,
         landing_window_s: float = 0.05,
+        metric_only: bool = False,
     ) -> torch.Tensor:
-        """Complete each landing window and penalize its maximum force once."""
+        """Complete each landing window, record its peak, and return its optional penalty."""
         self._validate_parameters(force_limit_multiplier, landing_window_s)
 
         contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
@@ -408,24 +413,28 @@ class FeetContactForceL2(ManagerTermBase):
         )
         landing_complete = self._landing_active & ((contact_time >= landing_window_s) | (~in_contact))
 
-        if self._robot_weight is None:
-            asset = env.scene[asset_cfg.name]
-            masses = asset.root_physx_view.get_masses().to(
-                device=self._landing_peak_force.device,
-                dtype=self._landing_peak_force.dtype,
-            )
-            gravity = torch.as_tensor(env.sim.cfg.gravity, device=masses.device, dtype=masses.dtype)
-            gravity_magnitude = torch.linalg.vector_norm(gravity)
-            if gravity_magnitude <= 0.0:
-                raise ValueError("FeetContactForceL2 requires non-zero gravity.")
-            self._robot_weight = torch.sum(masses, dim=1) * gravity_magnitude
-
-        force_limit = force_limit_multiplier * self._robot_weight.unsqueeze(-1)
-        force_excess_ratio = torch.relu(self._landing_peak_force - force_limit) / force_limit
-        penalty = torch.sum(torch.square(force_excess_ratio) * landing_complete, dim=1)
-
         self._touchdown_force_sum += torch.sum(self._landing_peak_force * landing_complete, dim=1)
         self._touchdown_count += torch.sum(landing_complete, dim=1)
+
+        if metric_only:
+            penalty = torch.zeros(env.num_envs, device=self._landing_peak_force.device)
+        else:
+            if self._robot_weight is None:
+                asset = env.scene[asset_cfg.name]
+                masses = asset.root_physx_view.get_masses().to(
+                    device=self._landing_peak_force.device,
+                    dtype=self._landing_peak_force.dtype,
+                )
+                gravity = torch.as_tensor(env.sim.cfg.gravity, device=masses.device, dtype=masses.dtype)
+                gravity_magnitude = torch.linalg.vector_norm(gravity)
+                if gravity_magnitude <= 0.0:
+                    raise ValueError("FeetContactForceL2 requires non-zero gravity.")
+                self._robot_weight = torch.sum(masses, dim=1) * gravity_magnitude
+
+            force_limit = force_limit_multiplier * self._robot_weight.unsqueeze(-1)
+            force_excess_ratio = torch.relu(self._landing_peak_force - force_limit) / force_limit
+            penalty = torch.sum(torch.square(force_excess_ratio) * landing_complete, dim=1)
+
         self._landing_active &= ~landing_complete
         self._landing_peak_force.masked_fill_(landing_complete, 0.0)
         return penalty

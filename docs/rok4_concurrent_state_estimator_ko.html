@@ -1,0 +1,1262 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+<title>RoK4 Base-Velocity Estimator 구조 문서</title>
+<style type="text/css">
+
+/* Minimal style sheet for the HTML output of Docutils.                    */
+/*                                                                         */
+/* :Author: Günter Milde, based on html4css1.css by David Goodger          */
+/* :Id: $Id: minimal.css 8642 2021-03-26 13:51:14Z milde $               */
+/* :Copyright: © 2015 Günter Milde.                                        */
+/* :License: Released under the terms of the `2-Clause BSD license`_,      */
+/*    in short:                                                            */
+/*                                                                         */
+/*    Copying and distribution of this file, with or without modification, */
+/*    are permitted in any medium without royalty provided the copyright   */
+/*    notice and this notice are preserved.                                */
+/*                                                                         */
+/*    This file is offered as-is, without any warranty.                    */
+/*                                                                         */
+/* .. _2-Clause BSD license: http://www.spdx.org/licenses/BSD-2-Clause     */
+
+/* This CSS2.1_ stylesheet defines rules for Docutils elements without    */
+/* HTML equivalent. It is required to make the document semantic visible. */
+/*                                                                        */
+/* .. _CSS2.1: http://www.w3.org/TR/CSS2                                  */
+/* .. _validates: http://jigsaw.w3.org/css-validator/validator$link       */
+
+/* titles */
+p.topic-title,
+p.admonition-title,
+p.system-message-title {
+  font-weight: bold;
+}
+p.sidebar-title,
+p.rubric {
+  font-weight: bold;
+  font-size: larger;
+}
+p.rubric {
+  color: maroon;
+}
+p.subtitle,
+p.section-subtitle,
+p.sidebar-subtitle {
+  font-weight: bold;
+  margin-top: -0.5em;
+}
+h1 + p.subtitle {
+  font-size: 1.6em;
+}
+h2 + p.section-subtitle, a.toc-backref {
+  color: black;
+  text-decoration: none;
+}
+
+/* Warnings, Errors */
+.system-messages h2,
+.system-message-title,
+span.problematic {
+  color: red;
+}
+
+/* Inline Literals */
+.docutils.literal {
+  font-family: monospace;
+  white-space: pre-wrap;
+}
+/* do not wrap at hyphens and similar: */
+.literal > span.pre { white-space: nowrap; }
+
+/* Lists */
+
+/* compact and simple lists: no margin between items */
+.simple  li, .simple  ul, .simple  ol,
+.compact li, .compact ul, .compact ol,
+.simple  > li p, dl.simple  > dd,
+.compact > li p, dl.compact > dd {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+/* Nested Paragraphs */
+p:first-child { margin-top: 0; }
+p:last-child { margin-bottom: 0; }
+td > p, th > p { margin-bottom: 0; }
+
+/* Table of Contents */
+.topic.contents { margin: 0.5em 0; }
+.topic.contents ul.auto-toc {
+  list-style-type: none;
+  padding-left: 1.5em;
+}
+
+/* Enumerated Lists */
+ol.arabic     { list-style: decimal }
+ol.loweralpha { list-style: lower-alpha }
+ol.upperalpha { list-style: upper-alpha }
+ol.lowerroman { list-style: lower-roman }
+ol.upperroman { list-style: upper-roman }
+
+/* Definition Lists and Derivatives */
+dt .classifier { font-style: italic }
+dt .classifier:before {
+  font-style: normal;
+  margin: 0.5em;
+  content: ":";
+}
+/* Field Lists and similar */
+/* bold field name, content starts on the same line */
+dl.field-list > dt,
+dl.option-list > dt,
+dl.docinfo > dt,
+dl.footnote > dt,
+dl.citation > dt {
+  font-weight: bold;
+  clear: left;
+  float: left;
+  margin: 0;
+  padding: 0;
+  padding-right: 0.5em;
+}
+/* Offset for field content (corresponds to the --field-name-limit option) */
+dl.field-list > dd,
+dl.option-list > dd,
+dl.docinfo > dd {
+  margin-left:  9em; /* ca. 14 chars in the test examples, fit all Docinfo fields */
+}
+/* start field-body on a new line after long field names */
+dl.field-list > dd > *:first-child,
+dl.option-list > dd > *:first-child
+{
+  display: inline-block;
+  width: 100%;
+  margin: 0;
+}
+/* field names followed by a colon */
+dl.field-list > dt:after,
+dl.docinfo > dt:after {
+  content: ":";
+}
+
+/* Bibliographic Fields (docinfo) */
+dl.docinfo pre.address {
+  font: inherit;
+  margin: 0.5em 0;
+}
+dl.docinfo > dd.authors > p { margin: 0; }
+
+/* Option Lists */
+dl.option-list > dt { font-weight: normal; }
+span.option { white-space: nowrap; }
+
+/* Footnotes and Citations  */
+dl.footnote.superscript > dd { margin-left: 1em; }
+dl.footnote.brackets > dd { margin-left: 2em; }
+dl.footnote > dt { font-weight: normal; }
+a.footnote-reference.brackets:before,
+dt.label > span.brackets:before { content: "["; }
+a.footnote-reference.brackets:after,
+dt.label > span.brackets:after { content: "]"; }
+a.footnote-reference.superscript,
+dl.footnote.superscript > dt.label {
+  vertical-align: super;
+  font-size: small;
+}
+dt.label > span.fn-backref {
+  margin-left: 0.2em;
+  font-weight: normal;
+}
+dt.label > span.fn-backref > a { font-style: italic; }
+
+/* Alignment */
+.align-left   {
+  text-align: left;
+  margin-right: auto;
+}
+.align-center {
+  clear: both;
+  text-align: center;
+  margin-left: auto;
+  margin-right: auto;
+}
+.align-right  {
+  text-align: right;
+  margin-left: auto;
+}
+.align-top    { vertical-align: top; }
+.align-middle { vertical-align: middle; }
+.align-bottom { vertical-align: bottom; }
+
+/* reset inner alignment in figures and tables */
+figure.align-left, figure.align-right,
+table.align-left, table.align-center, table.align-right {
+  text-align: inherit;
+}
+
+/* Text Blocks */
+blockquote,
+div.topic,
+aside.topic {
+  margin: 1em 2em;
+}
+.sidebar,
+.admonition,
+.system-message {
+  border: thin solid;
+  margin: 1em 2em;
+  padding: 0.5em 1em;
+}
+.sidebar {
+  width: 30%;
+  max-width: 26em;
+  float: right;
+  clear: right;
+}
+div.line-block { display: block; }
+div.line-block div.line-block, pre { margin-left: 2em; }
+
+/* Code line numbers: dropped when copying text from the page */
+pre.code .ln { display: none; }
+pre.code code:before {
+  content: attr(data-lineno); /* …, none) fallback not supported by any browser */
+  color: gray;
+}
+
+/* Tables */
+table {
+  border-collapse: collapse;
+}
+td, th {
+  border: thin solid silver;
+  padding: 0 1ex;
+}
+.borderless td, .borderless th {
+  border: 0;
+  padding: 0;
+  padding-right: 0.5em /* separate table cells */
+}
+
+table > caption {
+  text-align: left;
+  margin-top: 0.2em;
+  margin-bottom: 0.2em;
+}
+table.captionbelow {
+  caption-side: bottom;
+}
+
+/* Document Header and Footer */
+header { border-bottom: 1px solid black; }
+footer { border-top: 1px solid black; }
+
+/* Images are block-level by default in Docutils */
+/* New HTML5 block elements: set display for older browsers */
+img, header, section, footer, aside, nav, main, article, figure, video {
+  display: block;
+}
+/* inline images */
+p img, p video, figure img, figure video {
+  display: inline;
+}
+
+</style>
+<style type="text/css">
+
+/* CSS31_ style sheet for the output of Docutils HTML writers.             */
+/* Rules for easy reading and pre-defined style variants.                  */
+/*                                                                         */
+/* :Author: Günter Milde, based on html4css1.css by David Goodger          */
+/* :Id: $Id: plain.css 8636 2021-03-19 00:23:33Z milde $                                                               */
+/* :Copyright: © 2015 Günter Milde.                                        */
+/* :License: Released under the terms of the `2-Clause BSD license`_,      */
+/*    in short:                                                            */
+/*                                                                         */
+/*    Copying and distribution of this file, with or without modification, */
+/*    are permitted in any medium without royalty provided the copyright   */
+/*    notice and this notice are preserved.                                */
+/*                                                                         */
+/*    This file is offered as-is, without any warranty.                    */
+/*                                                                         */
+/* .. _2-Clause BSD license: http://www.spdx.org/licenses/BSD-2-Clause     */
+/* .. _CSS3: http://www.w3.org/TR/CSS3                                     */
+
+
+/* Document Structure */
+/* ****************** */
+
+/* "page layout" */
+body {
+  margin: 0;
+  background-color: #dbdbdb;
+}
+main, footer, header {
+  line-height:1.3;
+  /* avoid long lines --> better reading */
+  /* optimum is 45…75 characters/line <http://webtypography.net/2.1.2> */
+  /* OTOH: lines should not be too short because of missing hyphenation, */
+  max-width: 50rem;
+  padding: 1px 2%; /* 1px on top avoids grey bar above title (mozilla) */
+  margin: auto;
+}
+main {
+  counter-reset: table figure;
+  background-color: white;
+}
+footer, header {
+  font-size: smaller;
+  padding: 0.5em 2%;
+  border: none;
+}
+
+/* Transitions */
+hr.docutils {
+  width: 80%;
+  margin-top: 1em;
+  margin-bottom: 1em;
+  clear: both;
+}
+
+/* Paragraphs */
+
+/* vertical space (parskip) */
+p, ol, ul, dl, li, dd,
+div.line-block,
+div.topic,
+table {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+p:first-child { margin-top: 0; }
+/* (:last-child is new in CSS 3) */
+p:last-child  { margin-bottom: 0; }
+
+h1, h2, h3, h4, h5, h6,
+dl > dd {
+  margin-bottom: 0.5em;
+}
+
+/* Lists */
+/* ===== */
+
+/* Separate list entries in compound lists */
+dl > dd, ol > li,
+
+/* Definition Lists */
+/* Indent lists nested in definition lists */
+/* (:only-child is new in CSS 3)           */
+dd > ul:only-child, dd > ol:only-child { padding-left: 1em; }
+
+/* Description Lists */
+/* styled like in most dictionaries, encyclopedias etc. */
+dl.description > dt {
+  font-weight: bold;
+  clear: left;
+  float: left;
+  margin: 0;
+  padding: 0;
+  padding-right: 0.5em;
+}
+
+/* Field Lists */
+
+/* example for custom field-name width */
+dl.field-list.narrow > dd {
+  margin-left: 5em;
+}
+/* run-in: start field-body on same line after long field names */
+dl.field-list.run-in > dd p {
+  display: block;
+}
+
+/* Bibliographic Fields */
+
+/* generally, bibliographic fields use special definition list dl.docinfo */
+/* but dedication and abstract are placed into "topic" divs */
+div.abstract p.topic-title {
+  text-align: center;
+}
+div.dedication {
+  margin: 2em 5em;
+  text-align: center;
+  font-style: italic;
+}
+div.dedication p.topic-title {
+  font-style: normal;
+}
+
+/* Text Blocks */
+/* =========== */
+
+/* Literal Blocks */
+pre.literal-block, pre.doctest-block,
+pre.math, pre.code {
+  font-family: monospace;
+}
+
+/* Block Quotes */
+blockquote > table,
+div.topic > table {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+blockquote p.attribution,
+div.topic p.attribution {
+  text-align: right;
+  margin-left: 20%;
+}
+
+/* Tables */
+/* ====== */
+
+/* th { vertical-align: bottom; } */
+
+table tr { text-align: left; }
+
+/* "booktabs" style (no vertical lines) */
+table.booktabs {
+  border: 0;
+  border-top: 2px solid;
+  border-bottom: 2px solid;
+  border-collapse: collapse;
+}
+table.booktabs * {
+  border: 0;
+}
+table.booktabs th {
+  border-bottom: thin solid;
+}
+
+/* numbered tables (counter defined in div.document) */
+table.numbered > caption:before {
+  counter-increment: table;
+  content: "Table " counter(table) ": ";
+  font-weight: bold;
+}
+
+/* Explicit Markup Blocks */
+/* ====================== */
+
+/* Footnotes and Citations */
+/* ----------------------- */
+
+/* line on the left */
+dl.footnote {
+  padding-left: 1ex;
+  border-left: solid;
+  border-left-width: thin;
+}
+
+/* Directives */
+/* ---------- */
+
+/* Body Elements */
+/* ~~~~~~~~~~~~~ */
+
+/* Images and Figures */
+
+/* let content flow to the side of aligned images and figures */
+figure.align-left,
+img.align-left,
+video.align-left,
+object.align-left {
+  clear: left;
+  float: left;
+  margin-right: 1em;
+}
+figure.align-right,
+img.align-right,
+video.align-right,
+object.align-right {
+  clear: right;
+  float: right;
+  margin-left: 1em;
+}
+/* Stop floating sidebars, images and figures */
+h1, h2, h3, h4, footer, header { clear: both; }
+
+/* Numbered figures */
+figure.numbered > figcaption > p:before {
+  counter-increment: figure;
+  content: "Figure " counter(figure) ": ";
+  font-weight: bold;
+}
+
+/* Admonitions and System Messages */
+.caution p.admonition-title,
+.attention p.admonition-title,
+.danger p.admonition-title,
+.error p.admonition-title,
+.warning p.admonition-title,
+div.error {
+  color: red;
+}
+
+/* Sidebar */
+/* Move right. In a layout with fixed margins, */
+/* it can be moved into the margin.            */
+aside.sidebar {
+  width: 30%;
+  max-width: 26em;
+  margin-left: 1em;
+  margin-right: -2%;
+  background-color: #ffffee;
+}
+
+/* Code */
+pre.code { padding: 0.7ex }
+pre.code, code { background-color: #eeeeee }
+/* basic highlighting: for a complete scheme, see */
+/* http://docutils.sourceforge.net/sandbox/stylesheets/ */
+pre.code .comment, code .comment { color: #5C6576 }
+pre.code .keyword, code .keyword { color: #3B0D06; font-weight: bold }
+pre.code .literal.string, code .literal.string { color: #0C5404 }
+pre.code .name.builtin, code .name.builtin { color: #352B84 }
+pre.code .deleted, code .deleted { background-color: #DEB0A1}
+pre.code .inserted, code .inserted { background-color: #A3D289}
+
+/* Math */
+/* styled separately (see math.css for math-output=HTML) */
+
+/* Epigraph           */
+/* Highlights         */
+/* Pull-Quote         */
+/* Compound Paragraph */
+/* Container          */
+
+/* Inline Markup */
+/* ============= */
+
+/* Inline Literals                                          */
+/* possible values: normal, nowrap, pre, pre-wrap, pre-line */
+/*   span.docutils.literal { white-space: pre-wrap; }       */
+
+/* Hyperlink References */
+a { text-decoration: none; }
+
+/* External Targets       */
+/*   span.target.external */
+/* Internal Targets       */
+/*   span.target.internal */
+/* Footnote References    */
+/*   a.footnote-reference */
+/* Citation References    */
+/*   a.citation-reference */
+
+</style>
+<style type="text/css">
+
+/*
+*   math2html: convert LaTeX equations to HTML output.
+*
+*   Copyright (C) 2009,2010 Alex Fernández
+*
+*   Released under the terms of the `2-Clause BSD license'_, in short:
+*   Copying and distribution of this file, with or without modification,
+*   are permitted in any medium without royalty provided the copyright
+*   notice and this notice are preserved.
+*   This file is offered as-is, without any warranty.
+*
+* .. _2-Clause BSD license: http://www.spdx.org/licenses/BSD-2-Clause
+*
+*   Based on eLyXer: convert LyX source files to HTML output.
+*   http://elyxer.nongnu.org/
+*/
+/* --end--
+* CSS file for LaTeX formulas.
+*/
+
+/* Formulas */
+.formula {
+	text-align: center;
+	font-family: "Droid Serif", "DejaVu Serif", "STIX", serif;
+	margin: 1.2em 0;
+}
+span.formula {
+	white-space: nowrap;
+}
+div.formula {
+	padding: 0.5ex;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+/* Basic features */
+a.eqnumber {
+	display: inline-block;
+	float: right;
+	clear: right;
+	font-weight: bold;
+}
+span.unknown {
+	color: #800000;
+}
+span.ignored, span.arraydef {
+	display: none;
+}
+.formula i {
+	letter-spacing: 0.1ex;
+}
+
+/* Alignment */
+.align-left, .align-l {
+	text-align: left;
+}
+.align-right, .align-r {
+	text-align: right;
+}
+.align-center, .align-c {
+	text-align: center;
+}
+
+/* Structures */
+span.overline, span.bar {
+	text-decoration: overline;
+}
+.fraction, .fullfraction {
+	display: inline-block;
+	vertical-align: middle;
+	text-align: center;
+}
+.fraction .fraction {
+	font-size: 80%;
+	line-height: 100%;
+}
+span.numerator {
+	display: block;
+}
+span.denominator {
+	display: block;
+	padding: 0ex;
+	border-top: thin solid;
+}
+sup.numerator, sup.unit {
+	font-size: 70%;
+	vertical-align: 80%;
+}
+sub.denominator, sub.unit {
+	font-size: 70%;
+	vertical-align: -20%;
+}
+span.sqrt {
+	display: inline-block;
+	vertical-align: middle;
+	padding: 0.1ex;
+}
+sup.root {
+	font-size: 70%;
+	position: relative;
+	left: 1.4ex;
+}
+span.radical {
+	display: inline-block;
+	padding: 0ex;
+	font-size: 150%;
+	vertical-align: top;
+}
+span.root {
+	display: inline-block;
+	border-top: thin solid;
+	padding: 0ex;
+	vertical-align: middle;
+}
+span.symbol {
+	line-height: 125%;
+	font-size: 125%;
+}
+span.bigsymbol {
+	line-height: 150%;
+	font-size: 150%;
+}
+span.largesymbol {
+	font-size: 175%;
+}
+span.hugesymbol {
+	font-size: 200%;
+}
+span.scripts {
+	display: inline-table;
+	vertical-align: middle;
+}
+.script {
+	display: table-row;
+	text-align: left;
+	line-height: 150%;
+}
+span.limits {
+	display: inline-table;
+	vertical-align: middle;
+}
+.limit {
+	display: table-row;
+	line-height: 99%;
+}
+sup.limit, sub.limit {
+	line-height: 100%;
+}
+span.symbolover {
+	display: inline-block;
+	text-align: center;
+	position: relative;
+	float: right;
+	right: 100%;
+	bottom: 0.5em;
+	width: 0px;
+}
+span.withsymbol {
+	display: inline-block;
+}
+span.symbolunder {
+	display: inline-block;
+	text-align: center;
+	position: relative;
+	float: right;
+	right: 80%;
+	top: 0.3em;
+	width: 0px;
+}
+
+/* Environments */
+span.array, span.bracketcases, span.binomial, span.environment {
+	display: inline-table;
+	text-align: center;
+	border-collapse: collapse;
+	margin: 0em;
+	vertical-align: middle;
+}
+span.arrayrow, span.binomrow {
+	display: table-row;
+	padding: 0ex;
+	border: 0ex;
+}
+span.arraycell, span.bracket, span.case, span.binomcell, span.environmentcell {
+	display: table-cell;
+	padding: 0ex 0.2ex;
+	line-height: 99%;
+	border: 0ex;
+}
+/*
+* CSS file for LaTeX formulas, extra stuff:
+* binomials, vertical braces, stackrel, fonts and colors.
+*/
+
+/* Inline binomials */
+span.binom {
+	display: inline-block;
+	vertical-align: middle;
+	text-align: center;
+	font-size: 80%;
+}
+span.binomstack {
+	display: block;
+	padding: 0em;
+}
+
+/* Over- and underbraces */
+span.overbrace {
+	border-top: 2pt solid;
+}
+span.underbrace {
+	border-bottom: 2pt solid;
+}
+
+/* Stackrel */
+span.stackrel {
+	display: inline-block;
+	text-align: center;
+}
+span.upstackrel {
+	display: block;
+	padding: 0em;
+	font-size: 80%;
+	line-height: 64%;
+	position: relative;
+	top: 0.15em;
+
+}
+span.downstackrel {
+	display: block;
+	vertical-align: bottom;
+	padding: 0em;
+}
+
+/* Fonts */
+span.mathsf, span.textsf {
+	font-style: normal;
+	font-family: sans-serif;
+}
+span.mathrm, span.textrm {
+	font-style: normal;
+	font-family: serif;
+}
+span.text, span.textnormal {
+	font-style: normal;
+}
+span.textipa {
+	color: #008080;
+}
+span.fraktur {
+	font-family: "Lucida Blackletter", eufm10, blackletter;
+}
+span.blackboard {
+	font-family: Blackboard, msbm10, serif;
+}
+span.scriptfont {
+	font-family: "Monotype Corsiva", "Apple Chancery", "URW Chancery L", cursive;
+	font-style: italic;
+}
+
+/* Colors */
+span.colorbox {
+	display: inline-block;
+	padding: 5px;
+}
+span.fbox {
+	display: inline-block;
+	border: thin solid black;
+	padding: 2px;
+}
+span.boxed, span.framebox {
+	display: inline-block;
+	border: thin solid black;
+	padding: 5px;
+}
+
+
+</style>
+</head>
+<body>
+<main id="rok4-base-velocity-estimator">
+<h1 class="title">RoK4 Base-Velocity Estimator 구조 문서</h1>
+<dl class="docinfo simple">
+<dt>작성일</dt>
+<dd><p>2026-08-18</p>
+</dd>
+<dt>최종 업데이트</dt>
+<dd><p>2026-08-19</p>
+</dd>
+<dt>대상 브랜치</dt>
+<dd><p><span class="docutils literal"><span class="pre">yunho/concurrent-state-estimator</span></span></p>
+</dd>
+<dt>대상 저장소</dt>
+<dd><p>RoK4 repository root (<span class="docutils literal">${ROK4_LAB_ROOT}</span>)</p>
+</dd>
+<dt>기준 환경</dt>
+<dd><p>Isaac Lab v2.3.2, Isaac Sim 5.1.0, <span class="docutils literal">env_isaaclab</span></p>
+</dd>
+</dl>
+<style>
+@media print {
+  body, main { background-color: white; }
+  pre.code { break-inside: avoid; page-break-inside: avoid; }
+  h1, h2, h3 { break-after: avoid; page-break-after: avoid; }
+  table, tr { break-inside: avoid; page-break-inside: avoid; }
+  p { orphans: 3; widows: 3; }
+}
+</style><section id="id1">
+<h2>문서 목적</h2>
+<p>이 문서는 RoK4 policy와 body-frame base linear velocity estimator를 동시에 학습하는 구조를 설명한다. 목표는
+실기에서 직접 측정하기 어려운 <span class="docutils literal"><span class="pre">base_lin_vel_b=[v_x,v_y,v_z]</span></span> 를 proprioceptive history로 추정해 Actor가
+급정지와 외란 이후의 실제 움직임을 command와 구분할 수 있게 만드는 것이다.</p>
+<p>이번 첫 실험에서는 estimator 자체의 효과를 분리하기 위해 reward, command population, periodic freeze, push DR,
+stable-standing gate를 추가로 바꾸지 않는다. 기존 <span class="docutils literal"><span class="pre">yunho/privileged-observation</span></span> 상태에서 새 브랜치를 만들었으며
+이전 checkpoint를 resume하지 않고 fresh training한다.</p>
+</section>
+<section id="id2">
+<h2>핵심 계약</h2>
+<p>외부 observation dimension과 action dimension은 바뀌지 않는다. ONNX는 하나의 16D tensor가 아니라 의미와
+단위가 분리된 두 개의 named output을 제공한다.</p>
+<pre class="code text literal-block"><code>deployment input                     obs [1,240]
+control output                       actions [1,13]
+estimator diagnostic output          estimated_base_lin_vel_b [1,3]
+Critic input                         250D clean/privileged training state</code></pre>
+<p>Estimator와 Actor는 하나의 exported policy 내부에 포함된다. ONNX 소비자는 여전히 <span class="docutils literal">[1,240]</span> 만 입력하며 별도의
+velocity-estimator node나 243D 입력을 만들지 않는다. 대신 Actor가 실제로 사용한 동일한 추정값을 두 번째 출력으로
+읽어 Sim2Sim/Sim2Real에서 기록할 수 있다.</p>
+</section>
+<section id="network">
+<h2>전체 network 구조</h2>
+<pre class="code text literal-block"><code>Environment ObservationManager
+    |
+    +-- policy: noisy history 240D -------------------------------+
+    |                                                             |
+    |                   command history [30:45] 제거              |
+    |                              |                              |
+    |                              v                              |
+    |                    estimator input 225D                     |
+    |                              |                              |
+    |                 MLP [225, 256, 128, 3], ELU                 |
+    |                              |                              |
+    |                    estimated base velocity 3D              |
+    |                              +----&gt; ONNX output [1,3]       |
+    |                              | detach                       |
+    |                              v                              |
+    +---------------------- concatenate --------------------------+
+                                   |
+                            Actor input 243D
+                                   |
+                      MLP [243, 512, 256, 128, 13], ELU
+                                   |
+                           actuator action 13D
+
+Environment ObservationManager
+    |
+    +-- critic: clean history 240D
+    +-- privileged current state 10D
+                      |
+                 concatenate 250D
+                      |
+            Critic MLP [250, 512, 256, 128, 1], ELU</code></pre>
+</section>
+<section id="actor-observation-240d">
+<h2>Actor observation 240D</h2>
+<p>Isaac Lab ObservationManager는 각 term의 5-step history를 먼저 flatten한 뒤 term들을 concatenate한다.</p>
+<table>
+<caption>Actor policy layout</caption>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>index</p></th>
+<th class="head"><p>term</p></th>
+<th class="head"><p>shape</p></th>
+<th class="head"><p>corruption</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p><span class="docutils literal">0:15</span></p></td>
+<td><p><span class="docutils literal">base_ang_vel</span></p></td>
+<td><p><span class="docutils literal">5 x 3</span></p></td>
+<td><p>uniform noise <span class="docutils literal"><span class="pre">[-0.2,</span> 0.2]</span></p></td>
+</tr>
+<tr><td><p><span class="docutils literal">15:30</span></p></td>
+<td><p><span class="docutils literal">projected_gravity</span></p></td>
+<td><p><span class="docutils literal">5 x 3</span></p></td>
+<td><p>uniform noise <span class="docutils literal"><span class="pre">[-0.05,</span> 0.05]</span></p></td>
+</tr>
+<tr><td><p><span class="docutils literal">30:45</span></p></td>
+<td><p><span class="docutils literal">velocity_commands</span></p></td>
+<td><p><span class="docutils literal">5 x 3</span></p></td>
+<td><p>없음</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">45:110</span></p></td>
+<td><p><span class="docutils literal">actuator_pos</span></p></td>
+<td><p><span class="docutils literal">5 x 13</span></p></td>
+<td><p>uniform noise <span class="docutils literal"><span class="pre">[-0.01,</span> 0.01] rad</span></p></td>
+</tr>
+<tr><td><p><span class="docutils literal">110:175</span></p></td>
+<td><p><span class="docutils literal">actuator_vel</span></p></td>
+<td><p><span class="docutils literal">5 x 13</span></p></td>
+<td><p>uniform noise <span class="docutils literal"><span class="pre">[-1.5,</span> 1.5] rad/s</span></p></td>
+</tr>
+<tr><td><p><span class="docutils literal">175:240</span></p></td>
+<td><p><span class="docutils literal">last_action</span></p></td>
+<td><p><span class="docutils literal">5 x 13</span></p></td>
+<td><p>없음</p></td>
+</tr>
+</tbody>
+</table>
+<p>Actor normalizer는 이 240D를 원소별로 normalize한다. Estimator도 실기 Actor가 받는 것과 동일한 noisy/normalized
+history를 사용한다. Clean Critic history를 estimator에 넣지 않는다.</p>
+</section>
+<section id="estimator-input-225d-command">
+<h2>Estimator input 225D와 command 제외</h2>
+<p>Estimator 입력은 normalized 240D에서 command history <span class="docutils literal">30:45</span> 를 제외한 225D다.</p>
+<div class="formula">
+<i>o</i><span class="scripts"><sup class="script"><i>est</i></sup><sub class="script"><i>t</i></sub></span> = [<span class="bar"><i>o</i></span><sub><i>t</i>, 0 : 30</sub>,  <span class="bar"><i>o</i></span><sub><i>t</i>, 45 : 240</sub>] ∈ ℝ<sup>225</sup>
+</div>
+<p>여기서 <span class="docutils literal">bar</span> 는 empirical normalization 이후 값을 뜻한다. Command를 제외하는 이유는 estimator가 실제 state를
+추정하지 않고 desired command를 복사하는 shortcut을 막기 위해서다. Actor는 원래 240D 안에서 command를 계속
+받으므로 제어 목표는 사라지지 않는다.</p>
+<p>이 선택은 TRON1의 구현처럼 estimator와 Actor의 command 경로를 분리하는 방향이다. 논문의 한 구현처럼 current
+command를 estimator에 넣는 것도 가능하지만, RoK4의 첫 목적은 <span class="docutils literal">command=0</span> 인 급정지/외란 상황에서 실제
+base motion을 구별하는 것이므로 command-free estimator를 사용한다.</p>
+</section>
+<section id="estimator-target-loss">
+<h2>Estimator target과 loss</h2>
+<p>Supervised target은 current privileged observation의 첫 세 값이다.</p>
+<div class="formula">
+<i>y</i><sub><i>t</i></sub> = <i>v</i><span class="scripts"><sup class="script"><i>sim</i></sup><sub class="script"><i>base</i>, <i>b</i></sub></span> = [<i>v</i><sub><i>x</i></sub>, <i>v</i><sub><i>y</i></sub>, <i>v</i><sub><i>z</i></sub>] ∈ ℝ<sup>3</sup>
+</div>
+<p>Estimator는 MLP <span class="docutils literal">225 <span class="pre">-&gt;</span> 256 <span class="pre">-&gt;</span> 128 <span class="pre">-&gt;</span> 3</span> 이고 hidden activation은 ELU, output은 linear다.</p>
+<div class="formula">
+<i>v̂</i><sub><i>t</i></sub> = <i>f</i><sub><i>φ</i></sub>(<i>o</i><span class="scripts"><sup class="script"><i>est</i></sup><sub class="script"><i>t</i></sub></span>)
+</div>
+<p>학습 loss는 batch와 세 축 전체의 MSE다.</p>
+<div class="formula">
+<i>L</i><sub><i>est</i></sub> = <span class="fraction"><span class="ignored">(</span><span class="numerator">1</span><span class="ignored">)/(</span><span class="denominator">3<i>B</i></span><span class="ignored">)</span></span><span class="limits"><sup class="limit"><i>B</i></sup><span class="limit">⎲</span><span class="limit">⎳</span><sub class="limit"><i>i</i> = 1</sub></span>∥<i>v̂</i><sub><i>i</i></sub> − <i>v</i><span class="scripts"><sup class="script"><i>sim</i></sup><sub class="script"><i>i</i></sub></span>∥<span class="scripts"><sup class="script">2</sup><sub class="script">2</sub></span>
+</div>
+<p>Estimator optimizer는 PPO optimizer와 분리된 Adam이고 learning rate는 <span class="docutils literal"><span class="pre">1e-3</span></span>, gradient norm cap은 <span class="docutils literal">1.0</span> 이다.
+PPO의 adaptive learning rate가 변해도 estimator learning rate는 독립적으로 유지된다.</p>
+<p>TensorBoard에는 학습 목적함수 <span class="docutils literal">Loss/estimator_mse</span> 와 물리 단위 평가값을 함께 기록한다.</p>
+<pre class="code text literal-block"><code>Metrics/estimator/rmse_vx       [m/s]
+Metrics/estimator/rmse_vy       [m/s]
+Metrics/estimator/rmse_vz       [m/s]
+Metrics/estimator/rmse_total    [m/s]</code></pre>
+<p>축별 RMSE와 total RMSE는 다음과 같다.</p>
+<div class="formula">
+<i>RMSE</i><sub><i>j</i></sub> = <span class="sqrt"><span class="radical">√</span><span class="ignored">(</span><span class="root"><span class="fraction"><span class="ignored">(</span><span class="numerator">1</span><span class="ignored">)/(</span><span class="denominator"><i>B</i></span><span class="ignored">)</span></span><span class="limits"><sup class="limit"> </sup><span class="limit">⎲</span><span class="limit">⎳</span><sub class="limit"><i>i</i></sub></span>(<i>v̂</i><sub><i>i</i>, <i>j</i></sub> − <i>v</i><sub><i>i</i>, <i>j</i></sub>)<sup>2</sup></span><span class="ignored">)</span></span>
+</div>
+<div class="formula">
+<i>RMSE</i><sub><i>total</i></sub> = <span class="sqrt"><span class="radical">√</span><span class="ignored">(</span><span class="root"><i>MSE</i><sub><i>x</i></sub> + <i>MSE</i><sub><i>y</i></sub> + <i>MSE</i><sub><i>z</i></sub></span><span class="ignored">)</span></span>
+</div>
+<p>MSE는 제곱근이 없어 최적화에 사용하고, RMSE는 원래 단위 <span class="docutils literal">m/s</span> 로 읽기 위해 logging에 사용한다.</p>
+</section>
+<section id="ppo-estimator-gradient">
+<h2>PPO와 estimator gradient 분리</h2>
+<p>Actor input은 normalized policy history와 estimated velocity를 concatenate한 243D다.</p>
+<div class="formula">
+<i>a</i><sub><i>t</i></sub> = <i>π</i><sub><i>θ</i></sub>([<span class="bar"><i>o</i></span><span class="scripts"><sub class="script"><i>t</i></sub><sup class="script"><i>policy</i></sup></span>,  <i>stopgrad</i>(<i>v̂</i><sub><i>t</i></sub>)])
+</div>
+<p><span class="docutils literal">stopgrad</span> 는 PyTorch의 <span class="docutils literal">detach()</span> 다. 이 때문에 PPO surrogate/value/symmetry 경로는 estimator parameter
+<span class="docutils literal">phi</span> 를 바꾸지 않는다. Estimator는 오직 supervised MSE로만 갱신된다.</p>
+<pre class="code text literal-block"><code>PPO optimizer
+  updates: action MLP, Critic MLP, action std
+  excludes: estimator MLP
+
+Estimator optimizer
+  updates: estimator MLP only
+  objective: base velocity MSE</code></pre>
+<p>각 PPO mini-batch에서 먼저 PPO update를 수행하고, 같은 observation batch로 estimator MSE update를 한 번 수행한다.
+따라서 rollout을 별도로 다시 수집하지 않으며, policy와 estimator는 같은 학습 iteration의 state distribution을 본다.</p>
+</section>
+<section id="critic-250d">
+<h2>Critic 250D는 그대로 유지</h2>
+<p>Critic은 기존 asymmetric 구조를 그대로 사용한다.</p>
+<pre class="code text literal-block"><code>clean proprioceptive history 240D
++ current privileged state    10D
+--------------------------------
+Critic input                  250D</code></pre>
+<p>Privileged 10D layout은 다음과 같다.</p>
+<pre class="code text literal-block"><code>[0:3]   true base_lin_vel_b [vx, vy, vz]
+[3:4]   base height
+[4:6]   left/right Foot_Link height
+[6:8]   left/right contact flag
+[8:10]  left/right current air time</code></pre>
+<p>Critic에는 true velocity가 있으므로 value estimation은 privileged state를 계속 활용한다. 이번 v1에서는 estimated
+velocity를 Critic에 다시 붙이지 않는다. Estimator 성능과 Actor 효과를 먼저 분리하기 위한 선택이다.</p>
+</section>
+<section id="symmetry-augmentation">
+<h2>Symmetry augmentation</h2>
+<p>기존 좌우 symmetry augmentation은 estimator 학습에도 그대로 적용된다. Mirror observation은 동일한 estimator를
+통과하고 privileged target의 lateral component를 반전한다.</p>
+<div class="formula">
+[<i>v</i><sub><i>x</i></sub>, <i>v</i><sub><i>y</i></sub>, <i>v</i><sub><i>z</i></sub>] → [<i>v</i><sub><i>x</i></sub>,  − <i>v</i><sub><i>y</i></sub>, <i>v</i><sub><i>z</i></sub>] <span class="text">(left-right mirror)</span>
+</div>
+<p>원본과 mirror sample을 같은 estimator MSE batch에서 학습한다. Network를 두 개 만들지 않으며 left/right estimator
+weight도 공유한다. Command history는 원본과 mirror 모두 estimator 입력에서 제거된다.</p>
+</section>
+<section id="checkpoint-resume">
+<h2>Checkpoint와 resume</h2>
+<p>Checkpoint에는 다음 상태가 저장된다.</p>
+<pre class="code text literal-block"><code>model_state_dict
+  actor policy MLP
+  estimator MLP
+  critic MLP
+  actor/critic empirical normalizers
+  action standard deviation
+
+optimizer_state_dict             PPO optimizer
+estimator_optimizer_state_dict   estimator Adam
+iter
+infos</code></pre>
+<p>Estimator 없는 이전 checkpoint는 Actor 첫 층 구조도 <span class="docutils literal">240 <span class="pre">-&gt;</span> ...</span> 로 달라 새 branch에서 그대로 resume할 수 없다.
+이번 실험은 fresh training을 사용한다. 새 checkpoint끼리 resume할 때는 두 optimizer 상태도 함께 복원된다.</p>
+</section>
+<section id="play-teleop-jit-onnx">
+<h2>Play, Teleop, JIT, ONNX</h2>
+<p><span class="docutils literal">play.py</span> 와 <span class="docutils literal">play_teleop.py</span> 도 <span class="docutils literal">RoK4OnPolicyRunner</span> 를 사용한다. 표준 exporter는 Actor의 첫 linear layer를
+외부 input dimension으로 해석하므로 내부 243D Actor에 그대로 사용할 수 없다. RoK4 exporter는 normalizer,
+225D estimator, detach, 243D action MLP를 하나의 graph로 묶고 외부 dummy input을 명시적으로 240D로 둔다.</p>
+<pre class="code text literal-block"><code>external obs [1,240]
+    -&gt; empirical normalizer
+    -&gt; command-free estimator [1,225] -&gt; [1,3]
+         +-&gt; estimated_base_lin_vel_b [1,3]
+         |
+         +-&gt; detach -&gt; concatenate [1,243]
+                      -&gt; action MLP
+                      -&gt; actions [1,13]</code></pre>
+<p>따라서 기존 Sim2Sim/Sim2Real node의 ONNX input shape를 바꾸지 않는다. ONNX output은 다음 두 tensor다.</p>
+<table>
+<caption>policy.onnx interface</caption>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>이름</p></th>
+<th class="head"><p>shape</p></th>
+<th class="head"><p>단위</p></th>
+<th class="head"><p>용도</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p><span class="docutils literal">actions</span></p></td>
+<td><p><span class="docutils literal">[1,13]</span></p></td>
+<td><p>normalized raw action</p></td>
+<td><p>actuator command 생성에 사용</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">estimated_base_lin_vel_b</span></p></td>
+<td><p><span class="docutils literal">[1,3]</span></p></td>
+<td><p><span class="docutils literal">m/s</span></p></td>
+<td><p>Actor가 믿은 body-frame <span class="docutils literal">[v_x,v_y,v_z]</span> 기록</p></td>
+</tr>
+</tbody>
+</table>
+<p>두 output은 <span class="docutils literal">[1,16]</span> 으로 합쳐지지 않는다. 제어 코드는 <span class="docutils literal">actions</span> 전체 13개를 그대로 사용하므로 <span class="docutils literal">[:13]</span>
+같은 slicing도 필요 없다. 두 번째 output은 첫 번째 action을 계산할 때 사용한 바로 그 estimator tensor이며, 진단을
+위해 estimator를 다시 실행한 별도 결과가 아니다. Output을 하나 더 공개해도 action 계산 graph나 값은 바뀌지 않는다.</p>
+<p>Python ONNX Runtime 사용 예시는 다음과 같다.</p>
+<pre class="code python literal-block"><code><span class="name">actions</span><span class="punctuation">,</span> <span class="name">estimated_velocity</span> <span class="operator">=</span> <span class="name">session</span><span class="operator">.</span><span class="name">run</span><span class="punctuation">(</span>
+    <span class="punctuation">[</span><span class="literal string double">&quot;actions&quot;</span><span class="punctuation">,</span> <span class="literal string double">&quot;estimated_base_lin_vel_b&quot;</span><span class="punctuation">],</span>
+    <span class="punctuation">{</span><span class="literal string double">&quot;obs&quot;</span><span class="punctuation">:</span> <span class="name">observation_240</span><span class="punctuation">},</span>
+<span class="punctuation">)</span>
+
+<span class="comment single"># actions.shape == (1, 13): actuator command에 사용</span>
+<span class="comment single"># estimated_velocity.shape == (1, 3): logging/plot에 사용</span></code></pre>
+<p>Sim2Sim은 추정값과 simulator ground truth <span class="docutils literal">base_lin_vel_b</span> 를 함께 기록한다.</p>
+<div class="formula">
+<i>e</i><sub><i>t</i></sub> = <i>v̂</i><sub><i>base</i>, <i>b</i>, <i>t</i></sub> − <i>v</i><span class="scripts"><sup class="script"><i>sim</i></sup><sub class="script"><i>base</i>, <i>b</i>, <i>t</i></sub></span>
+</div>
+<div class="formula">
+<i>RMSE</i><sub><i>j</i></sub> = <span class="sqrt"><span class="radical">√</span><span class="ignored">(</span><span class="root"><span class="fraction"><span class="ignored">(</span><span class="numerator">1</span><span class="ignored">)/(</span><span class="denominator"><i>N</i></span><span class="ignored">)</span></span><span class="limits"><sup class="limit"><i>N</i></sup><span class="limit">⎲</span><span class="limit">⎳</span><sub class="limit"><i>t</i> = 1</sub></span>(<i>v̂</i><sub><i>t</i>, <i>j</i></sub> − <i>v</i><span class="scripts"><sup class="script"><i>sim</i></sup><sub class="script"><i>t</i>, <i>j</i></sub></span>)<sup>2</sup></span><span class="ignored">)</span></span>
+</div>
+<p><span class="docutils literal">v_x</span>, <span class="docutils literal">v_y</span>, <span class="docutils literal">v_z</span> 축별 RMSE와 total RMSE를 계산하면 TensorBoard의 estimator metric과 같은 물리 단위로
+Sim2Sim 성능을 비교할 수 있다. Sim2Real에는 simulator ground truth가 없으므로 추정값을 ROS topic, CSV 또는 plot으로
+기록한다. Motion capture, VIO 또는 별도 reference estimator가 있으면 timestamp를 맞춰 같은 방식으로 비교한다.</p>
+<p>TorchScript <span class="docutils literal">policy.pt</span> 는 기존 소비자와의 호환성을 위해 action-only <span class="docutils literal">[1,13]</span> interface를 유지한다. 두 출력이
+필요한 Sim2Sim/Sim2Real 배포에는 <span class="docutils literal">policy.onnx</span> 를 사용한다. 기존 estimator checkpoint는 재학습하지 않고 새
+exporter로 다시 export할 수 있다. 다만 ONNX output이 하나라고 가정한 기존 runtime은 두 output 이름을 읽도록 한 번
+수정해야 한다.</p>
+</section>
+<section id="teleop-estimator">
+<h2>Teleop estimator 화살표</h2>
+<p><span class="docutils literal">play_teleop.py</span> 는 policy step마다 현재 240D observation으로 Actor와 동일한 estimator를 실행하고, 그 결과의
+평면 성분 <span class="docutils literal"><span class="pre">[hat(v_x),hat(v_y)]</span></span> 을 주황색 화살표로 표시한다. 기존 command debug visualization과 좌표계 및
+길이 배율을 맞췄으므로 방향과 길이를 직접 비교할 수 있다.</p>
+<table>
+<caption>Teleop velocity arrows</caption>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>색상</p></th>
+<th class="head"><p>값</p></th>
+<th class="head"><p>좌표계</p></th>
+<th class="head"><p>의미</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p>녹색</p></td>
+<td><p>command <span class="docutils literal">[v_x,v_y]</span></p></td>
+<td><p>body frame</p></td>
+<td><p>사용자가 요구한 평면 선속도</p></td>
+</tr>
+<tr><td><p>파란색</p></td>
+<td><p>simulator <span class="docutils literal">root_lin_vel_b[0:2]</span></p></td>
+<td><p>body frame</p></td>
+<td><p>Isaac Sim ground truth 실제 속도</p></td>
+</tr>
+<tr><td><p>주황색</p></td>
+<td><p>estimator <span class="docutils literal"><span class="pre">[hat(v_x),hat(v_y)]</span></span></p></td>
+<td><p>body frame</p></td>
+<td><p>같은 policy observation에서 Actor가 사용한 추정 속도</p></td>
+</tr>
+</tbody>
+</table>
+<p>세 화살표는 body-frame XY 방향을 robot orientation으로 world에 회전시켜 로봇 위에 그린다. 길이는 모두
+<span class="docutils literal">3 * sqrt(v_x^2+v_y^2)</span> 에 같은 prototype scale을 적용한다. 주황색 화살표만 기존 두 화살표보다 <span class="docutils literal">0.08 m</span>
+높게 배치해 값이 비슷할 때도 색상을 확인할 수 있게 한다. Command에는 <span class="docutils literal">v_z</span> 목표가 없으므로 공정한 비교를 위해
+화살표는 XY만 표현한다. Estimator가 함께 출력하는 <span class="docutils literal">hat(v_z)</span> 는 ONNX diagnostic output 또는 TensorBoard RMSE로
+확인한다.</p>
+<p>이 화살표는 진단용이며 observation, action, reward, estimator loss, ONNX graph를 변경하지 않는다. Teleop에서
+estimator를 시각화하기 위해 한 번 더 forward하지만 환경이 하나이므로 제어 주기 영향은 무시할 수 있는 수준이다.
+표시된 값은 action 계산과 동일한 current observation 및 같은 estimator weight를 사용한 결정적 출력이다.</p>
+</section>
+<section id="id3">
+<h2>관련 파일</h2>
+<table>
+<caption>Estimator implementation files</caption>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>파일</p></th>
+<th class="head"><p>역할</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p><span class="docutils literal">scripts/rsl_rl/rok4_ppo.py</span></p></td>
+<td><p>estimator Actor, Actor-Critic, 별도 MSE optimizer, RMSE logging, checkpoint, fused exporter</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">config/rok4/agents/rsl_rl_ppo_cfg.py</span></p></td>
+<td><p>estimator hidden layer, learning rate, command-history slice와 custom class 이름 설정</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">config/rok4/flat_env_cfg.py</span></p></td>
+<td><p>noisy 240D policy, clean 240D critic, current privileged 10D 제공</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">mdp/symmetry.py</span></p></td>
+<td><p>policy history와 privileged velocity target의 좌우 mirror</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">scripts/rsl_rl/_run_isaaclab_rsl.py</span></p></td>
+<td><p>Train/Play에 custom runner를 주입하고 Play export를 fused exporter로 교체하며 Teleop 추정 속도를 visualizer에 전달</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">scripts/rsl_rl/_velocity_estimate_visualizer.py</span></p></td>
+<td><p>Teleop estimator body-frame XY를 주황색 world marker로 표시</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">tests/test_state_estimator.py</span></p></td>
+<td><p>dimension, command 제외, gradient 분리, PPO update, TorchScript와 ONNX 두 출력 및 action 동일성 검증</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">tests/test_rsl_rl_wrapper.py</span></p></td>
+<td><p>Train/Play runner 및 exporter source patch 회귀 검증</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="id4">
+<h2>첫 학습과 확인 순서</h2>
+<pre class="code bash literal-block"><code><span class="name builtin">export</span> <span class="name variable">ROK4_LAB_ROOT</span><span class="operator">=</span><span class="literal string double">&quot;</span><span class="literal string interpol">${</span><span class="name variable">HOME</span><span class="literal string interpol">}</span><span class="literal string double">/rok4_lab&quot;</span>
+<span class="name builtin">export</span> <span class="name variable">ISAACLAB_ROOT</span><span class="operator">=</span><span class="literal string double">&quot;</span><span class="literal string interpol">${</span><span class="name variable">HOME</span><span class="literal string interpol">}</span><span class="literal string double">/IsaacLab&quot;</span>
+<span class="name builtin">cd</span> <span class="literal string double">&quot;</span><span class="literal string interpol">${</span><span class="name variable">ISAACLAB_ROOT</span><span class="literal string interpol">}</span><span class="literal string double">&quot;</span>
+conda activate env_isaaclab
+
+./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4_LAB_ROOT</span><span class="literal string interpol">}</span>/scripts/rsl_rl/train.py <span class="literal string escape">\
+</span>  --task RoK4-Isaac-Velocity-Flat-v0 <span class="literal string escape">\
+</span>  --num_envs <span class="literal number">4096</span> <span class="literal string escape">\
+</span>  --max_iterations <span class="literal number">20000</span> <span class="literal string escape">\
+</span>  --headless <span class="literal string escape">\
+</span>  --run_name concurrent_vel_estimator_fresh20k</code></pre>
+<p>확인 우선순위는 다음과 같다.</p>
+<pre class="code text literal-block"><code>1. Loss/estimator_mse가 안정적으로 감소하는가
+2. Metrics/estimator/rmse_vx, vy, vz가 감소하는가
+3. velocity tracking과 symmetry reward가 기존 baseline보다 무너지지 않는가
+4. Play/Teleop exported policy.onnx input이 obs [1,240] 인가
+5. ONNX output이 actions [1,13] 와 estimated_base_lin_vel_b [1,3] 로 분리되는가
+6. ONNX action이 동일 checkpoint의 action-only exporter와 수치적으로 같은가
+7. Sim2Sim ground truth와 estimator output의 축별/total RMSE가 허용 범위인가
+8. 급정지와 push에서 Actor가 estimated velocity를 활용하는가</code></pre>
+</section>
+<section id="id5">
+<h2>후속 단계</h2>
+<p>Estimator가 충분히 정확해진 뒤에만 다음 실험을 별도로 진행한다.</p>
+<pre class="code text literal-block"><code>command == 0 and estimated motion small  -&gt; stable standing gate on
+command == 0 and estimated motion large  -&gt; recovery, standing pose constraint off
+walking command and external disturbance -&gt; recovery step allowed</code></pre>
+<p>Stable gate threshold, hysteresis, dwell time은 estimator RMSE와 실기 delay/noise를 본 뒤 정한다. 이번 branch에서는
+미리 임계값을 넣지 않는다. 그래야 estimator 자체의 학습 품질과 locomotion 효과를 먼저 판단할 수 있다.</p>
+</section>
+</main>
+</body>
+</html>
