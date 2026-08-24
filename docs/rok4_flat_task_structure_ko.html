@@ -836,7 +836,7 @@ span.boxed, span.framebox {
 <dd><p>2026-07-15</p>
 </dd>
 <dt>최종 업데이트</dt>
-<dd><p>2026-08-18</p>
+<dd><p>2026-08-21</p>
 </dd>
 <dt>대상 저장소</dt>
 <dd><p>RoK4 repository root (<span class="docutils literal">${ROK4_LAB_ROOT}</span>)</p>
@@ -1086,7 +1086,8 @@ RoK4 debug/verification
   ├─ ManagerBasedRLEnvWindow
   │    └─ 자식(상속): RoK4PushTestWindow                   [push_test_window.py]
   │         ├─ 선택 env의 command/실제 vx/vy/vz/wz/|vxy| 숫자 표시
-  │         ├─ Play/Teleop의 world-frame root delta-v 버튼
+  │         ├─ Play/Teleop의 base-yaw-frame root delta-v 버튼
+  │         ├─ Window &gt; IsaacLab panel 복구와 Property tab 재도킹
   │         └─ 다음 policy step에서 선택 env에 push 적용
   ├─ domain_randomization_cfg.py
   │    └─ material/mass/COM/external wrench/reset DR 설정
@@ -1638,6 +1639,9 @@ checkpoint를 이 브랜치에서 resume/play하지 말고 actuator-interface �
 </div>
 <p><span class="docutils literal">action_rate_l2</span> 와 <span class="docutils literal">second_action_rate_l2</span> reward는 observation의 <span class="docutils literal">last_action</span> 과 같은
 <span class="docutils literal">clipped_raw_action</span> 좌표에서 각각 1차와 2차 차분을 계산하고 weight <span class="docutils literal"><span class="pre">-0.01</span></span>, <span class="docutils literal"><span class="pre">-0.005</span></span> 를 사용한다.
+Command role 비율도 검증 기준인 <span class="docutils literal">mixed=0.35</span>, <span class="docutils literal">standing=0.05</span> 를 유지한다. 현재 실험은 두 smoothness
+가중치와 환경 비율을 고정하고 exact-zero standing default-pose weight만 <span class="docutils literal"><span class="pre">-0.2</span></span> 에서 <span class="docutils literal"><span class="pre">-0.05</span></span> 로 낮춘
+단일 변수 비교다.
 Reward 함수 자체는 clamp하지 않지만 RoK4 RSL-RL runner의 <span class="docutils literal">clip_actions=1.0</span> 이 ActionManager 이전에
 정책 출력을 제한한다. Action scale은 actuator target 생성에만
 사용하며 두 smoothness reward에는 적용하지 않는다. 다만 Hip Pitch/Knee action index <span class="docutils literal">2,3,8,9</span> 는 RoK4의
@@ -1687,7 +1691,7 @@ position soft limit은 추가하지 않는다. 변환된 joint torque에 대한 
 절댓값은 <span class="docutils literal">0.10 m/s</span>, <span class="docutils literal">wz</span> 는 <span class="docutils literal">0.10 rad/s</span> 이다.</p>
 <p><span class="docutils literal">mixed</span>, <span class="docutils literal">x</span>, <span class="docutils literal">fast_forward</span>, <span class="docutils literal">y</span>, <span class="docutils literal">yaw</span>, <span class="docutils literal">x_yaw</span> 환경은 <span class="docutils literal">10.0 s</span> cycle 안에서 서로 다른 random phase로 시작한다.
 각 환경은 독립적으로 <span class="docutils literal">Uniform(1.5, 3.0) s</span> standing duration을 표본화하므로 모든 환경이 동시에 멈추지
-않는다. 이 여섯 역할의 비율 합은 90%이므로 기존과 같은 90% population에서 moving-to-standing transition을
+않는다. 이 여섯 역할의 비율 합은 90%이므로 해당 population에서 moving-to-standing transition을
 학습한다. <span class="docutils literal">standing</span> 은 항상 exact zero이고, <span class="docutils literal">walking</span> 은 freeze 없이 planar command norm이 <span class="docutils literal">0.10 m/s</span>
 이상일 때까지 다시 표본화한다. 평균 freeze duration <span class="docutils literal">2.25 s</span> 를 기준으로 하면 전체 time sample은 대략
 standing 25%, moving 75%가 된다.</p>
@@ -1702,10 +1706,10 @@ standing과의 중복 배정을 피하기 위해 현재 <span class="docutils li
 Exact-zero command는 periodic freeze window와 <span class="docutils literal">standing</span> 역할에서 생성하며, 두 경로 모두 command를
 <span class="docutils literal">[0, 0, 0]</span> 으로 만드는 동시에 <span class="docutils literal">is_standing_env=True</span> 를 설정한다. 일반 <span class="docutils literal">mixed</span> moving command는
 크기가 작더라도 standing으로 변환하지 않으므로 연속적인 저속 command 범위를 유지한다.</p>
-<p>모든 exact-zero standing에서 weight <span class="docutils literal"><span class="pre">-0.2</span></span> 인 <span class="docutils literal">stand_still_joint_deviation_l1</span> 이 command term의
-<span class="docutils literal">is_standing_env</span> mask를 사용하여 전체 13관절의 실제 joint position을 default joint pose 근처로 유지한다.
-각 관절 오차의 절댓값을 합산하므로 작은 standing 자세 오차도 강하게 억제한다. 작은 non-zero 이동 command에는
-이 penalty를 적용하지 않는다.</p>
+<p>모든 exact-zero standing에서 weight <span class="docutils literal"><span class="pre">-0.05</span></span> 인 <span class="docutils literal">stand_still_joint_deviation_l1</span> 이 command term의
+<span class="docutils literal">is_standing_env</span> mask를 사용하여 전체 13관절의 실제 joint position을 default joint pose 근처로 유도한다.
+이는 검증 기준 <span class="docutils literal"><span class="pre">-0.2</span></span> 의 25% 강도다. 양발 standing 편향은 남기되 외란이나 급정지 중 recovery step과의
+경쟁을 줄이는 단일 변수 실험이며, 작은 non-zero 이동 command에는 적용하지 않는다.</p>
 </section>
 <section id="episode-timeout-periodic-freeze-push-timer">
 <h3>Episode timeout, periodic freeze, push timer 관계</h3>
@@ -2373,19 +2377,30 @@ GPU-to-CPU synchronization을 줄인다. Play가 여러 환경을 사용할 때�
 에 맞춰 표시 대상도 바뀐다.</p>
 <p><span class="docutils literal">RoK4 Push Test</span> 는 별도의 키보드/gamepad mapping 없이 마우스로 다음 버튼을 제공한다.</p>
 <ul class="simple">
-<li><p><span class="docutils literal">+X</span>, <span class="docutils literal"><span class="pre">-X</span></span>, <span class="docutils literal">+Y</span>, <span class="docutils literal"><span class="pre">-Y</span></span>: 선택 방향으로 root 선속도를 변경</p></li>
+<li><p><span class="docutils literal">+X</span>, <span class="docutils literal"><span class="pre">-X</span></span>: 로봇의 현재 전방/후방 방향으로 root 선속도를 변경</p></li>
+<li><p><span class="docutils literal">+Y</span>, <span class="docutils literal"><span class="pre">-Y</span></span>: 로봇의 현재 좌측/우측 방향으로 root 선속도를 변경</p></li>
 <li><p><span class="docutils literal">Random XY</span>: X/Y 속도 변화를 각각 독립적으로 <span class="docutils literal"><span class="pre">[-magnitude,</span> magnitude]</span> 에서 표본화</p></li>
 <li><p><span class="docutils literal">Delta velocity [m/s]</span>: <span class="docutils literal"><span class="pre">0.05-1.0</span> m/s</span> 범위의 변화량, 기본값 <span class="docutils literal">0.5 m/s</span></p></li>
 </ul>
-<p>버튼이 만드는 값은 world frame의 <span class="docutils literal">Delta <span class="pre">v=[Delta</span> vx, Delta vy, 0]</span> 이다. 선택한 환경의 현재
-<span class="docutils literal"><span class="pre">root_vel_w=[vx,vy,vz,wx,wy,wz]</span></span> 를 읽고 X/Y 성분에만 <span class="docutils literal">Delta v</span> 를 더한 뒤
-<span class="docutils literal">write_root_velocity_to_sim()</span> 으로 기록한다. 따라서 이는 newton 단위의 일정 시간 외력을 적분하는 방식이
+<p>버튼이 만드는 값은 base-yaw frame의 <span class="docutils literal">Delta <span class="pre">v_b=[Delta</span> vx,b, Delta vy,b, 0]</span> 이다. 실제 적용 시점의
+root quaternion에서 yaw만 취한 <span class="docutils literal">R_wb,yaw</span> 로</p>
+<div class="formula">
+Δ<b>v</b><sub><i>w</i></sub> = <i>R</i><sub><i>wb</i>, <span class="mathrm">yaw</span></sub>Δ<b>v</b><sub><i>b</i></sub>
+</div>
+<p>를 계산하고, 선택한 환경의 현재 <span class="docutils literal"><span class="pre">root_vel_w=[vx,vy,vz,wx,wy,wz]</span></span> 중 선속도에 더한 뒤
+<span class="docutils literal">write_root_velocity_to_sim()</span> 으로 기록한다. Roll/pitch를 제거하므로 로봇이 기울어도 외란은 수평이고,
+로봇이 회전한 뒤에도 버튼의 전후좌우 의미는 유지된다. 이는 newton 단위의 일정 시간 외력을 적분하는 방식이
 아니라, 충격 외란과 비슷한 순간 root 속도 변화다. velocity command 자체는 바꾸지 않는다.</p>
 <p>Play가 여러 환경을 사용할 때는 <span class="docutils literal">Viewer Settings &gt; Environment Index</span> 로 선택한 환경 하나에만 적용한다.
 Teleop은 env가 하나이므로 항상 env 0이다. 학습 중 부모 <span class="docutils literal">push_robot</span> event는 각 환경에 10-15초 간격으로
 독립적인 X/Y 속도 외란을 자동 적용하지만, Play/Teleop에서는 자동 event를 끄고 이 수동 버튼만 사용한다.
 버튼 UI는 GUI가 있는 local <span class="docutils literal">play.py</span> 및 <span class="docutils literal">play_teleop.py</span> wrapper에서만 동작하며 headless 학습에는
 생성되지 않는다. Isaac Lab 원본 파일은 수정하지 않는다.</p>
+<p>Isaac Lab panel의 <span class="docutils literal">X</span> 를 누르면 window object가 삭제되는 것이 아니라 숨겨진다. Isaac Sim 상단 메뉴의
+<span class="docutils literal">Window &gt; IsaacLab</span> 을 선택하면 같은 panel을 다시 표시하고 오른쪽 <span class="docutils literal">Property</span> tab 위치로 재도킹한다.
+실행 중인 구버전 코드에서 임시로 panel만 복구할 때는 Python Console에서
+<span class="docutils literal"><span class="pre">omni.ui.Workspace.get_window(&quot;IsaacLab&quot;).visible</span> = True</span> 를 실행할 수 있지만, 자동 재도킹은 RoK4 callback이
+있는 새 실행부터 적용된다.</p>
 </section>
 <section id="contact-force-debug-visualization">
 <h3>Contact force debug visualization</h3>
@@ -2492,8 +2507,9 @@ observation으로 estimator를 한 번 더 결정적으로 실행하는 진단 �
 play 명령어, DR 관리 파일, self-collision 설정을 문서화했다.
 Teleop task, gamepad/keyboard 입력, command scale과 한 policy-step 입력 지연도 함께 문서화했다.
 Contact Forces debug toggle로 환경 0의 좌우 발 접촉력 화살표와 실시간 newton 값을 확인하는 방법도 문서화했다.
-Play/Teleop의 command/actual 속도 숫자 panel과 <span class="docutils literal">RoK4 Push Test</span> 버튼, world-frame <span class="docutils literal">Delta v</span> 의미, 선택
-environment 및 queue 적용 흐름도 문서화했다.</p>
+Play/Teleop의 command/actual 속도 숫자 panel과 <span class="docutils literal">RoK4 Push Test</span> 버튼, base-yaw-frame <span class="docutils literal">Delta v</span> 의미, 선택
+environment 및 queue 적용 흐름도 문서화했다. 이후 수동 push를 base-yaw frame으로 변경하고
+<span class="docutils literal">Window &gt; IsaacLab</span> panel 복구 및 오른쪽 <span class="docutils literal">Property</span> tab 재도킹 경로를 추가했다.</p>
 </section>
 <section id="changelog-md">
 <h3><span class="docutils literal">CHANGELOG.md</span></h3>
@@ -2685,7 +2701,9 @@ rendering으로 인해 GPU·학습시간·저장공간 overhead가 추가된다.
 </span>  --num_envs <span class="literal number">16</span> <span class="literal string escape">\
 </span>  --checkpoint /path/to/model.pt</code></pre>
 <p>실행 후 <span class="docutils literal">RoK4 Push Test</span> frame에서 <span class="docutils literal">Delta velocity [m/s]</span> 를 정하고 방향 버튼을 누른다. 여러 env를
-띄운 경우 <span class="docutils literal">Viewer Settings &gt; Environment Index</span> 로 push 대상 env를 먼저 선택한다.</p>
+띄운 경우 <span class="docutils literal">Viewer Settings &gt; Environment Index</span> 로 push 대상 env를 먼저 선택한다. 방향은 현재
+base-yaw frame 기준이므로 로봇이 회전한 뒤에도 <span class="docutils literal">+X</span> 는 로봇 전방이다. Panel을 닫았으면 Isaac Sim 상단의
+<span class="docutils literal">Window &gt; IsaacLab</span> 으로 복구한다.</p>
 <p>Teleop with gamepad:</p>
 <pre class="code bash literal-block"><code>./isaaclab.sh -p <span class="literal string interpol">${</span><span class="name variable">ROK4_LAB_ROOT</span><span class="literal string interpol">}</span>/scripts/rsl_rl/play_teleop.py <span class="literal string escape">\
 </span>  --task RoK4-Isaac-Velocity-Flat-Teleop-v0 <span class="literal string escape">\

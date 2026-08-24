@@ -2,7 +2,7 @@ RoK4 Reward Structure
 =============================================================
 
 작성일: 2026-07-15
-최종 업데이트: 2026-08-12
+최종 업데이트: 2026-08-21
 
 .. raw:: html
 
@@ -157,7 +157,7 @@ Isaac Lab 원본 source를 수정하지 않는다. Isaac Lab의 부모 class와 
                           ├─ feet_swing_pitch_l2 (swing 중 pitch를 약하게 억제)
                           ├─ feet_stance_width_l2 (현재 None: 비활성)
                           ├─ feet_lateral_separation_l2 (signed lateral anti-cross)
-                          ├─ stand_still_joint_deviation_l1
+                          ├─ stand_still_joint_deviation_l1 (exact-zero standing, 약한 default-pose bias)
                           ├─ dof_pos_limits
                           ├─ joint_action_target_pos_limits
                           ├─ joint_deviation_hip
@@ -456,9 +456,9 @@ RoK4 전용 Reward Terms
      - 좌우 Foot 위치 차이를 base yaw frame으로 회전한 뒤 signed lateral width ``y_left - y_right`` 를 유지한다. ``relu(0.16 - signed_width)^2`` 만 반환하므로 정상 ``0.21 m`` 폭과 넓은 폭은 제한하지 않고, 좁아질수록 penalty가 증가하며 좌우 Foot이 교차해 부호가 바뀌면 더 크게 작동한다. Command mask 없이 standing과 moving 모두에 적용된다.
    * - ``stand_still_joint_deviation_l1``
      - ``mdp.stand_still_joint_deviation_l1``
-     - ``-0.2``
+     - ``-0.05``
      - ``ROK4_JOINT_ORDER`` 전체 13관절, ``base_velocity.is_standing_env`` mask
-     - RoK4 command generator가 standing으로 지정한 환경에서만 실제 joint position과 default joint position 차이의 절댓값 합을 penalty로 반환한다. 기존 Gym의 ``defaultPosStanding`` 에 대응한다.
+     - RoK4 command generator가 standing으로 지정한 환경에서 실제 joint position과 default joint position 차이의 절댓값 합을 penalty로 반환한다. 검증 기준 ``-0.2`` 의 25% 강도로 양발 standing 편향을 남기면서 recovery step과의 경쟁을 줄이는 ablation이다. 기존 Gym의 ``defaultPosStanding`` 에 대응한다.
    * - ``dof_pos_limits``
      - ``mdp.joint_pos_limits``
      - ``-1.0``
@@ -654,7 +654,7 @@ Reward Function 요약
      - 현재 joint position과 default joint position 차이의 absolute sum.
    * - ``stand_still_joint_deviation_l1``
      - RoK4 로컬 mdp
-     - ``base_velocity.is_standing_env`` 가 true일 때 전체 13관절의 default-pose absolute error sum.
+     - ``base_velocity.is_standing_env`` 가 true일 때 전체 13관절의 default-pose absolute error sum을 계산한다. 현재 weight는 ``-0.05`` 이다.
    * - ``joint_pos_limits``
      - Isaac Lab 공통
      - soft joint position limit을 넘은 정도를 합산한다.
@@ -709,15 +709,16 @@ timeout된다. 초기에는 episode counter가 같지만 early reset이 누적�
 부모 task에서 상속한 training ``push_robot`` 은 freeze와 다른 환경별 ``interval`` timer다. Reset마다 다음
 push 시간을 ``Uniform(10, 15) s`` 로 표본화하고, world-frame root x/y velocity에 각각 ``-0.5~0.5 m/s`` 를
 추가한다. 따라서 push는 이동 command 중에도, exact-zero freeze 중에도, 전환 부근에도 발생할 수 있다. Freeze
-중 push가 들어와도 command와 ``is_standing_env`` 는 zero/true로 유지되므로 velocity-tracking reward와
-``stand_still_joint_deviation_l1`` 은 외란에서 정지 자세로 복원하는 행동을 평가한다. Contact reward와
-``no_jumps`` 는 같은 구간의 실제 발 접촉 상태를 그대로 평가한다. Play/Teleop에서는 이 자동 interval event를
-끄고 수동 Push Test UI를 사용한다.
+중 push가 들어와도 command와 ``is_standing_env`` 는 zero/true로 유지되므로 dense velocity-tracking reward와
+약한 ``stand_still_joint_deviation_l1=-0.05`` 가 함께 복구를 평가한다. 이 standing 자세 항은 검증 기준
+``-0.2`` 보다 약해 필요한 recovery step의 비용을 줄인다. Contact reward와 ``no_jumps`` 는 같은 구간의 실제
+발 접촉 상태를 그대로 평가한다. Play/Teleop에서는 자동 interval event를 끄고 수동 Push Test UI를 사용한다.
 
 Periodic freeze와 ``standing`` 역할은 command를 ``[0, 0, 0]`` 으로 만드는 동시에 ``is_standing_env=True`` 를
-설정한다. ``stand_still_joint_deviation_l1`` 은 command 크기를 다시 판정하지 않고 이 mask를 직접 사용하여
-전체 13관절을 default pose 근처로 유지한다. 현재 weight는 ``-0.2`` 이다. ``-1.0`` 실험은 안정적인 양발
-standing을 만들었지만 feet-air-time 감소와 foot-slide 증가가 관측되어 보행 자유도를 회복하도록 완화했다.
+설정한다. 이 mask는 feet-air-time과 clearance 같은 standing-aware gait term 및
+``stand_still_joint_deviation_l1`` 에 사용한다. 현재 standing weight ``-0.05`` 는 이전 ``-1.0`` 및 검증 기준
+``-0.2`` 보다 약하다. Dense velocity/upright/base-height/smoothness reward가 주된 복구 목적을 담당하고,
+이 항은 exact-zero에서 default pose로 향하는 약한 편향만 제공한다.
 
 이 command는 ``track_lin_vel_xy_exp``, ``track_ang_vel_z_exp``, ``feet_air_time`` 에 직접 영향을 준다. 특히
 ``FeetAirTimeTouchdownBiped`` 는 x/y command norm이 ``0.05`` 이하이면 reward를 0으로 만든다. 즉 거의 정지
@@ -939,7 +940,8 @@ world-frame 접촉 합력 ``||[F_x,F_y,F_z]||`` 의 landing-window peak다. ``fe
    7. 발 미끄러짐을 줄인다.
    8. torque, joint acceleration, action rate, second action rate를 줄여 움직임을 부드럽게 한다.
    9. ankle limit, hip/torso deviation을 제한한다.
-   10. zero command에서 전체 13관절을 default standing pose 근처로 유지한다.
+   10. zero command에서 dense velocity/upright/base-height/smoothness reward로 정지 안정성을 유도하고,
+       약한 full-body default-pose penalty ``-0.05`` 로 양발 standing 편향을 보완한다.
    11. Foot를 제외한 body 접촉을 실패 종료로 처리한다.
 
 튜닝 시 우선 확인할 항목

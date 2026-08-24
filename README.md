@@ -392,12 +392,19 @@ not included in this planar comparison.
 
 The same window also adds a `RoK4 Push Test` frame. It provides
 `+X`, `-X`, `+Y`, `-Y`, and `Random XY` buttons plus a configurable `Delta velocity [m/s]` value. A click queues one
-world-frame root linear-velocity change and applies it at the next policy-step boundary. This avoids changing simulation
-state from inside an asynchronous UI callback.
+base-yaw-frame root linear-velocity change and applies it at the next policy-step boundary. `+X` is the robot's current
+forward direction and `+Y` is its current left direction. At application time, the horizontal delta is rotated by the
+robot's current yaw into the world frame; base roll and pitch do not tilt the disturbance. This avoids changing
+simulation state from inside an asynchronous UI callback.
 
 The push is applied to the environment selected by `Viewer Settings > Environment Index`; Teleop has one environment,
-so it naturally targets environment 0. `Random XY` samples independent x/y changes from `[-magnitude, magnitude]`, which
-matches the shape of the inherited training-time `push_robot` disturbance. The default magnitude is `0.5 m/s`.
+so it naturally targets environment 0. `Random XY` samples independent base-frame x/y changes from
+`[-magnitude, magnitude]`. The default magnitude is `0.5 m/s`.
+
+Closing the Isaac Lab panel with its `X` button only hides it. Select `Window > IsaacLab` from the Isaac Sim main menu
+to show it again. The local RoK4 window callback then docks it back into the right-side `Property` tab. For an already
+running process launched with an older RoK4 checkout, the equivalent temporary Python Console command is
+`omni.ui.Workspace.get_window("IsaacLab").visible = True`.
 
 This control reproduces an impulse-like disturbance by changing root velocity. It is not a sustained force in newtons,
 does not alter the policy command, and is available only through the local `play.py` and `play_teleop.py` wrappers. It
@@ -451,8 +458,9 @@ ONNX/TorchScript policy is called outside Isaac Lab train/play, clamp the policy
 `ROK4_ACTUATOR_ACTION_SCALE` and before saving it as the next `last_action`.
 
 The action smoothness rewards use clipped raw policy-action differences, matching the G1 first-order convention.
-`action_rate_l2` and `second_action_rate_l2` use weights `-0.01` and `-0.005`, matching the previous Gym first-to-second
-order ratio while strengthening both terms over the earlier Lab configuration. Action scaling remains
+`action_rate_l2` and `second_action_rate_l2` use weights `-0.01` and `-0.005`, retaining the previous Gym first-to-second
+order ratio. The command-role ratios use the validated `mixed=0.35` and `standing=0.05` split. The current controlled
+ablation changes only the exact-zero standing default-pose penalty from `-0.2` to `-0.05`. Action scaling remains
 part of actuator-target generation but is not applied by either smoothness reward. Hip-pitch and knee action indices
 `[2, 3, 8, 9]` retain the RoK4-specific `0.5` squared-error multiplier.
 
@@ -542,9 +550,10 @@ The `mixed`, `x`, `fast_forward`, `y`, `yaw`, and `x_yaw` roles use independent 
 `1.5-3.0 s` standing windows in a `10 s` cycle. Thus 90% of environments train asynchronous moving-to-standing transitions,
 while `standing` remains zero and `walking` never freezes. A normal `10 s` command resampling retains the episode
 role and samples a new command within that role; the next environment reset samples a new role. Exact-zero commands
-set the command term's standing mask, activating `stand_still_joint_deviation_l1` with weight `-0.2`.
-`rel_standing_envs` is disabled to avoid duplicate standing assignment, and the episode-role scheduler is disabled
-in Play and Teleop configurations.
+set the command term's standing mask and activate `stand_still_joint_deviation_l1` with weight `-0.05`. This weak
+13-joint default-pose bias targets stable two-foot standing while leaving more recovery freedom than the validated
+`-0.2` baseline. `rel_standing_envs` is disabled to avoid duplicate standing assignment, and the episode-role scheduler
+is disabled in Play and Teleop configurations.
 
 ### Episode, Freeze, and Push Timers
 
@@ -641,7 +650,8 @@ gait joint. This is a global default-pose deviation penalty, not a swing-phase k
 The contact-gated `feet_flat_orientation_l2` function remains available for diagnostics, but its reward term is
 currently `None`. It measures foot tilt against world up, which is useful for a flat-ground experiment but can oppose
 toe-off and terrain-normal alignment. The current experiment instead relies on the reduced ankle-side actuator gains
-for passive contact adaptation and on `stand_still_joint_deviation_l1` for exact-zero-command posture stability.
+for passive contact adaptation and a weak `stand_still_joint_deviation_l1=-0.05` term for exact-zero-command posture
+stability.
 
 The active `feet_swing_roll_l2` term uses weight `-1.0` to discourage inward or outward sole roll only while a foot
 is airborne. The companion `feet_swing_pitch_l2` term applies the same yaw-removed sole-normal calculation to the
@@ -828,7 +838,9 @@ Play a checkpoint:
 ```
 
 In the Isaac Lab window, expand `RoK4 Push Test`, choose the velocity-change magnitude, and click a direction. For a
-multi-environment Play run, first choose the target using `Viewer Settings > Environment Index`.
+multi-environment Play run, first choose the target using `Viewer Settings > Environment Index`. The direction buttons
+use the robot's current base-yaw frame, so `+X` remains robot-forward after it turns. If the panel was closed, reopen and
+re-dock it with `Window > IsaacLab`.
 
 Teleoperate a checkpoint with a connected gamepad, including a DualShock 4 detected by Isaac Sim:
 

@@ -4,6 +4,12 @@
 
 ### Changed
 
+- Reduced the exact-zero standing full-body default-pose penalty from `-0.2` to `-0.05`. This controlled ablation
+  retains a weak bias toward stable two-foot standing while giving disturbance and rapid-stop recovery steps more
+  freedom than the validated baseline.
+- Added `Window > IsaacLab` recovery for the local environment panel, re-docked the panel into the right-side
+  `Property` tab whenever it is shown, and changed manual push buttons from world X/Y to the robot's current
+  base-yaw frame while retaining a horizontal world-frame velocity update at the policy-step boundary.
 - Added a Teleop-only orange planar velocity arrow for the Actor's body-frame estimator output, using the same
   direction and length convention as the existing green command and blue simulator-velocity arrows.
 - Exposed the Actor's internal 3D body-frame base-velocity estimate as the separate ONNX output
@@ -17,8 +23,10 @@
 - Replaced capped touchdown air-time shaping with the uncapped signed event reward `T - 0.50 s`, increased its weight
   from `0.75` to `2.0` to match K1's `weight * policy_dt = 0.02` touchdown-error slope, and disabled the GRF-based
   `feet_contact_force` reward while preserving GRF visualization.
-- Increased first- and second-order raw-action smoothness weights to `-0.01` and `-0.005`. The reward functions do not clamp
-  internally; the standard RoK4 runner continues to provide `[-1, 1]` actions through `clip_actions=1.0`.
+- Retained first- and second-order raw-action smoothness weights at `-0.01` and `-0.005` and restored the validated
+  `mixed=35%`, full-episode `standing=5%` command-role split. This keeps the weak standing-pose weight as the only
+  experimental reward change. The standard RoK4 runner continues to provide `[-1, 1]` actions through
+  `clip_actions=1.0`.
 - Set the per-leg actuator-space gain profile to `[240, 240, 160, 160, 80, 80] / [12, 12, 8, 8, 8, 8]` after the
   lower-stiffness profile produced low-frequency real-robot joint oscillation. This retains `20:1` hip-side and
   `10:1` ankle-side ratios while retaining the measured 4 ms actuator command delay.

@@ -350,7 +350,7 @@ class RoK4RewardsCfg(RewardsCfg):
     )
     stand_still_joint_deviation_l1 = RewTerm(
         func=mdp.stand_still_joint_deviation_l1,
-        weight=-0.2,
+        weight=-0.05,
         params={
             "command_name": "base_velocity",
             "asset_cfg": SceneEntityCfg("robot", joint_names=ROK4_JOINT_ORDER, preserve_order=True),

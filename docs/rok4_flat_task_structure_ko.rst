@@ -2,7 +2,7 @@ RoK4 Flat RSL-RL Task 구조 문서
 ========================================================================
 
 :작성일: 2026-07-15
-:최종 업데이트: 2026-08-18
+:최종 업데이트: 2026-08-21
 :대상 저장소: RoK4 repository root (``${ROK4_LAB_ROOT}``)
 :기준 환경: Isaac Lab v2.3.2, Isaac Sim 5.1.0, ``env_isaaclab``
 
@@ -266,7 +266,8 @@ RoK4 구조 관계
      ├─ ManagerBasedRLEnvWindow
      │    └─ 자식(상속): RoK4PushTestWindow                   [push_test_window.py]
      │         ├─ 선택 env의 command/실제 vx/vy/vz/wz/|vxy| 숫자 표시
-     │         ├─ Play/Teleop의 world-frame root delta-v 버튼
+     │         ├─ Play/Teleop의 base-yaw-frame root delta-v 버튼
+     │         ├─ Window > IsaacLab panel 복구와 Property tab 재도킹
      │         └─ 다음 policy step에서 선택 env에 push 적용
      ├─ domain_randomization_cfg.py
      │    └─ material/mass/COM/external wrench/reset DR 설정
@@ -800,6 +801,9 @@ action이라는 점이다. motor target만 scale, default actuator pose, ADAPT m
 
 ``action_rate_l2`` 와 ``second_action_rate_l2`` reward는 observation의 ``last_action`` 과 같은
 ``clipped_raw_action`` 좌표에서 각각 1차와 2차 차분을 계산하고 weight ``-0.01``, ``-0.005`` 를 사용한다.
+Command role 비율도 검증 기준인 ``mixed=0.35``, ``standing=0.05`` 를 유지한다. 현재 실험은 두 smoothness
+가중치와 환경 비율을 고정하고 exact-zero standing default-pose weight만 ``-0.2`` 에서 ``-0.05`` 로 낮춘
+단일 변수 비교다.
 Reward 함수 자체는 clamp하지 않지만 RoK4 RSL-RL runner의 ``clip_actions=1.0`` 이 ActionManager 이전에
 정책 출력을 제한한다. Action scale은 actuator target 생성에만
 사용하며 두 smoothness reward에는 적용하지 않는다. 다만 Hip Pitch/Knee action index ``2,3,8,9`` 는 RoK4의
@@ -863,7 +867,7 @@ Flat 학습은 ``lin_vel_x=(-0.3, 0.85) m/s``, ``lin_vel_y=(-0.3, 0.3) m/s``,
 
 ``mixed``, ``x``, ``fast_forward``, ``y``, ``yaw``, ``x_yaw`` 환경은 ``10.0 s`` cycle 안에서 서로 다른 random phase로 시작한다.
 각 환경은 독립적으로 ``Uniform(1.5, 3.0) s`` standing duration을 표본화하므로 모든 환경이 동시에 멈추지
-않는다. 이 여섯 역할의 비율 합은 90%이므로 기존과 같은 90% population에서 moving-to-standing transition을
+않는다. 이 여섯 역할의 비율 합은 90%이므로 해당 population에서 moving-to-standing transition을
 학습한다. ``standing`` 은 항상 exact zero이고, ``walking`` 은 freeze 없이 planar command norm이 ``0.10 m/s``
 이상일 때까지 다시 표본화한다. 평균 freeze duration ``2.25 s`` 를 기준으로 하면 전체 time sample은 대략
 standing 25%, moving 75%가 된다.
@@ -881,10 +885,10 @@ Exact-zero command는 periodic freeze window와 ``standing`` 역할에서 생성
 ``[0, 0, 0]`` 으로 만드는 동시에 ``is_standing_env=True`` 를 설정한다. 일반 ``mixed`` moving command는
 크기가 작더라도 standing으로 변환하지 않으므로 연속적인 저속 command 범위를 유지한다.
 
-모든 exact-zero standing에서 weight ``-0.2`` 인 ``stand_still_joint_deviation_l1`` 이 command term의
-``is_standing_env`` mask를 사용하여 전체 13관절의 실제 joint position을 default joint pose 근처로 유지한다.
-각 관절 오차의 절댓값을 합산하므로 작은 standing 자세 오차도 강하게 억제한다. 작은 non-zero 이동 command에는
-이 penalty를 적용하지 않는다.
+모든 exact-zero standing에서 weight ``-0.05`` 인 ``stand_still_joint_deviation_l1`` 이 command term의
+``is_standing_env`` mask를 사용하여 전체 13관절의 실제 joint position을 default joint pose 근처로 유도한다.
+이는 검증 기준 ``-0.2`` 의 25% 강도다. 양발 standing 편향은 남기되 외란이나 급정지 중 recovery step과의
+경쟁을 줄이는 단일 변수 실험이며, 작은 non-zero 이동 command에는 적용하지 않는다.
 
 Episode timeout, periodic freeze, push timer 관계
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1480,13 +1484,21 @@ GPU-to-CPU synchronization을 줄인다. Play가 여러 환경을 사용할 때�
 
 ``RoK4 Push Test`` 는 별도의 키보드/gamepad mapping 없이 마우스로 다음 버튼을 제공한다.
 
-* ``+X``, ``-X``, ``+Y``, ``-Y``: 선택 방향으로 root 선속도를 변경
+* ``+X``, ``-X``: 로봇의 현재 전방/후방 방향으로 root 선속도를 변경
+* ``+Y``, ``-Y``: 로봇의 현재 좌측/우측 방향으로 root 선속도를 변경
 * ``Random XY``: X/Y 속도 변화를 각각 독립적으로 ``[-magnitude, magnitude]`` 에서 표본화
 * ``Delta velocity [m/s]``: ``0.05-1.0 m/s`` 범위의 변화량, 기본값 ``0.5 m/s``
 
-버튼이 만드는 값은 world frame의 ``Delta v=[Delta vx, Delta vy, 0]`` 이다. 선택한 환경의 현재
-``root_vel_w=[vx,vy,vz,wx,wy,wz]`` 를 읽고 X/Y 성분에만 ``Delta v`` 를 더한 뒤
-``write_root_velocity_to_sim()`` 으로 기록한다. 따라서 이는 newton 단위의 일정 시간 외력을 적분하는 방식이
+버튼이 만드는 값은 base-yaw frame의 ``Delta v_b=[Delta vx,b, Delta vy,b, 0]`` 이다. 실제 적용 시점의
+root quaternion에서 yaw만 취한 ``R_wb,yaw`` 로
+
+.. math::
+
+   \Delta \mathbf{v}_w = R_{wb,\mathrm{yaw}}\Delta \mathbf{v}_b
+
+를 계산하고, 선택한 환경의 현재 ``root_vel_w=[vx,vy,vz,wx,wy,wz]`` 중 선속도에 더한 뒤
+``write_root_velocity_to_sim()`` 으로 기록한다. Roll/pitch를 제거하므로 로봇이 기울어도 외란은 수평이고,
+로봇이 회전한 뒤에도 버튼의 전후좌우 의미는 유지된다. 이는 newton 단위의 일정 시간 외력을 적분하는 방식이
 아니라, 충격 외란과 비슷한 순간 root 속도 변화다. velocity command 자체는 바꾸지 않는다.
 
 Play가 여러 환경을 사용할 때는 ``Viewer Settings > Environment Index`` 로 선택한 환경 하나에만 적용한다.
@@ -1494,6 +1506,12 @@ Teleop은 env가 하나이므로 항상 env 0이다. 학습 중 부모 ``push_ro
 독립적인 X/Y 속도 외란을 자동 적용하지만, Play/Teleop에서는 자동 event를 끄고 이 수동 버튼만 사용한다.
 버튼 UI는 GUI가 있는 local ``play.py`` 및 ``play_teleop.py`` wrapper에서만 동작하며 headless 학습에는
 생성되지 않는다. Isaac Lab 원본 파일은 수정하지 않는다.
+
+Isaac Lab panel의 ``X`` 를 누르면 window object가 삭제되는 것이 아니라 숨겨진다. Isaac Sim 상단 메뉴의
+``Window > IsaacLab`` 을 선택하면 같은 panel을 다시 표시하고 오른쪽 ``Property`` tab 위치로 재도킹한다.
+실행 중인 구버전 코드에서 임시로 panel만 복구할 때는 Python Console에서
+``omni.ui.Workspace.get_window("IsaacLab").visible = True`` 를 실행할 수 있지만, 자동 재도킹은 RoK4 callback이
+있는 새 실행부터 적용된다.
 
 Contact force debug visualization
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1627,8 +1645,9 @@ observation으로 estimator를 한 번 더 결정적으로 실행하는 진단 �
 play 명령어, DR 관리 파일, self-collision 설정을 문서화했다.
 Teleop task, gamepad/keyboard 입력, command scale과 한 policy-step 입력 지연도 함께 문서화했다.
 Contact Forces debug toggle로 환경 0의 좌우 발 접촉력 화살표와 실시간 newton 값을 확인하는 방법도 문서화했다.
-Play/Teleop의 command/actual 속도 숫자 panel과 ``RoK4 Push Test`` 버튼, world-frame ``Delta v`` 의미, 선택
-environment 및 queue 적용 흐름도 문서화했다.
+Play/Teleop의 command/actual 속도 숫자 panel과 ``RoK4 Push Test`` 버튼, base-yaw-frame ``Delta v`` 의미, 선택
+environment 및 queue 적용 흐름도 문서화했다. 이후 수동 push를 base-yaw frame으로 변경하고
+``Window > IsaacLab`` panel 복구 및 오른쪽 ``Property`` tab 재도킹 경로를 추가했다.
 
 ``CHANGELOG.md``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1834,7 +1853,9 @@ Play:
      --checkpoint /path/to/model.pt
 
 실행 후 ``RoK4 Push Test`` frame에서 ``Delta velocity [m/s]`` 를 정하고 방향 버튼을 누른다. 여러 env를
-띄운 경우 ``Viewer Settings > Environment Index`` 로 push 대상 env를 먼저 선택한다.
+띄운 경우 ``Viewer Settings > Environment Index`` 로 push 대상 env를 먼저 선택한다. 방향은 현재
+base-yaw frame 기준이므로 로봇이 회전한 뒤에도 ``+X`` 는 로봇 전방이다. Panel을 닫았으면 Isaac Sim 상단의
+``Window > IsaacLab`` 으로 복구한다.
 
 Teleop with gamepad:
 
