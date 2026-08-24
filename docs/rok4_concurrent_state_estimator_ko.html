@@ -836,7 +836,7 @@ span.boxed, span.framebox {
 <dd><p>2026-08-18</p>
 </dd>
 <dt>최종 업데이트</dt>
-<dd><p>2026-08-19</p>
+<dd><p>2026-08-24</p>
 </dd>
 <dt>대상 브랜치</dt>
 <dd><p><span class="docutils literal"><span class="pre">yunho/concurrent-state-estimator</span></span></p>
@@ -1247,6 +1247,56 @@ conda activate env_isaaclab
 6. ONNX action이 동일 checkpoint의 action-only exporter와 수치적으로 같은가
 7. Sim2Sim ground truth와 estimator output의 축별/total RMSE가 허용 범위인가
 8. 급정지와 push에서 Actor가 estimated velocity를 활용하는가</code></pre>
+</section>
+<section id="mujoco-sim2sim">
+<h2>MuJoCo Sim2Sim 검증 기준</h2>
+<p>2026-08-24 기준 concurrent estimator 배포 baseline은 다음과 같다.</p>
+<table>
+<caption>Concurrent estimator Sim2Sim baseline</caption>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>항목</p></th>
+<th class="head"><p>기준</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p>Git branch</p></td>
+<td><p><span class="docutils literal"><span class="pre">yunho/concurrent-state-estimator</span></span></p></td>
+</tr>
+<tr><td><p>Git commit</p></td>
+<td><p><span class="docutils literal">df37f44</span> (<span class="docutils literal">Refine standing recovery validation</span>)</p></td>
+</tr>
+<tr><td><p>Isaac Lab run</p></td>
+<td><p><span class="docutils literal"><span class="pre">2026-08-21_02-28-25_concurrent_estimator_stand005_fresh25k</span></span></p></td>
+</tr>
+<tr><td><p>Checkpoint</p></td>
+<td><p><span class="docutils literal">model_24999.pt</span></p></td>
+</tr>
+<tr><td><p>외부 policy input</p></td>
+<td><p>noisy normalized observation <span class="docutils literal">[1,240]</span></p></td>
+</tr>
+<tr><td><p>ONNX outputs</p></td>
+<td><p><span class="docutils literal">actions [1,13]</span>, <span class="docutils literal">estimated_base_lin_vel_b [1,3]</span></p></td>
+</tr>
+<tr><td><p>Isaac Sim 확인</p></td>
+<td><p>Gamepad Teleop, stable standing, 방향별 보행, 급정지, manual push recovery, 실제/추정 속도 화살표</p></td>
+</tr>
+<tr><td><p>MuJoCo 확인</p></td>
+<td><p>같은 240D 입력과 fused ONNX 두 output으로 Sim2Sim 보행 및 제어 동작 완료</p></td>
+</tr>
+</tbody>
+</table>
+<p>MuJoCo에서는 <span class="docutils literal">actions</span> 만 actuator command로 적용하고 <span class="docutils literal">estimated_base_lin_vel_b</span> 는 진단값으로 분리해
+읽었다. 기존 240D deployment observation 계약을 바꾸지 않았으며, estimator output을 추가해도 action output
+경로가 유지되는 것을 확인했다. Isaac Sim Teleop에서 확인한 방향별 보행, 양발 정지, 급정지 및 외란 복구
+전략도 MuJoCo에서 사용할 수 있는 상태다.</p>
+<p>이 결과로 concurrent estimator의 첫 Isaac Sim + MuJoCo Sim2Sim baseline 검증은 완료되었다. 다만 이는
+실제 로봇에서 추정 속도의 정확도를 증명한 결과는 아니다. Sim2Real에서는 estimator output과 motion capture,
+VIO 또는 별도 reference estimator를 timestamp 정렬해 RMSE를 측정해야 한다. 따라서 현재 checkpoint는
+보존하고 이후 estimator delay/noise, 강한 push 및 급정지 실험은 별도 commit 또는 branch에서 진행한다.</p>
 </section>
 <section id="id5">
 <h2>후속 단계</h2>

@@ -2,7 +2,7 @@ RoK4 Base-Velocity Estimator 구조 문서
 ================================================================================
 
 :작성일: 2026-08-18
-:최종 업데이트: 2026-08-19
+:최종 업데이트: 2026-08-24
 :대상 브랜치: ``yunho/concurrent-state-estimator``
 :대상 저장소: RoK4 repository root (``${ROK4_LAB_ROOT}``)
 :기준 환경: Isaac Lab v2.3.2, Isaac Sim 5.1.0, ``env_isaaclab``
@@ -433,6 +433,43 @@ estimator를 시각화하기 위해 한 번 더 forward하지만 환경이 하�
    6. ONNX action이 동일 checkpoint의 action-only exporter와 수치적으로 같은가
    7. Sim2Sim ground truth와 estimator output의 축별/total RMSE가 허용 범위인가
    8. 급정지와 push에서 Actor가 estimated velocity를 활용하는가
+
+MuJoCo Sim2Sim 검증 기준
+--------------------------------------------------------------------------------
+
+2026-08-24 기준 concurrent estimator 배포 baseline은 다음과 같다.
+
+.. list-table:: Concurrent estimator Sim2Sim baseline
+   :header-rows: 1
+
+   * - 항목
+     - 기준
+   * - Git branch
+     - ``yunho/concurrent-state-estimator``
+   * - Git commit
+     - ``df37f44`` (``Refine standing recovery validation``)
+   * - Isaac Lab run
+     - ``2026-08-21_02-28-25_concurrent_estimator_stand005_fresh25k``
+   * - Checkpoint
+     - ``model_24999.pt``
+   * - 외부 policy input
+     - noisy normalized observation ``[1,240]``
+   * - ONNX outputs
+     - ``actions [1,13]``, ``estimated_base_lin_vel_b [1,3]``
+   * - Isaac Sim 확인
+     - Gamepad Teleop, stable standing, 방향별 보행, 급정지, manual push recovery, 실제/추정 속도 화살표
+   * - MuJoCo 확인
+     - 같은 240D 입력과 fused ONNX 두 output으로 Sim2Sim 보행 및 제어 동작 완료
+
+MuJoCo에서는 ``actions`` 만 actuator command로 적용하고 ``estimated_base_lin_vel_b`` 는 진단값으로 분리해
+읽었다. 기존 240D deployment observation 계약을 바꾸지 않았으며, estimator output을 추가해도 action output
+경로가 유지되는 것을 확인했다. Isaac Sim Teleop에서 확인한 방향별 보행, 양발 정지, 급정지 및 외란 복구
+전략도 MuJoCo에서 사용할 수 있는 상태다.
+
+이 결과로 concurrent estimator의 첫 Isaac Sim + MuJoCo Sim2Sim baseline 검증은 완료되었다. 다만 이는
+실제 로봇에서 추정 속도의 정확도를 증명한 결과는 아니다. Sim2Real에서는 estimator output과 motion capture,
+VIO 또는 별도 reference estimator를 timestamp 정렬해 RMSE를 측정해야 한다. 따라서 현재 checkpoint는
+보존하고 이후 estimator delay/noise, 강한 push 및 급정지 실험은 별도 commit 또는 branch에서 진행한다.
 
 후속 단계
 --------------------------------------------------------------------------------

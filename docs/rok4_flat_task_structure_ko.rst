@@ -2,7 +2,7 @@ RoK4 Flat RSL-RL Task 구조 문서
 ========================================================================
 
 :작성일: 2026-07-15
-:최종 업데이트: 2026-08-21
+:최종 업데이트: 2026-08-24
 :대상 저장소: RoK4 repository root (``${ROK4_LAB_ROOT}``)
 :기준 환경: Isaac Lab v2.3.2, Isaac Sim 5.1.0, ``env_isaaclab``
 
@@ -993,6 +993,13 @@ Contact Forces debug visualization도 그대로 사용할 수 있다.
 air time을 유지했다. Log/checkpoint는 Isaac Lab log directory에 보존하고 Git에는 코드와 설정만 기록한다.
 기존 Gym 호환 continuous ``feet_contact_velocity_l2`` 함수는 비교용으로
 남아 있지만 Reward Manager term은 ``None`` 이다.
+
+Concurrent estimator를 포함한 최신 MuJoCo Sim2Sim 기준은 commit ``df37f44`` 의
+``2026-08-21_02-28-25_concurrent_estimator_stand005_fresh25k/model_24999.pt`` 이다. 이 checkpoint는 외부
+240D observation 계약을 유지하면서 ONNX에서 ``actions [1,13]`` 와
+``estimated_base_lin_vel_b [1,3]`` 를 분리해 출력한다. Isaac Sim Teleop과 MuJoCo Sim2Sim에서 방향별 보행,
+양발 정지, 급정지 및 push recovery 동작을 확인했다. 상세한 estimator graph, supervised MSE 학습, export 및
+검증 경계는 ``rok4_concurrent_state_estimator_ko.rst`` 를 기준으로 한다.
 
 두 활성 stateful term은 각각 air time과 착지 직전 속도의 episode 합과 touchdown 횟수를 GPU tensor로
 누적하고 environment reset 시 다음

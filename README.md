@@ -20,6 +20,13 @@ named outputs: the 13-value actuator action and the 3-value body-frame velocity 
 action. Sim2Sim and Sim2Real consumers should read both outputs, apply only `actions` to the actuators, and log
 `estimated_base_lin_vel_b` for estimator validation.
 
+The current concurrent-estimator Sim2Sim reference is run
+`2026-08-21_02-28-25_concurrent_estimator_stand005_fresh25k`, checkpoint `model_24999.pt`, built from commit
+`df37f44`. Isaac Sim Teleop and MuJoCo Sim2Sim validation confirmed that the fused ONNX interface preserves the
+directional gait, stable standing, rapid stopping, and push-recovery behavior while exposing the velocity estimate.
+This is the deployment baseline for subsequent estimator Sim2Real validation; it is not yet a quantitative
+Sim2Real estimator-accuracy result.
+
 Previous joint-space reference policy: run `2026-07-15_17-28-41`, checkpoint `model_4999.pt`
 
 RoK4 Lab contains lightweight Isaac Lab scripts and RoK4 asset configuration code used to validate the RoK4 whole-body robot model before building reinforcement-learning tasks.
