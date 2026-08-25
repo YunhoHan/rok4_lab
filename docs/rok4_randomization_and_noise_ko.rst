@@ -45,7 +45,7 @@ root를 뜻한다. 저장소를 설치한 실제 위치에 맞춰 한 번만 설
 개요
 --------------------------------------------
 
-RoK4의 robustness 설정은 서로 목적과 적용 시점이 다른 세 층으로 나뉜다.
+RoK4의 robustness 설정은 서로 목적과 적용 시점이 다른 네 층으로 나뉜다.
 
 .. list-table::
    :header-rows: 1
@@ -67,7 +67,7 @@ RoK4의 robustness 설정은 서로 목적과 적용 시점이 다른 세 층으
      - 현재 대부분 scene startup
      - 아니요
    * - Training push
-     - root XY velocity
+     - base-yaw root XY velocity 또는 finite-duration base force
      - 환경별 ``10~15 s`` interval
      - 예
 
@@ -273,9 +273,21 @@ Mass와 COM
 Training push와 external wrench
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-상속한 ``push_robot`` interval event는 environment별 독립 timer를 사용한다. ``10~15 s`` 후 root world-frame
-XY velocity를 각각 ``Uniform(-0.5,0.5) m/s`` 로 바꾸고 다음 interval을 다시 표본화한다. 이 event는 지속적인
-force가 아니라 순간적인 root velocity disturbance다.
+RoK4-local ``RoK4MixedPush`` 는 environment별 독립 timer를 사용한다. ``10~15 s`` 후 base-yaw frame에서
+``Delta vx,b=Uniform(-0.5,1.0) m/s``, ``Delta vy,b=Uniform(-0.5,0.5) m/s`` 를 표본화하고 event 시작 시점의 yaw로
+world frame에 회전한다. 각 event는 확률 0.5로 다음 중 정확히 하나만 적용한다.
+
+* 현재 root velocity에 ``Delta v_w`` 를 즉시 더하는 velocity push
+* ``T=0.05~0.50 s`` 동안 ``F_w=m_robot*Delta v_w/T`` 를 적용하는 force pulse
+
+Force duration은 policy period ``0.01 s`` 의 정수배로 표본화하고 종료 시 force를 0으로 명시적으로 지운다.
+``m_robot`` 은 startup mass DR 이후 환경별 실제 total mass다. 두 mode의 nominal impulse는
+``J=m_robot*Delta v_w`` 로 같지만, force mode에서는 pulse 도중 접촉과 policy가 반응하므로 실제 최종 속도 변화가
+목표 ``Delta v`` 와 달라질 수 있다. X 범위의 평균은 ``+0.25 m/s`` 이므로 전방 recovery를 의도적으로 더 강하게
+노출하는 실험이며 zero-mean 외란이 아니다.
+
+좌표계, 전후 비대칭 근거, nominal 65 kg force 예시와 검증 기준은
+``docs/rok4_disturbance_and_recovery_ko.rst`` 를 기준으로 한다.
 
 ``base_external_force_torque`` reset event는 남아 있지만 현재 force와 torque 범위가 모두 0이므로 실제 외력을
 추가하지 않는다.
@@ -336,7 +348,7 @@ Episode timer, velocity-command freeze timer, training-push timer는 서로 다�
      - command term의 환경별 phase
      - 환경별 새 phase/duration 표본화
    * - Training push
-     - event manager의 환경별 ``10~15 s`` time-left
+     - stateful mixed-push term의 환경별 ``10~15 s`` time-left와 active-force time-left
      - 다음 interval 표본화
 
 따라서 어떤 environment는 걷는 중에 push를 받고, 다른 environment는 standing 전환 직전이나 직후에 push를

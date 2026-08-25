@@ -7,6 +7,7 @@ from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import SceneEntityCfg
 
 from rok4_tasks.manager_based.locomotion.velocity.mdp.events import (
+    RoK4MixedPush,
     randomize_rigid_body_material_correlated,
     reset_joints_by_position_scale_and_velocity,
 )
@@ -81,6 +82,15 @@ ROK4_RESET_BASE_VELOCITY_RANGE = {
     "pitch": (0.0, 0.0),
     "yaw": (-0.1, 0.1),
 }
+
+# Interval disturbances are sampled in the robot's base-yaw frame. Positive X receives a larger range because
+# RoK4's support polygon extends farther in front of the ankle than behind it. Each event is either an immediate
+# root-velocity change or an impulse-equivalent finite-duration force pulse, never both.
+ROK4_PUSH_INTERVAL_RANGE_S = (10.0, 15.0)
+ROK4_PUSH_DELTA_VELOCITY_X_RANGE = (-0.5, 1.0)
+ROK4_PUSH_DELTA_VELOCITY_Y_RANGE = (-0.5, 0.5)
+ROK4_PUSH_VELOCITY_PROBABILITY = 0.5
+ROK4_PUSH_FORCE_DURATION_RANGE_S = (0.05, 0.50)
 
 
 def _configure_mass_randomization(
@@ -184,3 +194,20 @@ def apply_rok4_domain_randomization(env_cfg) -> None:
         "pose_range": dict(ROK4_RESET_BASE_POSE_RANGE),
         "velocity_range": dict(ROK4_RESET_BASE_VELOCITY_RANGE),
     }
+
+    # Mixed recovery disturbance: the EventManager invokes this stateful term every policy step so it can stop a
+    # force pulse exactly on a policy-step boundary. The term itself preserves the original 10--15 s push cadence.
+    policy_dt = env_cfg.sim.dt * env_cfg.decimation
+    env_cfg.events.push_robot = EventTerm(
+        func=RoK4MixedPush,
+        mode="interval",
+        interval_range_s=(policy_dt, policy_dt),
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=list(ROK4_BASE_BODY_NAMES)),
+            "push_interval_range_s": ROK4_PUSH_INTERVAL_RANGE_S,
+            "delta_velocity_x_range": ROK4_PUSH_DELTA_VELOCITY_X_RANGE,
+            "delta_velocity_y_range": ROK4_PUSH_DELTA_VELOCITY_Y_RANGE,
+            "velocity_push_probability": ROK4_PUSH_VELOCITY_PROBABILITY,
+            "force_duration_range_s": ROK4_PUSH_FORCE_DURATION_RANGE_S,
+        },
+    )

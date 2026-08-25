@@ -116,6 +116,7 @@ Project notes are kept in `docs/` as editable RST/HTML files and generated PDFs:
 | `docs/_build/pdf/rok4_adapt_control_structure_ko.pdf` | ADAPT matrices, action/actuator object relationships, target/state origins, explicit PD call flow, and torque limits. |
 | `docs/_build/pdf/rok4_randomization_and_noise_ko.pdf` | Observation noise, reset randomization, physics DR, sampling cadence, and Train/Play/Teleop differences. |
 | `docs/_build/pdf/rok4_concurrent_state_estimator_ko.pdf` | Concurrent 225D-to-3D base-velocity estimator, PPO gradient separation, symmetry, checkpoints, and the fused two-output ONNX contract. |
+| `docs/_build/pdf/rok4_disturbance_and_recovery_ko.pdf` | Base-yaw mixed velocity/force disturbances, impulse equivalence, directional asymmetry, timers, and recovery validation. |
 
 The development branches intentionally remain independent:
 
@@ -127,6 +128,7 @@ The development branches intentionally remain independent:
 | `yunho/directional-gait-rework` | Touchdown air-time and directional command-role baseline described here. |
 | `yunho/privileged-observation` | Clean critic history, current privileged foot state, and height/clearance reward experiment. |
 | `yunho/concurrent-state-estimator` | Concurrent command-free base-velocity estimator while retaining the 240D deployment input and 250D critic. |
+| `yunho/mixed-push-disturbance` | Estimator baseline plus base-yaw velocity/force recovery disturbances. |
 
 Documentation updates on one branch do not imply merging or moving the other branch pointers.
 
@@ -466,9 +468,10 @@ ONNX/TorchScript policy is called outside Isaac Lab train/play, clamp the policy
 
 The action smoothness rewards use clipped raw policy-action differences, matching the G1 first-order convention.
 `action_rate_l2` and `second_action_rate_l2` use weights `-0.01` and `-0.005`, retaining the previous Gym first-to-second
-order ratio. The command-role ratios use the validated `mixed=0.35` and `standing=0.05` split. The current controlled
-ablation changes only the exact-zero standing default-pose penalty from `-0.2` to `-0.05`. Action scaling remains
-part of actuator-target generation but is not applied by either smoothness reward. Hip-pitch and knee action indices
+order ratio. The command-role ratios use the validated `mixed=0.35` and `standing=0.05` split. The exact-zero standing
+default-pose penalty uses the validated mixed-push value `-0.05`. A controlled `-0.01` ablation produced standing
+stepping, larger action/torque costs, and higher peak contact force, so it was rejected. Action scaling remains part
+of actuator-target generation but is not applied by either smoothness reward. Hip-pitch and knee action indices
 `[2, 3, 8, 9]` retain the RoK4-specific `0.5` squared-error multiplier.
 
 The reward functions do not clamp actions internally. In the standard RoK4 RSL-RL train/play path,
@@ -558,8 +561,8 @@ The `mixed`, `x`, `fast_forward`, `y`, `yaw`, and `x_yaw` roles use independent 
 while `standing` remains zero and `walking` never freezes. A normal `10 s` command resampling retains the episode
 role and samples a new command within that role; the next environment reset samples a new role. Exact-zero commands
 set the command term's standing mask and activate `stand_still_joint_deviation_l1` with weight `-0.05`. This weak
-13-joint default-pose bias targets stable two-foot standing while leaving more recovery freedom than the validated
-`-0.2` baseline. `rel_standing_envs` is disabled to avoid duplicate standing assignment, and the episode-role scheduler
+13-joint default-pose bias targets stable two-foot standing while retaining recovery freedom. `rel_standing_envs` is
+disabled to avoid duplicate standing assignment, and the episode-role scheduler
 is disabled in Play and Teleop configurations.
 
 ### Episode, Freeze, and Push Timers
@@ -575,11 +578,16 @@ The periodic-freeze schedule is a separate per-environment clock. Every episode 
 from `[0, 10) s` and a freeze duration from `[1.5, 3.0] s`. Consequently, a reset environment does not always wait ten
 seconds before stopping and may begin inside a freeze window. Eligible command roles repeat this cycle every `10 s`.
 
-The inherited training push is a third independent per-environment timer. On every episode reset it samples the next
-push from `[10, 15] s`; the push adds world-frame root `vx` and `vy` in `[-0.5, 0.5] m/s`. A full `20 s` episode normally
-contains one push, while an environment that terminates before `10 s` may receive none. Because the push timer and
-freeze phase are sampled independently, a push can occur while moving, during exact-zero standing, or around a command
-transition. Play and Teleop disable this automatic push event and provide the manual `RoK4 Push Test` UI instead.
+The RoK4-local training push is a third independent per-environment timer. On every episode reset it samples the next
+push from `[10, 15] s`. Each event samples a base-yaw-frame velocity candidate with
+`delta_vx in [-0.5, 1.0] m/s` and `delta_vy in [-0.5, 0.5] m/s`. With probability `0.5` it adds that vector directly
+to root velocity; otherwise it applies the impulse-equivalent force `F=m*delta_v/T` for a quantized
+`T in [0.05,0.50] s`. The two modes are exclusive, so the push count is unchanged. The larger positive-X range is an
+intentional first experiment for RoK4's longer front support margin and has a `+0.25 m/s` longitudinal sampling mean.
+A full `20 s` episode normally contains one disturbance, while an environment that terminates before `10 s` may
+receive none. Push and freeze phases are independent. Play and Teleop disable automatic disturbance events and keep
+the manual base-yaw instantaneous `RoK4 Push Test` UI. See `rok4_disturbance_and_recovery_ko.pdf` for equations,
+force magnitudes, and validation boundaries.
 
 The RoK4-local touchdown feet-air-time reward uses `target_air_time=0.50 s` and `weight=2.0`. It reads each foot's
 completed `last_air_time` only when exactly one foot reports first contact and pays `T - 0.50` once on that touchdown
@@ -703,7 +711,7 @@ source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/mdp/
   __init__.py                     Re-exports Isaac Lab locomotion mdp plus RoK4 local mdp
   actions.py                      Converts raw actuator actions to mapped joint targets
   commands.py                     Adds role-based command sampling and asynchronous standing windows
-  events.py                       Owns correlated foot-friction and randomized joint-reset events
+  events.py                       Owns mixed push, correlated foot-friction, and randomized joint-reset events
   observations.py                 Converts joint state to actuator-space observations
   rewards.py                      Owns actuator-space reward calculations and action smoothness terms
 ```
@@ -729,7 +737,7 @@ Current DR groups:
 | Reset joint pose | `reset` | each environment/joint independently scales its default position by `0.9-1.1`; a zero default remains zero |
 | Reset joint velocity | `reset` | each environment/joint independently samples `U(-0.1,0.1) rad/s` |
 | Reset base pose/velocity | `reset` | mild x/y/yaw pose and velocity perturbation |
-| Root XY velocity push | `interval` | per-environment `[10,15] s` timer; adds world-frame x/y velocity in `[-0.5,0.5] m/s` |
+| Mixed base-yaw push | `interval` | per-environment `[10,15] s`; 50% additive velocity, 50% `F=m*delta_v/T` force pulse; x `[-0.5,1.0]`, y `[-0.5,0.5] m/s`, `T=[0.05,0.50] s` |
 
 The G1/Digit-style nominal robot material is static friction `0.8` and dynamic friction `0.6` for every collision
 shape. The Foot override range is active only in the training task. Play and Teleop also fix the Foot shapes at

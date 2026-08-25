@@ -4,9 +4,12 @@
 
 ### Changed
 
-- Reduced the exact-zero standing full-body default-pose penalty from `-0.2` to `-0.05`. This controlled ablation
-  retains a weak bias toward stable two-foot standing while giving disturbance and rapid-stop recovery steps more
-  freedom than the validated baseline.
+- Replaced the automatic world-frame velocity-only push with an environment-local mixed disturbance. Each event uses
+  the robot's base-yaw frame and exclusively selects either an instantaneous velocity change or an impulse-equivalent
+  finite-duration force pulse, while retaining independent 10-15 s push timers.
+- Restored the exact-zero standing full-body default-pose penalty to the validated mixed-push value `-0.05`. A
+  controlled `-0.01` ablation produced standing stepping, larger action and torque costs, and higher peak contact
+  force; `-0.05` retains stable two-foot standing while preserving disturbance-recovery steps.
 - Added `Window > IsaacLab` recovery for the local environment panel, re-docked the panel into the right-side
   `Property` tab whenever it is shown, and changed manual push buttons from world X/Y to the robot's current
   base-yaw frame while retaining a horizontal world-frame velocity update at the policy-step boundary.

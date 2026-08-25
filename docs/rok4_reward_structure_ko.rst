@@ -52,6 +52,8 @@ noise를 조정하기 전의 비교 기준이며, 이후 실험에서도 보존�
 
 Observation noise, reset state randomization, physics DR의 상세 범위와 적용 주기는
 ``docs/rok4_randomization_and_noise_ko.rst`` 를 기준 문서로 사용한다.
+자동 velocity/force 외란의 좌표계, impulse와 recovery 검증은
+``docs/rok4_disturbance_and_recovery_ko.rst`` 를 기준 문서로 사용한다.
 
 관련 파일
 -------------------------------------------------
@@ -706,18 +708,20 @@ phase를 다시 시작한다. 예를 들어 global time ``3 s`` 에 reset된 환
 timeout된다. 초기에는 episode counter가 같지만 early reset이 누적되면서 환경별 episode phase가 자연스럽게
 달라진다.
 
-부모 task에서 상속한 training ``push_robot`` 은 freeze와 다른 환경별 ``interval`` timer다. Reset마다 다음
-push 시간을 ``Uniform(10, 15) s`` 로 표본화하고, world-frame root x/y velocity에 각각 ``-0.5~0.5 m/s`` 를
-추가한다. 따라서 push는 이동 command 중에도, exact-zero freeze 중에도, 전환 부근에도 발생할 수 있다. Freeze
-중 push가 들어와도 command와 ``is_standing_env`` 는 zero/true로 유지되므로 dense velocity-tracking reward와
-약한 ``stand_still_joint_deviation_l1=-0.05`` 가 함께 복구를 평가한다. 이 standing 자세 항은 검증 기준
-``-0.2`` 보다 약해 필요한 recovery step의 비용을 줄인다. Contact reward와 ``no_jumps`` 는 같은 구간의 실제
-발 접촉 상태를 그대로 평가한다. Play/Teleop에서는 자동 interval event를 끄고 수동 Push Test UI를 사용한다.
+RoK4-local training ``RoK4MixedPush`` 는 freeze와 다른 환경별 timer다. Reset마다 다음 event를
+``Uniform(10, 15) s`` 에서 표본화한다. Base-yaw ``Delta vx`` 는 ``-0.5~1.0 m/s``, ``Delta vy`` 는
+``-0.5~0.5 m/s`` 이며, event의 50%는 root velocity에 즉시 더하고 50%는 ``0.05~0.50 s`` 동안
+``F=m*Delta v/T`` force pulse로 적용한다. 따라서 외란은 이동 command 중에도, exact-zero freeze 중에도, 전환
+부근에도 발생할 수 있다. Freeze 중 외란이 들어와도 command와 ``is_standing_env`` 는 zero/true로 유지되므로
+dense velocity-tracking reward와 약한 ``stand_still_joint_deviation_l1=-0.05`` 가 함께 복구를 평가한다.
+``-0.01`` 후속 실험은 standing stepping과 동작 비용을 증가시켜 채택하지 않았다. Contact reward와
+``no_jumps`` 는 같은 구간의 실제 발 접촉 상태를 그대로 평가한다. Play/Teleop에서는 자동 event를 끄고 수동
+velocity Push Test UI를 사용한다.
 
 Periodic freeze와 ``standing`` 역할은 command를 ``[0, 0, 0]`` 으로 만드는 동시에 ``is_standing_env=True`` 를
 설정한다. 이 mask는 feet-air-time과 clearance 같은 standing-aware gait term 및
-``stand_still_joint_deviation_l1`` 에 사용한다. 현재 standing weight ``-0.05`` 는 이전 ``-1.0`` 및 검증 기준
-``-0.2`` 보다 약하다. Dense velocity/upright/base-height/smoothness reward가 주된 복구 목적을 담당하고,
+``stand_still_joint_deviation_l1`` 에 사용한다. 현재 standing weight ``-0.05`` 는 이전 ``-1.0`` 및 ``-0.2``
+보다 약하다. Dense velocity/upright/base-height/smoothness reward가 주된 복구 목적을 담당하고,
 이 항은 exact-zero에서 default pose로 향하는 약한 편향만 제공한다.
 
 이 command는 ``track_lin_vel_xy_exp``, ``track_ang_vel_z_exp``, ``feet_air_time`` 에 직접 영향을 준다. 특히

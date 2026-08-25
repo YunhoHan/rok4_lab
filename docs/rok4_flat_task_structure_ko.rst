@@ -49,6 +49,9 @@ ADAPT 행렬, ``actions.py`` 와 actuator의 객체 관계, ``compute()`` 입력
 Observation noise, reset state randomization, physics DR의 정확한 범위와 표본화 시점, Train/Play/Teleop 차이는
 ``docs/rok4_randomization_and_noise_ko.rst`` 와 생성된
 ``docs/_build/pdf/rok4_randomization_and_noise_ko.pdf`` 를 기준 문서로 사용한다.
+혼합 velocity/force 외란의 좌표계, impulse 등가성, 전후 비대칭과 recovery 검증은
+``docs/rok4_disturbance_and_recovery_ko.rst`` 와 생성된
+``docs/_build/pdf/rok4_disturbance_and_recovery_ko.pdf`` 를 기준 문서로 사용한다.
 
 Concurrent body-frame base-velocity estimator의 225D 입력, 3D target, PPO gradient 분리, RMSE logging,
 checkpoint와 fused 240D ONNX export는 ``docs/rok4_concurrent_state_estimator_ko.rst`` 와 생성된
@@ -99,7 +102,7 @@ checkpoint 호환성이 없다.
                  mdp/
                    actions.py           # actuator action -> mapped joint target
                    commands.py          # episode role과 비동기 exact-zero 정지 command
-                   events.py            # correlated foot friction과 joint reset DR
+                   events.py            # mixed push, correlated foot friction, joint reset DR
                    observations.py      # joint state -> actuator state
                    rewards.py           # RoK4 actuator-space reward 계산
                    symmetry.py          # 좌우 observation/action data augmentation
@@ -587,7 +590,7 @@ default state를 뺀 뒤 actuator 좌표로 변환한다. Position은 gait-ready
      - RoK4 scene, terrain, action, observation, reward, command, termination 설정
    * - ``domain_randomization_cfg.py``
      - DR config
-     - RoK4 foot material, base mass, COM, external wrench, reset randomization 범위와 event mode 설정
+     - RoK4 foot material, base mass, COM, mixed push, external wrench, reset randomization 범위와 event mode 설정
    * - ``contact_force_visualizer.py``
      - ``ContactSensor`` 확장
      - env-0 좌우 발의 world-frame GRF vector를 화살표로 그리고 force magnitude를 확대된 숫자와 simulation-time X축 live plot으로 표시
@@ -600,6 +603,9 @@ default state를 뺀 뒤 actuator 좌표로 변환한다. Position은 gait-ready
    * - ``mdp/commands.py``
      - RoK4 command 계산
      - 90/5/5 episode role과 환경별 비동기 정지 구간을 uniform command에 추가
+   * - ``mdp/events.py``
+     - RoK4 event 계산
+     - base-yaw velocity/force 혼합 외란, correlated Foot material, joint reset event 구현
    * - ``mdp/observations.py``
      - RoK4 observation 계산
      - articulation joint position/velocity를 actuator position/velocity로 변환
@@ -801,9 +807,9 @@ action이라는 점이다. motor target만 scale, default actuator pose, ADAPT m
 
 ``action_rate_l2`` 와 ``second_action_rate_l2`` reward는 observation의 ``last_action`` 과 같은
 ``clipped_raw_action`` 좌표에서 각각 1차와 2차 차분을 계산하고 weight ``-0.01``, ``-0.005`` 를 사용한다.
-Command role 비율도 검증 기준인 ``mixed=0.35``, ``standing=0.05`` 를 유지한다. 현재 실험은 두 smoothness
-가중치와 환경 비율을 고정하고 exact-zero standing default-pose weight만 ``-0.2`` 에서 ``-0.05`` 로 낮춘
-단일 변수 비교다.
+Command role 비율도 검증 기준인 ``mixed=0.35``, ``standing=0.05`` 를 유지한다. Exact-zero standing
+default-pose weight는 mixed-push 검증값 ``-0.05`` 를 사용한다. 다른 설정을 고정하고 ``-0.01`` 로 낮춘 후속
+실험에서는 제자리 stepping, action/torque 비용 증가, peak contact force 증가가 확인되어 채택하지 않았다.
 Reward 함수 자체는 clamp하지 않지만 RoK4 RSL-RL runner의 ``clip_actions=1.0`` 이 ActionManager 이전에
 정책 출력을 제한한다. Action scale은 actuator target 생성에만
 사용하며 두 smoothness reward에는 적용하지 않는다. 다만 Hip Pitch/Knee action index ``2,3,8,9`` 는 RoK4의
@@ -887,8 +893,8 @@ Exact-zero command는 periodic freeze window와 ``standing`` 역할에서 생성
 
 모든 exact-zero standing에서 weight ``-0.05`` 인 ``stand_still_joint_deviation_l1`` 이 command term의
 ``is_standing_env`` mask를 사용하여 전체 13관절의 실제 joint position을 default joint pose 근처로 유도한다.
-이는 검증 기준 ``-0.2`` 의 25% 강도다. 양발 standing 편향은 남기되 외란이나 급정지 중 recovery step과의
-경쟁을 줄이는 단일 변수 실험이며, 작은 non-zero 이동 command에는 적용하지 않는다.
+이는 이전 ``-0.2`` 설정의 25% 강도다. 양발 standing 편향은 남기되 외란이나 급정지 중 recovery step과의
+경쟁을 줄이며, 작은 non-zero 이동 command에는 적용하지 않는다.
 
 Episode timeout, periodic freeze, push timer 관계
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -913,7 +919,7 @@ Episode timeout, periodic freeze, push timer 관계
    * - Training push time-left
      - 환경별
      - ``Uniform(10, 15) s`` 로 다음 push 시간 표본화
-     - world-frame ``vx/vy`` 에 각각 ``Uniform(-0.5, 0.5) m/s`` 추가
+     - base-yaw ``Delta vx in [-0.5,1.0]``, ``Delta vy in [-0.5,0.5] m/s``; velocity/force mode 50:50
 
 Episode timeout은 ``ManagerBasedRLEnv`` 의 ``episode_length_buf`` 로 환경마다 관리한다. 학습 시작 직후에는
 모든 환경이 episode step 0에서 출발하므로, early termination이 전혀 없는 환경들은 global simulation time
@@ -928,12 +934,18 @@ Periodic freeze는 episode elapsed time과 별도인 command-term phase다. 해�
 상태일 수도 있다. Phase가 10초를 넘으면 0으로 wrap하고 새 duration을 표본화한다. Freeze를 빠져나오는 순간에는
 현재 episode role을 유지한 채 새 이동 command를 표본화한다.
 
-Training ``push_robot`` 은 Isaac Lab 부모 locomotion task에서 상속한 ``interval`` event다.
-``is_global_time=False`` 이므로 모든 환경에 동시에 push하는 global timer가 아니라 각 환경이 별도의 time-left를
-갖는다. Reset마다 그 환경의 다음 push 시간이 ``10~15 s`` 로 다시 표본화되고, push가 발생한 뒤에도 같은 범위로
-다음 interval을 뽑는다. Timeout이 ``20 s`` 이므로 끝까지 생존한 episode에는 보통 후반부에 push 한 번이 들어가고,
-10초 전에 종료된 episode에는 push가 없을 수 있다. 첫 push 뒤 다음 push까지 최소 10초가 필요하므로 정상적인
-20초 episode 안에서 두 번째 push가 발생하는 경우는 사실상 없다.
+Training ``push_robot`` 은 RoK4-local stateful ``RoK4MixedPush`` interval event다. EventManager는 force pulse의
+종료를 관리할 수 있도록 term을 policy period ``0.01 s`` 마다 호출하고, term 내부에서 각 환경의 실제 다음 push
+time-left를 별도로 관리한다. Reset마다 다음 push 시간을 ``10~15 s`` 로 다시 표본화하고 push 뒤에도 같은 범위를
+다시 뽑는다. Timeout이 ``20 s`` 이므로 끝까지 생존한 episode에는 보통 후반부에 push 한 번이 들어가고, 10초 전에
+종료된 episode에는 push가 없을 수 있다.
+
+Push event는 base-yaw frame에서 ``Delta vx in [-0.5,1.0]``, ``Delta vy in [-0.5,0.5] m/s`` 를 표본화한다.
+확률 0.5는 현재 root velocity에 회전된 값을 즉시 더하고, 나머지 0.5는 ``0.05~0.50 s`` 동안
+``F=m*Delta v/T`` 인 world-frame force를 ``Base_Link`` 에 적용한다. 두 mode는 exclusive라 event 수가 두 배가
+되지 않는다. Force duration은 10 ms 정수배이며 종료와 reset에서 0 N으로 해제된다. X 범위의 평균은
+``+0.25 m/s`` 로 전방 recovery를 더 강하게 노출하는 실험값이다. 전체 수식과 force 크기는
+``rok4_disturbance_and_recovery_ko.rst`` 에 정리한다.
 
 Freeze phase와 push time-left는 서로 독립적으로 표본화된다. 따라서 push는 이동 command 중, exact-zero freeze
 중, 또는 freeze 진입/종료 부근 어느 시점에도 들어올 수 있다. 이 조합 덕분에 policy는 같은 외란을 다양한 command
@@ -1147,9 +1159,9 @@ Baseline commit ``d949d40`` 이후 변경 범위는 다음과 같다.
    * - Reset base pose/velocity
      - ``reset``
      - episode reset마다 base x/y/yaw pose와 base velocity를 약하게 randomize
-   * - Root XY velocity push
+   * - Mixed base-yaw push
      - ``interval``
-     - 환경별 ``10~15 s`` timer로 world-frame root x/y velocity에 각각 ``-0.5~0.5 m/s`` 를 추가
+     - 환경별 ``10~15 s`` timer로 base-yaw ``Delta v`` 를 표본화하고 50% additive velocity, 50% finite force pulse 적용
 
 ``startup`` DR은 scene 생성 시 각 environment에 대해 한 번 샘플링된다. ``reset`` DR은 해당 environment의
 episode reset마다 다시 샘플링된다. ``interval`` event는 환경별 남은 시간을 가지며 reset 때 timer도 다시
@@ -1509,8 +1521,9 @@ root quaternion에서 yaw만 취한 ``R_wb,yaw`` 로
 아니라, 충격 외란과 비슷한 순간 root 속도 변화다. velocity command 자체는 바꾸지 않는다.
 
 Play가 여러 환경을 사용할 때는 ``Viewer Settings > Environment Index`` 로 선택한 환경 하나에만 적용한다.
-Teleop은 env가 하나이므로 항상 env 0이다. 학습 중 부모 ``push_robot`` event는 각 환경에 10-15초 간격으로
-독립적인 X/Y 속도 외란을 자동 적용하지만, Play/Teleop에서는 자동 event를 끄고 이 수동 버튼만 사용한다.
+Teleop은 env가 하나이므로 항상 env 0이다. 학습 중 RoK4 ``RoK4MixedPush`` event는 각 환경에 10-15초 간격으로
+독립적인 velocity/force 외란을 자동 적용하지만, Play/Teleop에서는 자동 event를 끄고 이 수동 velocity 버튼만
+사용한다.
 버튼 UI는 GUI가 있는 local ``play.py`` 및 ``play_teleop.py`` wrapper에서만 동작하며 headless 학습에는
 생성되지 않는다. Isaac Lab 원본 파일은 수정하지 않는다.
 

@@ -871,7 +871,7 @@ root를 뜻한다. 저장소를 설치한 실제 위치에 맞춰 한 번만 설
 </section>
 <section id="id2">
 <h2>개요</h2>
-<p>RoK4의 robustness 설정은 서로 목적과 적용 시점이 다른 세 층으로 나뉜다.</p>
+<p>RoK4의 robustness 설정은 서로 목적과 적용 시점이 다른 네 층으로 나뉜다.</p>
 <table>
 <colgroup>
 <col style="width: 25%" />
@@ -903,7 +903,7 @@ root를 뜻한다. 저장소를 설치한 실제 위치에 맞춰 한 번만 설
 <td><p>아니요</p></td>
 </tr>
 <tr><td><p>Training push</p></td>
-<td><p>root XY velocity</p></td>
+<td><p>base-yaw root XY velocity 또는 finite-duration base force</p></td>
 <td><p>환경별 <span class="docutils literal">10~15 s</span> interval</p></td>
 <td><p>예</p></td>
 </tr>
@@ -1247,9 +1247,20 @@ property는 multiplicative scale을 적용해도 0으로 유지된다. 이 event
 </section>
 <section id="training-push-external-wrench">
 <h3>Training push와 external wrench</h3>
-<p>상속한 <span class="docutils literal">push_robot</span> interval event는 environment별 독립 timer를 사용한다. <span class="docutils literal">10~15 s</span> 후 root world-frame
-XY velocity를 각각 <span class="docutils literal"><span class="pre">Uniform(-0.5,0.5)</span> m/s</span> 로 바꾸고 다음 interval을 다시 표본화한다. 이 event는 지속적인
-force가 아니라 순간적인 root velocity disturbance다.</p>
+<p>RoK4-local <span class="docutils literal">RoK4MixedPush</span> 는 environment별 독립 timer를 사용한다. <span class="docutils literal">10~15 s</span> 후 base-yaw frame에서
+<span class="docutils literal">Delta <span class="pre">vx,b=Uniform(-0.5,1.0)</span> m/s</span>, <span class="docutils literal">Delta <span class="pre">vy,b=Uniform(-0.5,0.5)</span> m/s</span> 를 표본화하고 event 시작 시점의 yaw로
+world frame에 회전한다. 각 event는 확률 0.5로 다음 중 정확히 하나만 적용한다.</p>
+<ul class="simple">
+<li><p>현재 root velocity에 <span class="docutils literal">Delta v_w</span> 를 즉시 더하는 velocity push</p></li>
+<li><p><span class="docutils literal">T=0.05~0.50 s</span> 동안 <span class="docutils literal">F_w=m_robot*Delta v_w/T</span> 를 적용하는 force pulse</p></li>
+</ul>
+<p>Force duration은 policy period <span class="docutils literal">0.01 s</span> 의 정수배로 표본화하고 종료 시 force를 0으로 명시적으로 지운다.
+<span class="docutils literal">m_robot</span> 은 startup mass DR 이후 환경별 실제 total mass다. 두 mode의 nominal impulse는
+<span class="docutils literal">J=m_robot*Delta v_w</span> 로 같지만, force mode에서는 pulse 도중 접촉과 policy가 반응하므로 실제 최종 속도 변화가
+목표 <span class="docutils literal">Delta v</span> 와 달라질 수 있다. X 범위의 평균은 <span class="docutils literal">+0.25 m/s</span> 이므로 전방 recovery를 의도적으로 더 강하게
+노출하는 실험이며 zero-mean 외란이 아니다.</p>
+<p>좌표계, 전후 비대칭 근거, nominal 65 kg force 예시와 검증 기준은
+<span class="docutils literal">docs/rok4_disturbance_and_recovery_ko.rst</span> 를 기준으로 한다.</p>
 <p><span class="docutils literal">base_external_force_torque</span> reset event는 남아 있지만 현재 force와 torque 범위가 모두 0이므로 실제 외력을
 추가하지 않는다.</p>
 </section>
@@ -1332,7 +1343,7 @@ deterministic evaluation이 필요하면 이 표의 남은 startup/reset event�
 <td><p>환경별 새 phase/duration 표본화</p></td>
 </tr>
 <tr><td><p>Training push</p></td>
-<td><p>event manager의 환경별 <span class="docutils literal">10~15 s</span> time-left</p></td>
+<td><p>stateful mixed-push term의 환경별 <span class="docutils literal">10~15 s</span> time-left와 active-force time-left</p></td>
 <td><p>다음 interval 표본화</p></td>
 </tr>
 </tbody>

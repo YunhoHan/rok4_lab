@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+<title>RoK4 혼합 외란과 Recovery 학습 문서</title>
+<style type="text/css">
+
+/* Minimal style sheet for the HTML output of Docutils.                    */
+/*                                                                         */
+/* :Author: Günter Milde, based on html4css1.css by David Goodger          */
+/* :Id: $Id: minimal.css 8642 2021-03-26 13:51:14Z milde $               */
+/* :Copyright: © 2015 Günter Milde.                                        */
+/* :License: Released under the terms of the `2-Clause BSD license`_,      */
+/*    in short:                                                            */
+/*                                                                         */
+/*    Copying and distribution of this file, with or without modification, */
+/*    are permitted in any medium without royalty provided the copyright   */
+/*    notice and this notice are preserved.                                */
+/*                                                                         */
+/*    This file is offered as-is, without any warranty.                    */
+/*                                                                         */
+/* .. _2-Clause BSD license: http://www.spdx.org/licenses/BSD-2-Clause     */
+
+/* This CSS2.1_ stylesheet defines rules for Docutils elements without    */
+/* HTML equivalent. It is required to make the document semantic visible. */
+/*                                                                        */
+/* .. _CSS2.1: http://www.w3.org/TR/CSS2                                  */
+/* .. _validates: http://jigsaw.w3.org/css-validator/validator$link       */
+
+/* titles */
+p.topic-title,
+p.admonition-title,
+p.system-message-title {
+  font-weight: bold;
+}
+p.sidebar-title,
+p.rubric {
+  font-weight: bold;
+  font-size: larger;
+}
+p.rubric {
+  color: maroon;
+}
+p.subtitle,
+p.section-subtitle,
+p.sidebar-subtitle {
+  font-weight: bold;
+  margin-top: -0.5em;
+}
+h1 + p.subtitle {
+  font-size: 1.6em;
+}
+h2 + p.section-subtitle, a.toc-backref {
+  color: black;
+  text-decoration: none;
+}
+
+/* Warnings, Errors */
+.system-messages h2,
+.system-message-title,
+span.problematic {
+  color: red;
+}
+
+/* Inline Literals */
+.docutils.literal {
+  font-family: monospace;
+  white-space: pre-wrap;
+}
+/* do not wrap at hyphens and similar: */
+.literal > span.pre { white-space: nowrap; }
+
+/* Lists */
+
+/* compact and simple lists: no margin between items */
+.simple  li, .simple  ul, .simple  ol,
+.compact li, .compact ul, .compact ol,
+.simple  > li p, dl.simple  > dd,
+.compact > li p, dl.compact > dd {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+/* Nested Paragraphs */
+p:first-child { margin-top: 0; }
+p:last-child { margin-bottom: 0; }
+td > p, th > p { margin-bottom: 0; }
+
+/* Table of Contents */
+.topic.contents { margin: 0.5em 0; }
+.topic.contents ul.auto-toc {
+  list-style-type: none;
+  padding-left: 1.5em;
+}
+
+/* Enumerated Lists */
+ol.arabic     { list-style: decimal }
+ol.loweralpha { list-style: lower-alpha }
+ol.upperalpha { list-style: upper-alpha }
+ol.lowerroman { list-style: lower-roman }
+ol.upperroman { list-style: upper-roman }
+
+/* Definition Lists and Derivatives */
+dt .classifier { font-style: italic }
+dt .classifier:before {
+  font-style: normal;
+  margin: 0.5em;
+  content: ":";
+}
+/* Field Lists and similar */
+/* bold field name, content starts on the same line */
+dl.field-list > dt,
+dl.option-list > dt,
+dl.docinfo > dt,
+dl.footnote > dt,
+dl.citation > dt {
+  font-weight: bold;
+  clear: left;
+  float: left;
+  margin: 0;
+  padding: 0;
+  padding-right: 0.5em;
+}
+/* Offset for field content (corresponds to the --field-name-limit option) */
+dl.field-list > dd,
+dl.option-list > dd,
+dl.docinfo > dd {
+  margin-left:  9em; /* ca. 14 chars in the test examples, fit all Docinfo fields */
+}
+/* start field-body on a new line after long field names */
+dl.field-list > dd > *:first-child,
+dl.option-list > dd > *:first-child
+{
+  display: inline-block;
+  width: 100%;
+  margin: 0;
+}
+/* field names followed by a colon */
+dl.field-list > dt:after,
+dl.docinfo > dt:after {
+  content: ":";
+}
+
+/* Bibliographic Fields (docinfo) */
+dl.docinfo pre.address {
+  font: inherit;
+  margin: 0.5em 0;
+}
+dl.docinfo > dd.authors > p { margin: 0; }
+
+/* Option Lists */
+dl.option-list > dt { font-weight: normal; }
+span.option { white-space: nowrap; }
+
+/* Footnotes and Citations  */
+dl.footnote.superscript > dd { margin-left: 1em; }
+dl.footnote.brackets > dd { margin-left: 2em; }
+dl.footnote > dt { font-weight: normal; }
+a.footnote-reference.brackets:before,
+dt.label > span.brackets:before { content: "["; }
+a.footnote-reference.brackets:after,
+dt.label > span.brackets:after { content: "]"; }
+a.footnote-reference.superscript,
+dl.footnote.superscript > dt.label {
+  vertical-align: super;
+  font-size: small;
+}
+dt.label > span.fn-backref {
+  margin-left: 0.2em;
+  font-weight: normal;
+}
+dt.label > span.fn-backref > a { font-style: italic; }
+
+/* Alignment */
+.align-left   {
+  text-align: left;
+  margin-right: auto;
+}
+.align-center {
+  clear: both;
+  text-align: center;
+  margin-left: auto;
+  margin-right: auto;
+}
+.align-right  {
+  text-align: right;
+  margin-left: auto;
+}
+.align-top    { vertical-align: top; }
+.align-middle { vertical-align: middle; }
+.align-bottom { vertical-align: bottom; }
+
+/* reset inner alignment in figures and tables */
+figure.align-left, figure.align-right,
+table.align-left, table.align-center, table.align-right {
+  text-align: inherit;
+}
+
+/* Text Blocks */
+blockquote,
+div.topic,
+aside.topic {
+  margin: 1em 2em;
+}
+.sidebar,
+.admonition,
+.system-message {
+  border: thin solid;
+  margin: 1em 2em;
+  padding: 0.5em 1em;
+}
+.sidebar {
+  width: 30%;
+  max-width: 26em;
+  float: right;
+  clear: right;
+}
+div.line-block { display: block; }
+div.line-block div.line-block, pre { margin-left: 2em; }
+
+/* Code line numbers: dropped when copying text from the page */
+pre.code .ln { display: none; }
+pre.code code:before {
+  content: attr(data-lineno); /* …, none) fallback not supported by any browser */
+  color: gray;
+}
+
+/* Tables */
+table {
+  border-collapse: collapse;
+}
+td, th {
+  border: thin solid silver;
+  padding: 0 1ex;
+}
+.borderless td, .borderless th {
+  border: 0;
+  padding: 0;
+  padding-right: 0.5em /* separate table cells */
+}
+
+table > caption {
+  text-align: left;
+  margin-top: 0.2em;
+  margin-bottom: 0.2em;
+}
+table.captionbelow {
+  caption-side: bottom;
+}
+
+/* Document Header and Footer */
+header { border-bottom: 1px solid black; }
+footer { border-top: 1px solid black; }
+
+/* Images are block-level by default in Docutils */
+/* New HTML5 block elements: set display for older browsers */
+img, header, section, footer, aside, nav, main, article, figure, video {
+  display: block;
+}
+/* inline images */
+p img, p video, figure img, figure video {
+  display: inline;
+}
+
+</style>
+<style type="text/css">
+
+/* CSS31_ style sheet for the output of Docutils HTML writers.             */
+/* Rules for easy reading and pre-defined style variants.                  */
+/*                                                                         */
+/* :Author: Günter Milde, based on html4css1.css by David Goodger          */
+/* :Id: $Id: plain.css 8636 2021-03-19 00:23:33Z milde $                                                               */
+/* :Copyright: © 2015 Günter Milde.                                        */
+/* :License: Released under the terms of the `2-Clause BSD license`_,      */
+/*    in short:                                                            */
+/*                                                                         */
+/*    Copying and distribution of this file, with or without modification, */
+/*    are permitted in any medium without royalty provided the copyright   */
+/*    notice and this notice are preserved.                                */
+/*                                                                         */
+/*    This file is offered as-is, without any warranty.                    */
+/*                                                                         */
+/* .. _2-Clause BSD license: http://www.spdx.org/licenses/BSD-2-Clause     */
+/* .. _CSS3: http://www.w3.org/TR/CSS3                                     */
+
+
+/* Document Structure */
+/* ****************** */
+
+/* "page layout" */
+body {
+  margin: 0;
+  background-color: #dbdbdb;
+}
+main, footer, header {
+  line-height:1.3;
+  /* avoid long lines --> better reading */
+  /* optimum is 45…75 characters/line <http://webtypography.net/2.1.2> */
+  /* OTOH: lines should not be too short because of missing hyphenation, */
+  max-width: 50rem;
+  padding: 1px 2%; /* 1px on top avoids grey bar above title (mozilla) */
+  margin: auto;
+}
+main {
+  counter-reset: table figure;
+  background-color: white;
+}
+footer, header {
+  font-size: smaller;
+  padding: 0.5em 2%;
+  border: none;
+}
+
+/* Transitions */
+hr.docutils {
+  width: 80%;
+  margin-top: 1em;
+  margin-bottom: 1em;
+  clear: both;
+}
+
+/* Paragraphs */
+
+/* vertical space (parskip) */
+p, ol, ul, dl, li, dd,
+div.line-block,
+div.topic,
+table {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+p:first-child { margin-top: 0; }
+/* (:last-child is new in CSS 3) */
+p:last-child  { margin-bottom: 0; }
+
+h1, h2, h3, h4, h5, h6,
+dl > dd {
+  margin-bottom: 0.5em;
+}
+
+/* Lists */
+/* ===== */
+
+/* Separate list entries in compound lists */
+dl > dd, ol > li,
+
+/* Definition Lists */
+/* Indent lists nested in definition lists */
+/* (:only-child is new in CSS 3)           */
+dd > ul:only-child, dd > ol:only-child { padding-left: 1em; }
+
+/* Description Lists */
+/* styled like in most dictionaries, encyclopedias etc. */
+dl.description > dt {
+  font-weight: bold;
+  clear: left;
+  float: left;
+  margin: 0;
+  padding: 0;
+  padding-right: 0.5em;
+}
+
+/* Field Lists */
+
+/* example for custom field-name width */
+dl.field-list.narrow > dd {
+  margin-left: 5em;
+}
+/* run-in: start field-body on same line after long field names */
+dl.field-list.run-in > dd p {
+  display: block;
+}
+
+/* Bibliographic Fields */
+
+/* generally, bibliographic fields use special definition list dl.docinfo */
+/* but dedication and abstract are placed into "topic" divs */
+div.abstract p.topic-title {
+  text-align: center;
+}
+div.dedication {
+  margin: 2em 5em;
+  text-align: center;
+  font-style: italic;
+}
+div.dedication p.topic-title {
+  font-style: normal;
+}
+
+/* Text Blocks */
+/* =========== */
+
+/* Literal Blocks */
+pre.literal-block, pre.doctest-block,
+pre.math, pre.code {
+  font-family: monospace;
+}
+
+/* Block Quotes */
+blockquote > table,
+div.topic > table {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+blockquote p.attribution,
+div.topic p.attribution {
+  text-align: right;
+  margin-left: 20%;
+}
+
+/* Tables */
+/* ====== */
+
+/* th { vertical-align: bottom; } */
+
+table tr { text-align: left; }
+
+/* "booktabs" style (no vertical lines) */
+table.booktabs {
+  border: 0;
+  border-top: 2px solid;
+  border-bottom: 2px solid;
+  border-collapse: collapse;
+}
+table.booktabs * {
+  border: 0;
+}
+table.booktabs th {
+  border-bottom: thin solid;
+}
+
+/* numbered tables (counter defined in div.document) */
+table.numbered > caption:before {
+  counter-increment: table;
+  content: "Table " counter(table) ": ";
+  font-weight: bold;
+}
+
+/* Explicit Markup Blocks */
+/* ====================== */
+
+/* Footnotes and Citations */
+/* ----------------------- */
+
+/* line on the left */
+dl.footnote {
+  padding-left: 1ex;
+  border-left: solid;
+  border-left-width: thin;
+}
+
+/* Directives */
+/* ---------- */
+
+/* Body Elements */
+/* ~~~~~~~~~~~~~ */
+
+/* Images and Figures */
+
+/* let content flow to the side of aligned images and figures */
+figure.align-left,
+img.align-left,
+video.align-left,
+object.align-left {
+  clear: left;
+  float: left;
+  margin-right: 1em;
+}
+figure.align-right,
+img.align-right,
+video.align-right,
+object.align-right {
+  clear: right;
+  float: right;
+  margin-left: 1em;
+}
+/* Stop floating sidebars, images and figures */
+h1, h2, h3, h4, footer, header { clear: both; }
+
+/* Numbered figures */
+figure.numbered > figcaption > p:before {
+  counter-increment: figure;
+  content: "Figure " counter(figure) ": ";
+  font-weight: bold;
+}
+
+/* Admonitions and System Messages */
+.caution p.admonition-title,
+.attention p.admonition-title,
+.danger p.admonition-title,
+.error p.admonition-title,
+.warning p.admonition-title,
+div.error {
+  color: red;
+}
+
+/* Sidebar */
+/* Move right. In a layout with fixed margins, */
+/* it can be moved into the margin.            */
+aside.sidebar {
+  width: 30%;
+  max-width: 26em;
+  margin-left: 1em;
+  margin-right: -2%;
+  background-color: #ffffee;
+}
+
+/* Code */
+pre.code { padding: 0.7ex }
+pre.code, code { background-color: #eeeeee }
+/* basic highlighting: for a complete scheme, see */
+/* http://docutils.sourceforge.net/sandbox/stylesheets/ */
+pre.code .comment, code .comment { color: #5C6576 }
+pre.code .keyword, code .keyword { color: #3B0D06; font-weight: bold }
+pre.code .literal.string, code .literal.string { color: #0C5404 }
+pre.code .name.builtin, code .name.builtin { color: #352B84 }
+pre.code .deleted, code .deleted { background-color: #DEB0A1}
+pre.code .inserted, code .inserted { background-color: #A3D289}
+
+/* Math */
+/* styled separately (see math.css for math-output=HTML) */
+
+/* Epigraph           */
+/* Highlights         */
+/* Pull-Quote         */
+/* Compound Paragraph */
+/* Container          */
+
+/* Inline Markup */
+/* ============= */
+
+/* Inline Literals                                          */
+/* possible values: normal, nowrap, pre, pre-wrap, pre-line */
+/*   span.docutils.literal { white-space: pre-wrap; }       */
+
+/* Hyperlink References */
+a { text-decoration: none; }
+
+/* External Targets       */
+/*   span.target.external */
+/* Internal Targets       */
+/*   span.target.internal */
+/* Footnote References    */
+/*   a.footnote-reference */
+/* Citation References    */
+/*   a.citation-reference */
+
+</style>
+<style type="text/css">
+
+/*
+*   math2html: convert LaTeX equations to HTML output.
+*
+*   Copyright (C) 2009,2010 Alex Fernández
+*
+*   Released under the terms of the `2-Clause BSD license'_, in short:
+*   Copying and distribution of this file, with or without modification,
+*   are permitted in any medium without royalty provided the copyright
+*   notice and this notice are preserved.
+*   This file is offered as-is, without any warranty.
+*
+* .. _2-Clause BSD license: http://www.spdx.org/licenses/BSD-2-Clause
+*
+*   Based on eLyXer: convert LyX source files to HTML output.
+*   http://elyxer.nongnu.org/
+*/
+/* --end--
+* CSS file for LaTeX formulas.
+*/
+
+/* Formulas */
+.formula {
+	text-align: center;
+	font-family: "Droid Serif", "DejaVu Serif", "STIX", serif;
+	margin: 1.2em 0;
+}
+span.formula {
+	white-space: nowrap;
+}
+div.formula {
+	padding: 0.5ex;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+/* Basic features */
+a.eqnumber {
+	display: inline-block;
+	float: right;
+	clear: right;
+	font-weight: bold;
+}
+span.unknown {
+	color: #800000;
+}
+span.ignored, span.arraydef {
+	display: none;
+}
+.formula i {
+	letter-spacing: 0.1ex;
+}
+
+/* Alignment */
+.align-left, .align-l {
+	text-align: left;
+}
+.align-right, .align-r {
+	text-align: right;
+}
+.align-center, .align-c {
+	text-align: center;
+}
+
+/* Structures */
+span.overline, span.bar {
+	text-decoration: overline;
+}
+.fraction, .fullfraction {
+	display: inline-block;
+	vertical-align: middle;
+	text-align: center;
+}
+.fraction .fraction {
+	font-size: 80%;
+	line-height: 100%;
+}
+span.numerator {
+	display: block;
+}
+span.denominator {
+	display: block;
+	padding: 0ex;
+	border-top: thin solid;
+}
+sup.numerator, sup.unit {
+	font-size: 70%;
+	vertical-align: 80%;
+}
+sub.denominator, sub.unit {
+	font-size: 70%;
+	vertical-align: -20%;
+}
+span.sqrt {
+	display: inline-block;
+	vertical-align: middle;
+	padding: 0.1ex;
+}
+sup.root {
+	font-size: 70%;
+	position: relative;
+	left: 1.4ex;
+}
+span.radical {
+	display: inline-block;
+	padding: 0ex;
+	font-size: 150%;
+	vertical-align: top;
+}
+span.root {
+	display: inline-block;
+	border-top: thin solid;
+	padding: 0ex;
+	vertical-align: middle;
+}
+span.symbol {
+	line-height: 125%;
+	font-size: 125%;
+}
+span.bigsymbol {
+	line-height: 150%;
+	font-size: 150%;
+}
+span.largesymbol {
+	font-size: 175%;
+}
+span.hugesymbol {
+	font-size: 200%;
+}
+span.scripts {
+	display: inline-table;
+	vertical-align: middle;
+}
+.script {
+	display: table-row;
+	text-align: left;
+	line-height: 150%;
+}
+span.limits {
+	display: inline-table;
+	vertical-align: middle;
+}
+.limit {
+	display: table-row;
+	line-height: 99%;
+}
+sup.limit, sub.limit {
+	line-height: 100%;
+}
+span.symbolover {
+	display: inline-block;
+	text-align: center;
+	position: relative;
+	float: right;
+	right: 100%;
+	bottom: 0.5em;
+	width: 0px;
+}
+span.withsymbol {
+	display: inline-block;
+}
+span.symbolunder {
+	display: inline-block;
+	text-align: center;
+	position: relative;
+	float: right;
+	right: 80%;
+	top: 0.3em;
+	width: 0px;
+}
+
+/* Environments */
+span.array, span.bracketcases, span.binomial, span.environment {
+	display: inline-table;
+	text-align: center;
+	border-collapse: collapse;
+	margin: 0em;
+	vertical-align: middle;
+}
+span.arrayrow, span.binomrow {
+	display: table-row;
+	padding: 0ex;
+	border: 0ex;
+}
+span.arraycell, span.bracket, span.case, span.binomcell, span.environmentcell {
+	display: table-cell;
+	padding: 0ex 0.2ex;
+	line-height: 99%;
+	border: 0ex;
+}
+/*
+* CSS file for LaTeX formulas, extra stuff:
+* binomials, vertical braces, stackrel, fonts and colors.
+*/
+
+/* Inline binomials */
+span.binom {
+	display: inline-block;
+	vertical-align: middle;
+	text-align: center;
+	font-size: 80%;
+}
+span.binomstack {
+	display: block;
+	padding: 0em;
+}
+
+/* Over- and underbraces */
+span.overbrace {
+	border-top: 2pt solid;
+}
+span.underbrace {
+	border-bottom: 2pt solid;
+}
+
+/* Stackrel */
+span.stackrel {
+	display: inline-block;
+	text-align: center;
+}
+span.upstackrel {
+	display: block;
+	padding: 0em;
+	font-size: 80%;
+	line-height: 64%;
+	position: relative;
+	top: 0.15em;
+
+}
+span.downstackrel {
+	display: block;
+	vertical-align: bottom;
+	padding: 0em;
+}
+
+/* Fonts */
+span.mathsf, span.textsf {
+	font-style: normal;
+	font-family: sans-serif;
+}
+span.mathrm, span.textrm {
+	font-style: normal;
+	font-family: serif;
+}
+span.text, span.textnormal {
+	font-style: normal;
+}
+span.textipa {
+	color: #008080;
+}
+span.fraktur {
+	font-family: "Lucida Blackletter", eufm10, blackletter;
+}
+span.blackboard {
+	font-family: Blackboard, msbm10, serif;
+}
+span.scriptfont {
+	font-family: "Monotype Corsiva", "Apple Chancery", "URW Chancery L", cursive;
+	font-style: italic;
+}
+
+/* Colors */
+span.colorbox {
+	display: inline-block;
+	padding: 5px;
+}
+span.fbox {
+	display: inline-block;
+	border: thin solid black;
+	padding: 2px;
+}
+span.boxed, span.framebox {
+	display: inline-block;
+	border: thin solid black;
+	padding: 5px;
+}
+
+
+</style>
+</head>
+<body>
+<main id="rok4-recovery">
+<h1 class="title">RoK4 혼합 외란과 Recovery 학습 문서</h1>
+<dl class="docinfo simple">
+<dt>작성 기준</dt>
+<dd><p>2026-08-26</p>
+</dd>
+<dt>적용 브랜치</dt>
+<dd><p><span class="docutils literal"><span class="pre">yunho/mixed-push-disturbance</span></span></p>
+</dd>
+<dt>기준 브랜치</dt>
+<dd><p><span class="docutils literal"><span class="pre">yunho/concurrent-state-estimator</span></span></p>
+</dd>
+<dt class="task">대상 task</dt>
+<dd class="task"><p><span class="docutils literal"><span class="pre">RoK4-Isaac-Velocity-Flat-v0</span></span></p>
+</dd>
+</dl>
+<section id="id1">
+<h2>문서 경로</h2>
+<p>이 문서에서 <span class="docutils literal">${ROK4_LAB_ROOT}</span> 는 RoK4 저장소, <span class="docutils literal">${ISAACLAB_ROOT}</span> 는 Isaac Lab 저장소의 root를 뜻한다.
+개인 PC의 <span class="docutils literal"><span class="pre">/home/&lt;user&gt;</span></span> 경로를 복사하지 말고 실제 clone 위치에 맞춰 사용한다.</p>
+</section>
+<section id="id2">
+<h2>목적</h2>
+<p>기준 정책은 방향별 보행, 양발 정지, 약한 급정지와 순간 velocity push에 대한 복원을 이미 학습했다. 그러나 기존
+자동 외란은 world-frame root velocity를 순간적으로 바꾸는 한 종류뿐이었다. 이 구조는 post-disturbance state를
+빠르게 만들지만 실제 사람이 일정 시간 미는 상황, 접촉 중 policy가 반응하는 과정, RoK4 발의 전후 지지영역
+비대칭을 충분히 표현하지 못한다.</p>
+<p>이번 실험은 command, freeze, reward, estimator와 observation을 그대로 유지하고 자동 push만 다음과 같이 바꾼다.</p>
+<ul class="simple">
+<li><p>외란 방향을 world XY가 아니라 <strong>현재 robot base-yaw XY</strong> 에서 정의한다.</p></li>
+<li><p>한 event마다 같은 <span class="docutils literal">Delta v_b</span> 후보를 표본화한다.</p></li>
+<li><p>50%는 기존과 같은 순간 velocity push, 50%는 impulse-equivalent force pulse로 적용한다.</p></li>
+<li><p>두 mode를 동시에 적용하지 않으므로 event 빈도와 목표 운동량을 중복시키지 않는다.</p></li>
+<li><p>RoK4의 전방 지지영역이 후방보다 길다는 관찰을 반영해 longitudinal 범위를 비대칭으로 둔다.</p></li>
+</ul>
+</section>
+<section id="id3">
+<h2>좌표계와 방향</h2>
+<p>외란 표본은 base roll/pitch를 제거한 yaw frame에서 정의한다.</p>
+<div class="formula">
+Δ<b>v</b><sub><i>b</i></sub> = [Δ<i>v</i><sub><i>x</i>, <i>b</i></sub>,  Δ<i>v</i><sub><i>y</i>, <i>b</i></sub>,  0]<sup><i>T</i></sup>
+</div>
+<div class="formula">
+Δ<i>v</i><sub><i>x</i>, <i>b</i></sub> ~ <i>U</i>( − 0.5, 1.0),   Δ<i>v</i><sub><i>y</i>, <i>b</i></sub> ~ <i>U</i>( − 0.5, 0.5) [<span class="mathrm"> m ⁄ s</span>]
+</div>
+<p><span class="docutils literal">+X</span> 는 로봇의 현재 전방, <span class="docutils literal"><span class="pre">-X</span></span> 는 후방, <span class="docutils literal">+Y</span> 는 좌측, <span class="docutils literal"><span class="pre">-Y</span></span> 는 우측이다. Event가 시작하는 순간의
+root quaternion에서 yaw만 취해 world frame으로 회전한다.</p>
+<div class="formula">
+Δ<b>v</b><sub><i>w</i></sub> = <i>R</i><sub><i>wb</i>, <span class="mathrm">yaw</span></sub>Δ<b>v</b><sub><i>b</i></sub>
+</div>
+<p>따라서 로봇이 world에서 어느 방향을 보고 있더라도 외란의 전후좌우 의미가 유지된다. Force mode도 시작 순간
+world 방향을 계산한 뒤 pulse가 끝날 때까지 그 world 방향을 고정한다. 로봇이 pulse 도중 회전한다고 힘이 robot
+frame을 따라 회전하지 않는다.</p>
+</section>
+<section id="id4">
+<h2>전후 비대칭의 근거와 주의점</h2>
+<p>Linear inverted pendulum 근사에서 DCM은 다음과 같다.</p>
+<div class="formula">
+<b>ξ</b> = <b>x</b> + <span class="fraction"><span class="ignored">(</span><span class="numerator"><b>v</b></span><span class="ignored">)/(</span><span class="denominator"><i>ω</i><sub>0</sub></span><span class="ignored">)</span></span>,   <i>ω</i><sub>0</sub> = <span class="sqrt"><span class="radical">√</span><span class="ignored">(</span><span class="root"><span class="fraction"><span class="ignored">(</span><span class="numerator"><i>g</i></span><span class="ignored">)/(</span><span class="denominator"><i>h</i></span><span class="ignored">)</span></span></span><span class="ignored">)</span></span>
+</div>
+<p>순간 속도 변화가 만드는 DCM 이동은</p>
+<div class="formula">
+Δ<b>ξ</b> = <span class="fraction"><span class="ignored">(</span><span class="numerator">Δ<b>v</b></span><span class="ignored">)/(</span><span class="denominator"><i>ω</i><sub>0</sub></span><span class="ignored">)</span></span>
+</div>
+<p>이다. RoK4 기본 높이 <span class="docutils literal">h=0.907 m</span> 를 쓰면 <span class="docutils literal">omega_0</span> 는 약 <span class="docutils literal">3.29 <span class="pre">s^-1</span></span> 이다. 발이 ankle보다 전방으로
+더 길면 전방 DCM margin도 후방보다 크므로 같은 크기의 외란에서 전방은 오래 버티고 후방은 먼저 stepping할 수
+있다. 이번 <span class="docutils literal"><span class="pre">[-0.5,1.0]</span></span> 범위는 더 큰 전방 외란으로 이 버티기 전략을 넘어 recovery step을 경험시키려는 첫
+실험값이다.</p>
+<p>중요하게도 이 범위는 zero-mean이 아니다.</p>
+<div class="formula">
+<i>E</i>[Δ<i>v</i><sub><i>x</i>, <i>b</i></sub>] = <span class="fraction"><span class="ignored">(</span><span class="numerator"> − 0.5 + 1.0</span><span class="ignored">)/(</span><span class="denominator">2</span><span class="ignored">)</span></span> =  + 0.25 <span class="mathrm"> m ⁄ s</span>
+</div>
+<p>즉 전방 외란을 의도적으로 더 강하게 노출한다. 학습 결과가 forward gait 또는 standing COM 자체를 전방으로
+편향시키면, 다음 실험에서는 실제 foot support margin을 측정하고 부호 확률 또는 conditional magnitude를 조정해
+평균 impulse를 0에 맞춰야 한다. 이 branch의 값은 support polygon을 정밀 측정한 최종값이 아니라 recovery
+동작을 확인하는 실험값이다.</p>
+</section>
+<section id="mode-1-velocity-push">
+<h2>Mode 1: 순간 velocity push</h2>
+<p>확률 <span class="docutils literal">0.5</span> 로 현재 world-frame root velocity에 회전된 <span class="docutils literal">Delta v_w</span> 를 더한다.</p>
+<div class="formula">
+<b>v</b><sub><i>w</i>, <span class="mathrm">new</span></sub> = <b>v</b><sub><i>w</i>, <span class="mathrm">old</span></sub> + Δ<b>v</b><sub><i>w</i></sub>
+</div>
+<p>이는 실제 force history를 만들지 않고 충격 직후의 state를 바로 생성한다. Policy가 외란을 받는 순간에는 이미
+속도가 변해 있으므로 post-disturbance recovery state를 효율적으로 많이 학습하는 장점이 있다.</p>
+</section>
+<section id="mode-2-finite-duration-force-pulse">
+<h2>Mode 2: finite-duration force pulse</h2>
+<p>나머지 확률 <span class="docutils literal">0.5</span> 에서는 duration을 표본화한다.</p>
+<div class="formula">
+<i>T</i> ~ <i>U</i>(0.05, 0.50) [<span class="mathrm"> s</span>]
+</div>
+<p>실제 구현은 policy period <span class="docutils literal">0.01 s</span> 의 정수배인 5~50 step에서 균일 표본화한다. 목표 impulse가 velocity
+mode와 같도록 환경별 전체 robot mass를 사용해 force를 계산한다.</p>
+<div class="formula">
+<span class="boxed"><b>F</b><sub><i>w</i></sub> = <span class="fraction"><span class="ignored">(</span><span class="numerator"><i>m</i><sub><span class="mathrm">robot</span></sub></span><span class="ignored">)/(</span><span class="denominator"><i>T</i></span><span class="ignored">)</span></span>Δ<b>v</b><sub><i>w</i></sub></span>
+</div>
+<div class="formula">
+<b>J</b> = <span class="limits"><sup class="limit"><i>T</i></sup><span class="limit">⌠</span><span class="limit">⌡</span><sub class="limit">0</sub></span><b> F</b><sub><i>w</i></sub> <i>dt</i> = <b>F</b><sub><i>wT</i></sub> = <i>m</i><sub><span class="mathrm">robot</span></sub>Δ<b>v</b><sub><i>w</i></sub>
+</div>
+<p><span class="docutils literal">m_robot</span> 은 nominal 65 kg 상수가 아니라 startup mass DR 이후 각 environment의 실제 rigid-body mass 합이다.
+따라서 같은 <span class="docutils literal">Delta v</span> 와 <span class="docutils literal">T</span> 에서 무거운 environment에는 더 큰 force가 들어가며, nominal momentum change는
+environment mass에 맞게 유지된다. Force는 <span class="docutils literal">Base_Link</span> 에 world-frame force로 적용하고 별도 torque는 0이다.</p>
+<section id="kg-nominal-mass">
+<h3>65 kg nominal mass 예시</h3>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p><span class="docutils literal">Delta v_b</span> 예</p></th>
+<th class="head"><p><span class="docutils literal">|Delta v|</span></p></th>
+<th class="head"><p><span class="docutils literal">T=0.05 s</span></p></th>
+<th class="head"><p><span class="docutils literal">T=0.50 s</span></p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p>pure rear <span class="docutils literal"><span class="pre">[-0.5,0]</span></span></p></td>
+<td><p><span class="docutils literal">0.500 m/s</span></p></td>
+<td><p><span class="docutils literal">650 N</span></p></td>
+<td><p><span class="docutils literal">65 N</span></p></td>
+</tr>
+<tr><td><p>pure front <span class="docutils literal">[+1.0,0]</span></p></td>
+<td><p><span class="docutils literal">1.000 m/s</span></p></td>
+<td><p><span class="docutils literal">1300 N</span></p></td>
+<td><p><span class="docutils literal">130 N</span></p></td>
+</tr>
+<tr><td><p>rear diagonal <span class="docutils literal"><span class="pre">[-0.5,+-0.5]</span></span></p></td>
+<td><p><span class="docutils literal">0.707 m/s</span></p></td>
+<td><p>약 <span class="docutils literal">919 N</span></p></td>
+<td><p>약 <span class="docutils literal">92 N</span></p></td>
+</tr>
+<tr><td><p>front diagonal <span class="docutils literal"><span class="pre">[+1.0,+-0.5]</span></span></p></td>
+<td><p><span class="docutils literal">1.118 m/s</span></p></td>
+<td><p>약 <span class="docutils literal">1453 N</span></p></td>
+<td><p>약 <span class="docutils literal">145 N</span></p></td>
+</tr>
+</tbody>
+</table>
+<p>이는 applied base force다. 실제 root <span class="docutils literal">Delta v</span> 는 발 접촉력, actuator PD, policy action, base 회전과 지면 반력의
+영향을 동시에 받으므로 식의 목표값과 정확히 같지 않아도 정상이다. 바로 이 차이가 force mode에서 학습하려는
+closed-loop recovery 과정이다.</p>
+</section>
+</section>
+<section id="id5">
+<h2>시간 상태와 실행 순서</h2>
+<p>각 environment는 서로 독립적인 다음 push timer를 갖는다.</p>
+<div class="formula">
+<i>t</i><sub><span class="mathrm">next</span></sub> ~ <i>U</i>(10, 15) [<span class="mathrm"> s</span>]
+</div>
+<p>Stateful event는 EventManager에서 policy period마다 호출되지만, 실제 외란은 이 timer가 0일 때만 시작한다.</p>
+<pre class="code text literal-block"><code>episode reset
+  -&gt; active force를 0 N으로 해제
+  -&gt; next push time을 10~15 s에서 표본화
+
+each policy step (10 ms)
+  -&gt; active force duration 감소
+  -&gt; duration 종료 시 force를 정확히 0 N으로 해제
+  -&gt; push timer 감소
+  -&gt; timer가 0이면 Delta v_b 표본화
+       -&gt; Bernoulli(0.5)
+          velocity: root velocity에 즉시 더함
+          force: duration 표본화 후 F=m*Delta v/T 적용
+       -&gt; next push time 다시 10~15 s 표본화</code></pre>
+<p>Force maximum duration은 0.50 s이고 push minimum interval은 10 s이므로 정상 설정에서는 pulse가 겹치지 않는다.
+그래도 구현은 새 disturbance 시작 전에 이전 active force를 명시적으로 지운다. Episode가 조기 종료되는 경우에도
+<span class="docutils literal">reset()</span> 이 해당 environment의 force를 지우므로 다음 episode로 외력이 누출되지 않는다.</p>
+</section>
+<section id="freeze-command">
+<h2>Freeze, command와의 관계</h2>
+<p>Command resampling, periodic freeze, episode timeout, mixed push timer는 서로 독립적이다. 현재 command role과
+freeze 구성은 변경하지 않는다. 따라서 같은 외란은 다음 상태에서 모두 발생할 수 있다.</p>
+<ul class="simple">
+<li><p>이동 command 추종 중</p></li>
+<li><p>exact-zero periodic freeze 중</p></li>
+<li><p>always-standing role</p></li>
+<li><p>freeze 진입 또는 해제 부근</p></li>
+</ul>
+<p>Estimator가 Actor에 제공하는 estimated base linear velocity 덕분에 <span class="docutils literal"><span class="pre">command=[0,0,0]</span></span> 이어도 실제로 움직이는
+recovery state와 안정된 standing state를 관측상 구별할 수 있다. 이번 branch는 stable/recovery reward gate를
+새로 만들지 않고, 검증된 <span class="docutils literal"><span class="pre">stand_still_joint_deviation_l1=-0.05</span></span> 를 유지한다.</p>
+<p>Standing weight ablation은 다른 모든 설정을 고정한 fresh 25k 학습으로 비교했다. Mixed-push baseline
+<span class="docutils literal"><span class="pre">2026-08-24_17-10-31_concurrent_estimator_mixedpush_baseyaw_fresh25k</span></span> 는 <span class="docutils literal"><span class="pre">-0.05</span></span> 를 사용한다. 후속
+<span class="docutils literal"><span class="pre">2026-08-25_11-41-29_concurrent_estimator_mixedpush_stand001_fresh25k</span></span> 는 <span class="docutils literal"><span class="pre">-0.01</span></span> 만 변경했지만 제자리
+stepping이 나타났고, 최종 1,000 iteration 평균에서 action-rate와 actuator-torque 비용, illegal contact,
+peak normal force가 모두 증가했다. 따라서 <span class="docutils literal"><span class="pre">-0.01</span></span> 은 제외하고 <span class="docutils literal"><span class="pre">-0.05</span></span> 를 mixed-push 기준값으로 복원했다.</p>
+</section>
+<section id="train-play-teleop">
+<h2>Train과 Play/Teleop</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>환경</p></th>
+<th class="head"><p>자동 mixed push</p></th>
+<th class="head"><p>수동 UI push</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p>Train</p></td>
+<td><p>활성, environment별 10~15 s</p></td>
+<td><p>GUI를 띄운 학습이어도 사용하지 않음</p></td>
+</tr>
+<tr><td><p>Play</p></td>
+<td><p>비활성</p></td>
+<td><p>활성</p></td>
+</tr>
+<tr><td><p>Teleop</p></td>
+<td><p>비활성</p></td>
+<td><p>활성</p></td>
+</tr>
+</tbody>
+</table>
+<p>Play/Teleop의 <span class="docutils literal">RoK4 Push Test</span> 는 기존대로 base-yaw-frame 순간 velocity push만 제공한다. 따라서 checkpoint
+평가에서 velocity recovery를 재현할 수 있지만, 학습 중 force pulse를 UI에서 그대로 재현하는 기능은 이번
+변경 범위에 포함하지 않는다.</p>
+</section>
+<section id="id6">
+<h2>구현 파일과 검증</h2>
+<p>아래 경로는 모두 <span class="docutils literal">${ROK4_LAB_ROOT}</span> 기준 상대경로다.</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr><th class="head"><p>파일</p></th>
+<th class="head"><p>역할</p></th>
+</tr>
+</thead>
+<tbody>
+<tr><td><p><span class="docutils literal"><span class="pre">.../velocity/mdp/events.py</span></span></p></td>
+<td><p><span class="docutils literal">RoK4MixedPush</span>, frame 변환, mode 선택, force 계산과 해제</p></td>
+</tr>
+<tr><td><p><span class="docutils literal"><span class="pre">.../config/rok4/domain_randomization_cfg.py</span></span></p></td>
+<td><p>외란 범위, 확률, duration과 EventTerm 등록</p></td>
+</tr>
+<tr><td><p><span class="docutils literal">tests/test_events.py</span></p></td>
+<td><p>impulse 등가성, exclusive mode 선택, pulse 종료 검증</p></td>
+</tr>
+</tbody>
+</table>
+<p>테스트는 다음 불변조건을 확인한다.</p>
+<div class="formula">
+<b>F</b><i>T</i> = <i>m</i>Δ<b>v</b>
+</div>
+<p>또한 한 event에서 velocity와 force가 동시에 적용되지 않는지, duration 종료와 reset에서 force가 0이 되는지를
+확인한다. 실제 학습 전에는 GUI가 있는 소규모 environment에서 force 방향과 pulse 종료를 확인하고, 이후
+headless 4096-env 학습으로 넘어가는 것이 좋다.</p>
+</section>
+<section id="id7">
+<h2>첫 실험에서 볼 항목</h2>
+<ul class="simple">
+<li><p>기존 estimator RMSE와 tracking reward가 유지되는가</p></li>
+<li><p>standing push에서 발을 내딛고 다시 양발 지지로 돌아오는가</p></li>
+<li><p>moving push에서 command tracking을 회복하는가</p></li>
+<li><p><span class="docutils literal">+X</span> 외란에서 오래 버티다 늦게 넘어지는 대신 조기에 전방 step을 선택하는가</p></li>
+<li><p><span class="docutils literal"><span class="pre">-X</span></span> 외란이 과도해져 불필요한 후방 stepping을 만들지 않는가</p></li>
+<li><p>force duration이 긴 경우 몸을 계속 기울여 버티기만 하지 않는가</p></li>
+<li><p>전방 평균 외란 때문에 normal gait와 standing COM이 편향되지 않는가</p></li>
+</ul>
+<p>이 실험에서 reward, command population, estimator, gain을 동시에 바꾸지 않는다. 결과가 나쁘더라도 먼저
+velocity mode와 force mode의 방향별 recovery를 분리해서 확인한 뒤, 외란 범위나 mode probability 중 한 변수만
+조정한다.</p>
+</section>
+</main>
+</body>
+</html>

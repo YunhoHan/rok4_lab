@@ -872,7 +872,9 @@ noise를 조정하기 전의 비교 기준이며, 이후 실험에서도 보존�
 <pre class="code bash literal-block"><code><span class="name builtin">export</span> <span class="name variable">ROK4_LAB_ROOT</span><span class="operator">=</span><span class="literal string double">&quot;</span><span class="literal string interpol">${</span><span class="name variable">HOME</span><span class="literal string interpol">}</span><span class="literal string double">/rok4_lab&quot;</span>
 <span class="name builtin">export</span> <span class="name variable">ISAACLAB_ROOT</span><span class="operator">=</span><span class="literal string double">&quot;</span><span class="literal string interpol">${</span><span class="name variable">HOME</span><span class="literal string interpol">}</span><span class="literal string double">/IsaacLab&quot;</span></code></pre>
 <p>Observation noise, reset state randomization, physics DR의 상세 범위와 적용 주기는
-<span class="docutils literal">docs/rok4_randomization_and_noise_ko.rst</span> 를 기준 문서로 사용한다.</p>
+<span class="docutils literal">docs/rok4_randomization_and_noise_ko.rst</span> 를 기준 문서로 사용한다.
+자동 velocity/force 외란의 좌표계, impulse와 recovery 검증은
+<span class="docutils literal">docs/rok4_disturbance_and_recovery_ko.rst</span> 를 기준 문서로 사용한다.</p>
 <section id="id1">
 <h2>관련 파일</h2>
 <table>
@@ -1590,17 +1592,19 @@ episode timeout은 환경별 <span class="docutils literal">20 s</span> 이며, 
 phase를 다시 시작한다. 예를 들어 global time <span class="docutils literal">3 s</span> 에 reset된 환경은 이후 20초를 생존하면 약 <span class="docutils literal">23 s</span> 에
 timeout된다. 초기에는 episode counter가 같지만 early reset이 누적되면서 환경별 episode phase가 자연스럽게
 달라진다.</p>
-<p>부모 task에서 상속한 training <span class="docutils literal">push_robot</span> 은 freeze와 다른 환경별 <span class="docutils literal">interval</span> timer다. Reset마다 다음
-push 시간을 <span class="docutils literal">Uniform(10, 15) s</span> 로 표본화하고, world-frame root x/y velocity에 각각 <span class="docutils literal"><span class="pre">-0.5~0.5</span> m/s</span> 를
-추가한다. 따라서 push는 이동 command 중에도, exact-zero freeze 중에도, 전환 부근에도 발생할 수 있다. Freeze
-중 push가 들어와도 command와 <span class="docutils literal">is_standing_env</span> 는 zero/true로 유지되므로 dense velocity-tracking reward와
-약한 <span class="docutils literal"><span class="pre">stand_still_joint_deviation_l1=-0.05</span></span> 가 함께 복구를 평가한다. 이 standing 자세 항은 검증 기준
-<span class="docutils literal"><span class="pre">-0.2</span></span> 보다 약해 필요한 recovery step의 비용을 줄인다. Contact reward와 <span class="docutils literal">no_jumps</span> 는 같은 구간의 실제
-발 접촉 상태를 그대로 평가한다. Play/Teleop에서는 자동 interval event를 끄고 수동 Push Test UI를 사용한다.</p>
+<p>RoK4-local training <span class="docutils literal">RoK4MixedPush</span> 는 freeze와 다른 환경별 timer다. Reset마다 다음 event를
+<span class="docutils literal">Uniform(10, 15) s</span> 에서 표본화한다. Base-yaw <span class="docutils literal">Delta vx</span> 는 <span class="docutils literal"><span class="pre">-0.5~1.0</span> m/s</span>, <span class="docutils literal">Delta vy</span> 는
+<span class="docutils literal"><span class="pre">-0.5~0.5</span> m/s</span> 이며, event의 50%는 root velocity에 즉시 더하고 50%는 <span class="docutils literal">0.05~0.50 s</span> 동안
+<span class="docutils literal">F=m*Delta v/T</span> force pulse로 적용한다. 따라서 외란은 이동 command 중에도, exact-zero freeze 중에도, 전환
+부근에도 발생할 수 있다. Freeze 중 외란이 들어와도 command와 <span class="docutils literal">is_standing_env</span> 는 zero/true로 유지되므로
+dense velocity-tracking reward와 약한 <span class="docutils literal"><span class="pre">stand_still_joint_deviation_l1=-0.05</span></span> 가 함께 복구를 평가한다.
+<span class="docutils literal"><span class="pre">-0.01</span></span> 후속 실험은 standing stepping과 동작 비용을 증가시켜 채택하지 않았다. Contact reward와
+<span class="docutils literal">no_jumps</span> 는 같은 구간의 실제 발 접촉 상태를 그대로 평가한다. Play/Teleop에서는 자동 event를 끄고 수동
+velocity Push Test UI를 사용한다.</p>
 <p>Periodic freeze와 <span class="docutils literal">standing</span> 역할은 command를 <span class="docutils literal">[0, 0, 0]</span> 으로 만드는 동시에 <span class="docutils literal">is_standing_env=True</span> 를
 설정한다. 이 mask는 feet-air-time과 clearance 같은 standing-aware gait term 및
-<span class="docutils literal">stand_still_joint_deviation_l1</span> 에 사용한다. 현재 standing weight <span class="docutils literal"><span class="pre">-0.05</span></span> 는 이전 <span class="docutils literal"><span class="pre">-1.0</span></span> 및 검증 기준
-<span class="docutils literal"><span class="pre">-0.2</span></span> 보다 약하다. Dense velocity/upright/base-height/smoothness reward가 주된 복구 목적을 담당하고,
+<span class="docutils literal">stand_still_joint_deviation_l1</span> 에 사용한다. 현재 standing weight <span class="docutils literal"><span class="pre">-0.05</span></span> 는 이전 <span class="docutils literal"><span class="pre">-1.0</span></span> 및 <span class="docutils literal"><span class="pre">-0.2</span></span>
+보다 약하다. Dense velocity/upright/base-height/smoothness reward가 주된 복구 목적을 담당하고,
 이 항은 exact-zero에서 default pose로 향하는 약한 편향만 제공한다.</p>
 <p>이 command는 <span class="docutils literal">track_lin_vel_xy_exp</span>, <span class="docutils literal">track_ang_vel_z_exp</span>, <span class="docutils literal">feet_air_time</span> 에 직접 영향을 준다. 특히
 <span class="docutils literal">FeetAirTimeTouchdownBiped</span> 는 x/y command norm이 <span class="docutils literal">0.05</span> 이하이면 reward를 0으로 만든다. 즉 거의 정지
