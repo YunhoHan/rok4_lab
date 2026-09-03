@@ -357,6 +357,8 @@ def test_feet_touchdown_velocity_uses_previous_airborne_speed_once() -> None:
     body_lin_vel_w[..., 2] = torch.tensor(
         [[-0.6, -0.1], [-0.1, -0.5], [-1.0, 0.0]]
     )
+    body_lin_vel_w[0, 0, :2] = torch.tensor([0.3, 0.4])
+    body_lin_vel_w[1, 1, :2] = torch.tensor([0.12, 0.16])
     asset = SimpleNamespace(data=SimpleNamespace(body_lin_vel_w=body_lin_vel_w))
     sensor = _ContactSensorStub()
     env = SimpleNamespace(
@@ -404,14 +406,122 @@ def test_feet_touchdown_velocity_uses_previous_airborne_speed_once() -> None:
         safe_landing_velocity=0.0,
     )
 
-    torch.testing.assert_close(touchdown_penalty, torch.tensor([0.36, 0.25, 0.0]))
+    torch.testing.assert_close(touchdown_penalty, torch.tensor([0.61, 0.29, 0.0]))
     term.reset(torch.arange(3))
+    torch.testing.assert_close(
+        env.extras["log"]["Metrics/feet_touchdown/mean_pre_touchdown_planar_speed"],
+        torch.tensor(0.35),
+    )
     torch.testing.assert_close(
         env.extras["log"]["Metrics/feet_touchdown/mean_pre_touchdown_vertical_speed"],
         torch.tensor(0.55),
     )
-    torch.testing.assert_close(term._previous_foot_vel_z, torch.zeros((3, 2)))
+    torch.testing.assert_close(term._previous_foot_vel_w, torch.zeros((3, 2, 3)))
     assert not torch.any(term._has_previous_sample)
+
+
+def test_touchdown_diagnostics_records_edge_speed_and_split_force_peaks() -> None:
+    """Diagnostics must include angular point velocity and separate landing-force windows."""
+
+    class _ContactSensorStub:
+        def __init__(self):
+            self.first_contact = torch.zeros((1, 1), dtype=torch.bool)
+            self.data = SimpleNamespace(
+                current_contact_time=torch.zeros((1, 1)),
+                force_matrix_w_history=torch.zeros((1, 5, 1, 1, 3)),
+            )
+
+        def compute_first_contact(self, _step_dt: float) -> torch.Tensor:
+            return self.first_contact
+
+        def set_normal_force(self, force: float) -> None:
+            self.data.force_matrix_w_history.zero_()
+            self.data.force_matrix_w_history[..., 2] = force
+
+    asset = SimpleNamespace(
+        data=SimpleNamespace(
+            body_pos_w=torch.zeros((1, 1, 3)),
+            body_quat_w=torch.zeros((1, 1, 4)),
+            body_lin_vel_w=torch.tensor([[[0.1, -0.2, -0.05]]]),
+            body_ang_vel_w=torch.tensor([[[0.0, 2.0, 0.0]]]),
+        )
+    )
+    sensor = _ContactSensorStub()
+    env = SimpleNamespace(
+        num_envs=1,
+        device="cpu",
+        step_dt=0.01,
+        scene=_SceneStub(
+            entities={"robot": asset},
+            sensors={"contact_forces": sensor},
+            env_origins=torch.zeros((1, 3)),
+        ),
+        extras={},
+    )
+    sensor_cfg = _SceneEntityCfgStub("contact_forces", body_ids=[0])
+    asset_cfg = _SceneEntityCfgStub("robot", body_ids=[0])
+    params = {
+        "sensor_cfg": sensor_cfg,
+        "asset_cfg": asset_cfg,
+        "toe_x": 0.175,
+        "heel_x": -0.060,
+        "half_width": 0.045,
+        "sole_z": 0.0,
+        "early_window_s": 0.02,
+        "late_window_s": 0.10,
+    }
+    term = _REWARDS.FeetTouchdownDiagnostics(SimpleNamespace(params=params), env)
+
+    torch.testing.assert_close(term(env, **params), torch.zeros(1))
+
+    sensor.first_contact.fill_(True)
+    sensor.data.current_contact_time.fill_(0.01)
+    sensor.set_normal_force(800.0)
+    asset.data.body_lin_vel_w.zero_()
+    asset.data.body_ang_vel_w.zero_()
+    torch.testing.assert_close(term(env, **params), torch.zeros(1))
+
+    sensor.first_contact.zero_()
+    for step in range(1, 10):
+        sensor.data.current_contact_time.fill_(0.01 * (step + 1))
+        sensor.set_normal_force(1200.0 if step == 1 else 1500.0 if step == 5 else 900.0)
+        torch.testing.assert_close(term(env, **params), torch.zeros(1))
+
+    term.reset(torch.tensor([0]))
+    metrics = env.extras["log"]
+    torch.testing.assert_close(
+        metrics["Metrics/feet_touchdown/mean_pre_touchdown_toe_abs_vx"],
+        torch.tensor(0.1),
+    )
+    torch.testing.assert_close(
+        metrics["Metrics/feet_touchdown/mean_pre_touchdown_toe_abs_vy"],
+        torch.tensor(0.2),
+    )
+    torch.testing.assert_close(
+        metrics["Metrics/feet_touchdown/mean_pre_touchdown_toe_downward_speed"],
+        torch.tensor(0.4),
+    )
+    torch.testing.assert_close(
+        metrics["Metrics/feet_touchdown/mean_pre_touchdown_heel_downward_speed"],
+        torch.tensor(0.0),
+    )
+    torch.testing.assert_close(
+        metrics["Metrics/feet_touchdown/mean_pre_touchdown_lower_edge_planar_speed"],
+        torch.sqrt(torch.tensor(0.05)),
+    )
+    torch.testing.assert_close(
+        metrics["Metrics/feet_touchdown/mean_pre_touchdown_lower_edge_downward_speed"],
+        torch.tensor(0.4),
+    )
+    torch.testing.assert_close(
+        metrics["Metrics/feet_touchdown/mean_peak_normal_force_0_20ms"],
+        torch.tensor(1200.0),
+    )
+    torch.testing.assert_close(
+        metrics["Metrics/feet_touchdown/mean_peak_normal_force_20_100ms"],
+        torch.tensor(1500.0),
+    )
+    assert not torch.any(term._landing_active)
 
 
 def test_feet_touchdown_velocity_rejects_negative_safe_speed() -> None:
@@ -731,6 +841,8 @@ def test_feet_swing_clearance_rewards_valid_moving_swing_feet() -> None:
         data=SimpleNamespace(
             body_pos_w=body_pos_w,
             body_lin_vel_w=body_lin_vel_w,
+            root_pos_w=env_origins,
+            root_lin_vel_w=torch.zeros((6, 3)),
             root_quat_w=torch.zeros((6, 4)),
         )
     )
@@ -791,10 +903,97 @@ def test_feet_swing_clearance_rewards_valid_moving_swing_feet() -> None:
             0.5 * (tanh_point_four + torch.tanh(torch.tensor(0.8))),
             0.0,
             0.0,
-            tanh_point_four,
+            0.5,
         ]
     )
     torch.testing.assert_close(reward, expected)
+
+
+def test_feet_swing_clearance_rewards_yaw_lift_and_correct_tangential_progress() -> None:
+    """Pure-yaw clearance must reward lift and only add progress in the commanded tangent direction."""
+    body_pos_w = torch.tensor(
+        [
+            [[0.0, 0.10, 0.075], [0.0, -0.10, 0.004]],
+            [[0.0, 0.10, 0.075], [0.0, -0.10, 0.004]],
+            [[0.0, 0.10, 0.075], [0.0, -0.10, 0.004]],
+            [[0.0, 0.10, 0.075], [0.0, -0.10, 0.004]],
+            [[0.0, 0.10, 0.075], [0.0, -0.10, 0.004]],
+        ]
+    )
+    body_lin_vel_w = torch.zeros((5, 2, 3))
+    body_lin_vel_w[1, 0, 0] = -0.50
+    body_lin_vel_w[2, 0, 0] = 0.50
+    body_lin_vel_w[3, 0, 0] = 0.50
+    body_lin_vel_w[4, :, 0] = -0.50
+    root_lin_vel_w = torch.zeros((5, 3))
+    root_lin_vel_w[4, 0] = -0.50
+    asset = SimpleNamespace(
+        data=SimpleNamespace(
+            body_pos_w=body_pos_w,
+            body_lin_vel_w=body_lin_vel_w,
+            root_pos_w=torch.zeros((5, 3)),
+            root_lin_vel_w=root_lin_vel_w,
+            root_quat_w=torch.zeros((5, 4)),
+        )
+    )
+    contact_sensor = SimpleNamespace(
+        data=SimpleNamespace(current_air_time=torch.tensor([[0.3, 0.0]] * 5))
+    )
+    commands = torch.tensor(
+        [
+            [0.0, 0.0, 0.3],
+            [0.0, 0.0, 0.3],
+            [0.0, 0.0, 0.3],
+            [0.0, 0.0, -0.3],
+            [0.0, 0.0, 0.3],
+        ]
+    )
+    env = SimpleNamespace(
+        scene=_SceneStub(
+            entities={"robot": asset},
+            sensors={"contact_forces": contact_sensor},
+            env_origins=torch.zeros((5, 3)),
+        ),
+        command_manager=SimpleNamespace(
+            get_term=lambda _name: SimpleNamespace(is_standing_env=torch.zeros(5, dtype=torch.bool)),
+            get_command=lambda _name: commands,
+        ),
+    )
+
+    reward = _REWARDS.feet_swing_clearance_exp(
+        env,
+        command_name="base_velocity",
+        target_height=0.075,
+        std=0.04,
+        velocity_scale=0.50,
+        asset_cfg=_SceneEntityCfgStub("robot"),
+        sensor_cfg=_SceneEntityCfgStub("contact_forces"),
+        yaw_lift_fraction=0.5,
+    )
+
+    expected_progress = 0.5 + 0.5 * torch.tanh(torch.tensor(1.0))
+    torch.testing.assert_close(
+        reward,
+        torch.tensor([0.5, expected_progress, 0.5, expected_progress, 0.5]),
+    )
+
+
+@pytest.mark.parametrize("yaw_lift_fraction", (-0.1, 1.1))
+def test_feet_swing_clearance_rejects_invalid_yaw_lift_fraction(
+    yaw_lift_fraction: float,
+) -> None:
+    """The pure-yaw lift share must remain a bounded reward fraction."""
+    with pytest.raises(ValueError, match=r"yaw_lift_fraction must be within \[0, 1\]"):
+        _REWARDS.feet_swing_clearance_exp(
+            SimpleNamespace(),
+            command_name="base_velocity",
+            target_height=0.075,
+            std=0.04,
+            velocity_scale=0.50,
+            asset_cfg=_SceneEntityCfgStub("robot"),
+            sensor_cfg=_SceneEntityCfgStub("contact_forces"),
+            yaw_lift_fraction=yaw_lift_fraction,
+        )
 
 
 @pytest.mark.parametrize(

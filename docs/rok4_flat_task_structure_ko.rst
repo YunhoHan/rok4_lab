@@ -2,7 +2,7 @@ RoK4 Flat RSL-RL Task 구조 문서
 ========================================================================
 
 :작성일: 2026-07-15
-:최종 업데이트: 2026-08-24
+:최종 업데이트: 2026-08-26
 :대상 저장소: RoK4 repository root (``${ROK4_LAB_ROOT}``)
 :기준 환경: Isaac Lab v2.3.2, Isaac Sim 5.1.0, ``env_isaaclab``
 
@@ -12,6 +12,11 @@ RoK4 Flat RSL-RL Task 구조 문서
    @media print {
      body, main {
        background-color: white;
+     }
+     code, span.docutils.literal, span.docutils.literal span.pre {
+       overflow-wrap: anywhere;
+       word-break: break-all;
+       white-space: normal !important;
      }
      pre.code {
        break-inside: avoid;
@@ -57,12 +62,59 @@ Concurrent body-frame base-velocity estimator의 225D 입력, 3D target, PPO gra
 checkpoint와 fused 240D ONNX export는 ``docs/rok4_concurrent_state_estimator_ko.rst`` 와 생성된
 ``docs/_build/pdf/rok4_concurrent_state_estimator_ko.pdf`` 에 정리한다.
 
-현재 actuator-space 기준 정책은
-``2026-07-24_19-34-26_symmetry_aug_nojumps2_swing_roll100_fresh/model_9999.pt`` 이며,
-이 문서에서는 이를 experimental ``Yunho Symmetry ADAPT v1`` baseline으로 기록한다. 이 checkpoint를 보존한
-상태에서 다음 단계로 domain randomization과 policy observation noise를 조정한다. 이전
-``2026-07-15_17-28-41/model_4999.pt`` 는 joint-space ``Yunho v1`` reference이므로 ADAPT action interface와
-checkpoint 호환성이 없다.
+정책 baseline과 검증 상태
+--------------------------------------------
+
+아래 commit은 각 checkpoint의 학습 설정을 재현하는 code snapshot이다. Branch ancestry나 학습 완료만으로
+검증 상태를 추정하지 않고 실제 수행한 단계만 기록한다.
+
+**현재 개발 baseline**
+
+* Run: ``2026-08-24_17-10-31_concurrent_estimator_mixedpush_baseyaw_fresh25k``
+* Checkpoint: ``model_24999.pt``
+* Code: ``ccdd543`` on ``yunho/mixed-push-disturbance``
+* 검증: Isaac Sim Teleop 및 학습 로그 검토 완료. MuJoCo Sim2Sim과 hardware Sim2Real은 대기 상태다.
+
+**Concurrent-estimator Sim2Sim baseline**
+
+* Run: ``2026-08-21_02-28-25_concurrent_estimator_stand005_fresh25k``
+* Checkpoint: ``model_24999.pt``
+* Code: ``df37f44`` on ``yunho/concurrent-state-estimator``
+* 검증 문서 commit: ``785a83c``
+* 검증: Isaac Sim Teleop과 MuJoCo Sim2Sim 완료. Estimator Sim2Real은 대기 상태다.
+
+**Pre-estimator Sim2Real baseline**
+
+* Run: ``2026-08-12_23-45-39_privileged250_gain240_160_80_air050_w2_tdvel10_ar01_ar2_005_noforce_delay4ms_fresh20k``
+* Checkpoint: ``model_19999.pt``
+* Code: ``2712787`` on ``yunho/privileged-observation``
+* 검증: Hardware Sim2Real 완료.
+
+**이전 directional-gait baseline**
+
+* Run: ``2026-08-03_14-58-46_touchdown_air_symmetric_x_fastforward_fresh20k``
+* Checkpoint: ``model_19999.pt``
+* Code: ``1d52838`` on ``yunho/directional-gait-rework``
+* 검증 문서 commit: ``746e5d0``
+* 검증: Isaac Sim Teleop 완료.
+
+**이전 joint-space reference**
+
+* Run: ``2026-07-15_17-28-41``
+* Checkpoint: ``model_4999.pt``
+* Code: ``034a754`` on 당시 ``main``
+* 상태: Actuator-space interface 도입 전 reference.
+
+Baseline을 새로 기록하거나 push하기 전에는 다음 항목을 모두 확인한다.
+
+#. README 최상단 표에서 현재 baseline을 하나만 지정한다.
+#. Run 이름, checkpoint 파일명, code commit이 같은 설정을 나타내는지 확인한다.
+#. Isaac Sim, MuJoCo Sim2Sim, hardware Sim2Real 검증 상태를 각각 구분하고 미검증 단계는 ``대기`` 로 둔다.
+#. 현재 baseline과 이전 검증 reference를 분리한다.
+#. 관련 RST, 생성 HTML/PDF, ``CHANGELOG.md`` 를 동기화한다.
+#. Branch graph와 upstream을 확인하고 명시적 승인 없이 다른 branch를 merge, fast-forward 또는 이동하지 않는다.
+
+이전 joint-space checkpoint는 ADAPT action interface와 호환되지 않는다.
 
 현재 생성된 task는 다음 세 개다.
 
@@ -808,8 +860,9 @@ action이라는 점이다. motor target만 scale, default actuator pose, ADAPT m
 ``action_rate_l2`` 와 ``second_action_rate_l2`` reward는 observation의 ``last_action`` 과 같은
 ``clipped_raw_action`` 좌표에서 각각 1차와 2차 차분을 계산하고 weight ``-0.01``, ``-0.005`` 를 사용한다.
 Command role 비율도 검증 기준인 ``mixed=0.35``, ``standing=0.05`` 를 유지한다. Exact-zero standing
-default-pose weight는 mixed-push 검증값 ``-0.05`` 를 사용한다. 다른 설정을 고정하고 ``-0.01`` 로 낮춘 후속
-실험에서는 제자리 stepping, action/torque 비용 증가, peak contact force 증가가 확인되어 채택하지 않았다.
+default-pose weight는 현재 실험 절충값 ``-0.1`` 을 사용한다. 이는 mixed-push 검증값 ``-0.05`` 보다 강하고
+이전 ``-0.2`` 보다 약하다. 다른 설정을 고정하고 ``-0.01`` 로 낮춘 후속 실험에서는 제자리 stepping,
+action/torque 비용 증가, peak contact force 증가가 확인되어 채택하지 않았다.
 Reward 함수 자체는 clamp하지 않지만 RoK4 RSL-RL runner의 ``clip_actions=1.0`` 이 ActionManager 이전에
 정책 출력을 제한한다. Action scale은 actuator target 생성에만
 사용하며 두 smoothness reward에는 적용하지 않는다. 다만 Hip Pitch/Knee action index ``2,3,8,9`` 는 RoK4의
@@ -891,10 +944,10 @@ Exact-zero command는 periodic freeze window와 ``standing`` 역할에서 생성
 ``[0, 0, 0]`` 으로 만드는 동시에 ``is_standing_env=True`` 를 설정한다. 일반 ``mixed`` moving command는
 크기가 작더라도 standing으로 변환하지 않으므로 연속적인 저속 command 범위를 유지한다.
 
-모든 exact-zero standing에서 weight ``-0.05`` 인 ``stand_still_joint_deviation_l1`` 이 command term의
+모든 exact-zero standing에서 weight ``-0.1`` 인 ``stand_still_joint_deviation_l1`` 이 command term의
 ``is_standing_env`` mask를 사용하여 전체 13관절의 실제 joint position을 default joint pose 근처로 유도한다.
-이는 이전 ``-0.2`` 설정의 25% 강도다. 양발 standing 편향은 남기되 외란이나 급정지 중 recovery step과의
-경쟁을 줄이며, 작은 non-zero 이동 command에는 적용하지 않는다.
+이는 검증된 ``-0.05`` 와 이전 ``-0.2`` 사이의 절충 강도다. 양발 standing 편향은 유지하면서 외란이나
+급정지 중 recovery step과의 경쟁을 제한하며, 작은 non-zero 이동 command에는 적용하지 않는다.
 
 Episode timeout, periodic freeze, push timer 관계
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -990,14 +1043,24 @@ penalty ``1`` 을 반환한다. 따라서 정상 single stance와 toe-off는 허
 ``compute_first_contact(step_dt)`` 는 최근 ``10 ms`` 내 접촉을 검출하지만 reward가 읽는 ``body_lin_acc_w`` 는
 5번째 physics substep 이후의 최신 가속도이므로, 앞선 ``2 ms`` substep에서 발생한 충격 peak와 시간적으로
 어긋날 수 있다. 함수와 단위 테스트는 비교용으로 남긴다. 현재 soft-landing 실험은 stateful
-``FeetTouchdownVelocityL2`` 를 활성화한다. 이전 policy step에서 공중이었던 발의 world-Z 속도를 저장하고,
-first contact가 발생하면 ``relu(-v_z_prev)^2`` 를 사건당 한 번 계산해 weight ``-10.0`` 을 적용한다.
+``FeetTouchdownVelocityL2`` 를 활성화한다. 이전 policy step에서 공중이었던 발의 world-XYZ 속도를 저장하고,
+first contact가 발생하면 ``v_x_prev^2 + v_y_prev^2 + relu(-v_z_prev)^2`` 를 사건당 한 번 계산해 weight
+``-10.0`` 을 적용한다.
 접근 중과 계속된 stance에는 영향을 주지 않으며 reset 직후 이전 sample이 없는 초기 접촉도 제외한다.
 ``FeetContactForceL2`` class는 first contact부터 ``0.10 s`` 동안 filtered world-frame 접촉 합력
 ``||[F_x,F_y,F_z]||`` 의 최대값을 누적한다. 현재 shaping config는 ``feet_contact_force=None`` 이므로 GRF가
 학습을 shaping하지 않는다. 대신 ``feet_contact_force_metrics`` 가 ``metric_only=True`` 로 같은 peak를
 TensorBoard ``Metrics/feet_touchdown/mean_peak_normal_force`` 에 기록하면서 reward에는 항상 0을 반환한다.
 Contact Forces debug visualization도 그대로 사용할 수 있다.
+
+추가 ``FeetTouchdownDiagnostics`` term도 항상 0을 반환한다. URDF sole collision box에서 toe ``x=0.175 m``,
+heel ``x=-0.060 m``, 좌우 ``y=+/-0.045 m`` 인 네 모서리를 복원하고
+``v_edge = v_foot + omega_foot x (R_foot r_edge)`` 로 회전 성분까지 포함한 착지 직전 point velocity를
+계산한다. Toe/heel 각각의 낮은 모서리와 네 점 중 최저 모서리 속도를 기록하므로 발 원점 속도로 보이지 않는
+toe/heel slap을 구분할 수 있다. Ground-filtered world-Z normal force는 ``0-20 ms`` 초기 충돌과
+``20-100 ms`` 체중 인수 구간으로 나누어 기록한다. 이 term은 기존 checkpoint의 action과 reward를 바꾸지
+않고 Play/Teleop 진단에만 사용한다. 학습에서는 TensorBoard에, Teleop에서는 자동 episode 종료 또는 keyboard
+``R`` reset 뒤 터미널에 같은 metric이 표시된다.
 
 검증된 기준 checkpoint는
 ``2026-08-12_23-45-39_privileged250_gain240_160_80_air050_w2_tdvel10_ar01_ar2_005_noforce_delay4ms_fresh20k/model_19999.pt``
@@ -1019,6 +1082,11 @@ event-weighted 평균을 TensorBoard에 기록한다.
 
 * ``Metrics/feet_touchdown/mean_pre_touchdown_vertical_speed``: 직전 airborne sample의 평균 하강속도 크기 [m/s]
 * ``Metrics/feet_touchdown/mean_air_time``: touchdown에서 완료된 평균 ``last_air_time`` [s]
+* ``Metrics/feet_touchdown/mean_pre_touchdown_toe_*``: 낮은 toe 모서리의 절대 X/Y 및 하강속도 [m/s]
+* ``Metrics/feet_touchdown/mean_pre_touchdown_heel_*``: 낮은 heel 모서리의 절대 X/Y 및 하강속도 [m/s]
+* ``Metrics/feet_touchdown/mean_pre_touchdown_lower_edge_*``: 최저 sole 모서리의 planar/하강속도 [m/s]
+* ``Metrics/feet_touchdown/mean_peak_normal_force_0_20ms``: 초기 접촉 world-Z peak [N]
+* ``Metrics/feet_touchdown/mean_peak_normal_force_20_100ms``: 후속 체중 인수 world-Z peak [N]
 
 두 값은 reward 가중치나 ``dt`` 가 적용되지 않은 물리량이며 매 step CPU 동기화를 만들지 않는다.
 

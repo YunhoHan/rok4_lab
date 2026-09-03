@@ -42,6 +42,26 @@ def _inject_estimator_visualization(source: str, script_path: Path) -> str:
     )
 
 
+def _inject_touchdown_diagnostic_output(source: str, script_path: Path) -> str:
+    """Print episode touchdown diagnostics returned by the Teleop environment."""
+    step_statement = "obs, _, dones, _ = env.step(actions)"
+    if source.count(step_statement) != 1:
+        raise RuntimeError(f"Could not uniquely locate the teleoperation environment step in {script_path}.")
+
+    step_offset = source.index(step_statement)
+    line_start = source.rfind("\n", 0, step_offset) + 1
+    indentation = source[line_start:step_offset]
+    if indentation.strip():
+        raise RuntimeError(f"Could not resolve teleoperation environment-step indentation in {script_path}.")
+
+    replacement = (
+        f"{indentation}obs, _, dones, infos = env.step(actions)\n"
+        f"{indentation}if torch.any(dones):\n"
+        f"{indentation}    _print_touchdown_diagnostics(infos)"
+    )
+    return source.replace(f"{indentation}{step_statement}", replacement, 1)
+
+
 def _prepare_isaaclab_rsl_source(
     script_path: Path,
     *,
@@ -251,6 +271,37 @@ def _scale_teleop_command(raw_command: torch.Tensor, invert_lateral_and_yaw: boo
     return command
 
 
+_TOUCHDOWN_DIAGNOSTIC_KEYS = (
+    ("toe |vx|", "Metrics/feet_touchdown/mean_pre_touchdown_toe_abs_vx", "m/s"),
+    ("toe |vy|", "Metrics/feet_touchdown/mean_pre_touchdown_toe_abs_vy", "m/s"),
+    ("toe down", "Metrics/feet_touchdown/mean_pre_touchdown_toe_downward_speed", "m/s"),
+    ("heel |vx|", "Metrics/feet_touchdown/mean_pre_touchdown_heel_abs_vx", "m/s"),
+    ("heel |vy|", "Metrics/feet_touchdown/mean_pre_touchdown_heel_abs_vy", "m/s"),
+    ("heel down", "Metrics/feet_touchdown/mean_pre_touchdown_heel_downward_speed", "m/s"),
+    ("lower-edge planar", "Metrics/feet_touchdown/mean_pre_touchdown_lower_edge_planar_speed", "m/s"),
+    ("lower-edge down", "Metrics/feet_touchdown/mean_pre_touchdown_lower_edge_downward_speed", "m/s"),
+    ("normal peak 0-20 ms", "Metrics/feet_touchdown/mean_peak_normal_force_0_20ms", "N"),
+    ("normal peak 20-100 ms", "Metrics/feet_touchdown/mean_peak_normal_force_20_100ms", "N"),
+)
+
+
+def _print_touchdown_diagnostics(infos: dict) -> None:
+    """Print physical-unit touchdown metrics when an episode is reset."""
+    log = infos.get("log", {})
+    values = []
+    for label, key, unit in _TOUCHDOWN_DIAGNOSTIC_KEYS:
+        if key not in log:
+            continue
+        value = torch.as_tensor(log[key]).detach().mean().item()
+        values.append((label, value, unit))
+    if not values:
+        return
+
+    print("[INFO] Touchdown diagnostics (completed episode):")
+    for label, value, unit in values:
+        print(f"\t{label:>22}: {value:8.4f} {unit}")
+
+
 '''
         source = _replace_once(
             source,
@@ -299,9 +350,10 @@ def _scale_teleop_command(raw_command: torch.Tensor, invert_lateral_and_yaw: boo
             if keyboard_command is not None:
                 keyboard_command.reset()
             with torch.inference_mode():
-                obs, _ = env.reset()
+                obs, reset_infos = env.reset()
                 reset_dones = torch.ones(env.num_envs, dtype=torch.bool, device=env.unwrapped.device)
                 policy_nn.reset(reset_dones)
+            _print_touchdown_diagnostics(reset_infos)
             print("[INFO] Teleoperation environment reset.")
         if keyboard_command is None:
             raw_teleop_command = teleop_interface.advance()
@@ -325,6 +377,7 @@ def _scale_teleop_command(raw_command: torch.Tensor, invert_lateral_and_yaw: boo
         )
 
         source = _inject_estimator_visualization(source, script_path)
+        source = _inject_touchdown_diagnostic_output(source, script_path)
 
     return source
 

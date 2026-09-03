@@ -836,7 +836,7 @@ span.boxed, span.framebox {
 <dd><p>2026-07-15</p>
 </dd>
 <dt>최종 업데이트</dt>
-<dd><p>2026-08-24</p>
+<dd><p>2026-08-26</p>
 </dd>
 <dt>대상 저장소</dt>
 <dd><p>RoK4 repository root (<span class="docutils literal">${ROK4_LAB_ROOT}</span>)</p>
@@ -849,6 +849,11 @@ span.boxed, span.framebox {
 @media print {
   body, main {
     background-color: white;
+  }
+  code, span.docutils.literal, span.docutils.literal span.pre {
+    overflow-wrap: anywhere;
+    word-break: break-all;
+    white-space: normal !important;
   }
   pre.code {
     break-inside: avoid;
@@ -882,12 +887,58 @@ RoK4 기준으로 다시 작성했다.</p>
 <p>Concurrent body-frame base-velocity estimator의 225D 입력, 3D target, PPO gradient 분리, RMSE logging,
 checkpoint와 fused 240D ONNX export는 <span class="docutils literal">docs/rok4_concurrent_state_estimator_ko.rst</span> 와 생성된
 <span class="docutils literal">docs/_build/pdf/rok4_concurrent_state_estimator_ko.pdf</span> 에 정리한다.</p>
-<p>현재 actuator-space 기준 정책은
-<span class="docutils literal"><span class="pre">2026-07-24_19-34-26_symmetry_aug_nojumps2_swing_roll100_fresh/model_9999.pt</span></span> 이며,
-이 문서에서는 이를 experimental <span class="docutils literal">Yunho Symmetry ADAPT v1</span> baseline으로 기록한다. 이 checkpoint를 보존한
-상태에서 다음 단계로 domain randomization과 policy observation noise를 조정한다. 이전
-<span class="docutils literal"><span class="pre">2026-07-15_17-28-41/model_4999.pt</span></span> 는 joint-space <span class="docutils literal">Yunho v1</span> reference이므로 ADAPT action interface와
-checkpoint 호환성이 없다.</p>
+</section>
+<section id="baseline">
+<h2>정책 baseline과 검증 상태</h2>
+<p>아래 commit은 각 checkpoint의 학습 설정을 재현하는 code snapshot이다. Branch ancestry나 학습 완료만으로
+검증 상태를 추정하지 않고 실제 수행한 단계만 기록한다.</p>
+<p><strong>현재 개발 baseline</strong></p>
+<ul class="simple">
+<li><p>Run: <span class="docutils literal"><span class="pre">2026-08-24_17-10-31_concurrent_estimator_mixedpush_baseyaw_fresh25k</span></span></p></li>
+<li><p>Checkpoint: <span class="docutils literal">model_24999.pt</span></p></li>
+<li><p>Code: <span class="docutils literal">ccdd543</span> on <span class="docutils literal"><span class="pre">yunho/mixed-push-disturbance</span></span></p></li>
+<li><p>검증: Isaac Sim Teleop 및 학습 로그 검토 완료. MuJoCo Sim2Sim과 hardware Sim2Real은 대기 상태다.</p></li>
+</ul>
+<p><strong>Concurrent-estimator Sim2Sim baseline</strong></p>
+<ul class="simple">
+<li><p>Run: <span class="docutils literal"><span class="pre">2026-08-21_02-28-25_concurrent_estimator_stand005_fresh25k</span></span></p></li>
+<li><p>Checkpoint: <span class="docutils literal">model_24999.pt</span></p></li>
+<li><p>Code: <span class="docutils literal">df37f44</span> on <span class="docutils literal"><span class="pre">yunho/concurrent-state-estimator</span></span></p></li>
+<li><p>검증 문서 commit: <span class="docutils literal">785a83c</span></p></li>
+<li><p>검증: Isaac Sim Teleop과 MuJoCo Sim2Sim 완료. Estimator Sim2Real은 대기 상태다.</p></li>
+</ul>
+<p><strong>Pre-estimator Sim2Real baseline</strong></p>
+<ul class="simple">
+<li><p>Run: <span class="docutils literal"><span class="pre">2026-08-12_23-45-39_privileged250_gain240_160_80_air050_w2_tdvel10_ar01_ar2_005_noforce_delay4ms_fresh20k</span></span></p></li>
+<li><p>Checkpoint: <span class="docutils literal">model_19999.pt</span></p></li>
+<li><p>Code: <span class="docutils literal">2712787</span> on <span class="docutils literal"><span class="pre">yunho/privileged-observation</span></span></p></li>
+<li><p>검증: Hardware Sim2Real 완료.</p></li>
+</ul>
+<p><strong>이전 directional-gait baseline</strong></p>
+<ul class="simple">
+<li><p>Run: <span class="docutils literal"><span class="pre">2026-08-03_14-58-46_touchdown_air_symmetric_x_fastforward_fresh20k</span></span></p></li>
+<li><p>Checkpoint: <span class="docutils literal">model_19999.pt</span></p></li>
+<li><p>Code: <span class="docutils literal">1d52838</span> on <span class="docutils literal"><span class="pre">yunho/directional-gait-rework</span></span></p></li>
+<li><p>검증 문서 commit: <span class="docutils literal">746e5d0</span></p></li>
+<li><p>검증: Isaac Sim Teleop 완료.</p></li>
+</ul>
+<p><strong>이전 joint-space reference</strong></p>
+<ul class="simple">
+<li><p>Run: <span class="docutils literal"><span class="pre">2026-07-15_17-28-41</span></span></p></li>
+<li><p>Checkpoint: <span class="docutils literal">model_4999.pt</span></p></li>
+<li><p>Code: <span class="docutils literal">034a754</span> on 당시 <span class="docutils literal">main</span></p></li>
+<li><p>상태: Actuator-space interface 도입 전 reference.</p></li>
+</ul>
+<p>Baseline을 새로 기록하거나 push하기 전에는 다음 항목을 모두 확인한다.</p>
+<ol class="arabic simple">
+<li><p>README 최상단 표에서 현재 baseline을 하나만 지정한다.</p></li>
+<li><p>Run 이름, checkpoint 파일명, code commit이 같은 설정을 나타내는지 확인한다.</p></li>
+<li><p>Isaac Sim, MuJoCo Sim2Sim, hardware Sim2Real 검증 상태를 각각 구분하고 미검증 단계는 <span class="docutils literal">대기</span> 로 둔다.</p></li>
+<li><p>현재 baseline과 이전 검증 reference를 분리한다.</p></li>
+<li><p>관련 RST, 생성 HTML/PDF, <span class="docutils literal">CHANGELOG.md</span> 를 동기화한다.</p></li>
+<li><p>Branch graph와 upstream을 확인하고 명시적 승인 없이 다른 branch를 merge, fast-forward 또는 이동하지 않는다.</p></li>
+</ol>
+<p>이전 joint-space checkpoint는 ADAPT action interface와 호환되지 않는다.</p>
 <p>현재 생성된 task는 다음 세 개다.</p>
 <table>
 <colgroup>
@@ -1647,8 +1698,9 @@ checkpoint를 이 브랜치에서 resume/play하지 말고 actuator-interface �
 <p><span class="docutils literal">action_rate_l2</span> 와 <span class="docutils literal">second_action_rate_l2</span> reward는 observation의 <span class="docutils literal">last_action</span> 과 같은
 <span class="docutils literal">clipped_raw_action</span> 좌표에서 각각 1차와 2차 차분을 계산하고 weight <span class="docutils literal"><span class="pre">-0.01</span></span>, <span class="docutils literal"><span class="pre">-0.005</span></span> 를 사용한다.
 Command role 비율도 검증 기준인 <span class="docutils literal">mixed=0.35</span>, <span class="docutils literal">standing=0.05</span> 를 유지한다. Exact-zero standing
-default-pose weight는 mixed-push 검증값 <span class="docutils literal"><span class="pre">-0.05</span></span> 를 사용한다. 다른 설정을 고정하고 <span class="docutils literal"><span class="pre">-0.01</span></span> 로 낮춘 후속
-실험에서는 제자리 stepping, action/torque 비용 증가, peak contact force 증가가 확인되어 채택하지 않았다.
+default-pose weight는 현재 실험 절충값 <span class="docutils literal"><span class="pre">-0.1</span></span> 을 사용한다. 이는 mixed-push 검증값 <span class="docutils literal"><span class="pre">-0.05</span></span> 보다 강하고
+이전 <span class="docutils literal"><span class="pre">-0.2</span></span> 보다 약하다. 다른 설정을 고정하고 <span class="docutils literal"><span class="pre">-0.01</span></span> 로 낮춘 후속 실험에서는 제자리 stepping,
+action/torque 비용 증가, peak contact force 증가가 확인되어 채택하지 않았다.
 Reward 함수 자체는 clamp하지 않지만 RoK4 RSL-RL runner의 <span class="docutils literal">clip_actions=1.0</span> 이 ActionManager 이전에
 정책 출력을 제한한다. Action scale은 actuator target 생성에만
 사용하며 두 smoothness reward에는 적용하지 않는다. 다만 Hip Pitch/Knee action index <span class="docutils literal">2,3,8,9</span> 는 RoK4의
@@ -1713,10 +1765,10 @@ standing과의 중복 배정을 피하기 위해 현재 <span class="docutils li
 Exact-zero command는 periodic freeze window와 <span class="docutils literal">standing</span> 역할에서 생성하며, 두 경로 모두 command를
 <span class="docutils literal">[0, 0, 0]</span> 으로 만드는 동시에 <span class="docutils literal">is_standing_env=True</span> 를 설정한다. 일반 <span class="docutils literal">mixed</span> moving command는
 크기가 작더라도 standing으로 변환하지 않으므로 연속적인 저속 command 범위를 유지한다.</p>
-<p>모든 exact-zero standing에서 weight <span class="docutils literal"><span class="pre">-0.05</span></span> 인 <span class="docutils literal">stand_still_joint_deviation_l1</span> 이 command term의
+<p>모든 exact-zero standing에서 weight <span class="docutils literal"><span class="pre">-0.1</span></span> 인 <span class="docutils literal">stand_still_joint_deviation_l1</span> 이 command term의
 <span class="docutils literal">is_standing_env</span> mask를 사용하여 전체 13관절의 실제 joint position을 default joint pose 근처로 유도한다.
-이는 이전 <span class="docutils literal"><span class="pre">-0.2</span></span> 설정의 25% 강도다. 양발 standing 편향은 남기되 외란이나 급정지 중 recovery step과의
-경쟁을 줄이며, 작은 non-zero 이동 command에는 적용하지 않는다.</p>
+이는 검증된 <span class="docutils literal"><span class="pre">-0.05</span></span> 와 이전 <span class="docutils literal"><span class="pre">-0.2</span></span> 사이의 절충 강도다. 양발 standing 편향은 유지하면서 외란이나
+급정지 중 recovery step과의 경쟁을 제한하며, 작은 non-zero 이동 command에는 적용하지 않는다.</p>
 </section>
 <section id="episode-timeout-periodic-freeze-push-timer">
 <h3>Episode timeout, periodic freeze, push timer 관계</h3>
@@ -1810,14 +1862,23 @@ penalty <span class="docutils literal">1</span> 을 반환한다. 따라서 정�
 <span class="docutils literal">compute_first_contact(step_dt)</span> 는 최근 <span class="docutils literal">10 ms</span> 내 접촉을 검출하지만 reward가 읽는 <span class="docutils literal">body_lin_acc_w</span> 는
 5번째 physics substep 이후의 최신 가속도이므로, 앞선 <span class="docutils literal">2 ms</span> substep에서 발생한 충격 peak와 시간적으로
 어긋날 수 있다. 함수와 단위 테스트는 비교용으로 남긴다. 현재 soft-landing 실험은 stateful
-<span class="docutils literal">FeetTouchdownVelocityL2</span> 를 활성화한다. 이전 policy step에서 공중이었던 발의 world-Z 속도를 저장하고,
-first contact가 발생하면 <span class="docutils literal"><span class="pre">relu(-v_z_prev)^2</span></span> 를 사건당 한 번 계산해 weight <span class="docutils literal"><span class="pre">-10.0</span></span> 을 적용한다.
+<span class="docutils literal">FeetTouchdownVelocityL2</span> 를 활성화한다. 이전 policy step에서 공중이었던 발의 world-XYZ 속도를 저장하고,
+first contact가 발생하면 <span class="docutils literal">v_x_prev^2 + v_y_prev^2 + <span class="pre">relu(-v_z_prev)^2</span></span> 를 사건당 한 번 계산해 weight
+<span class="docutils literal"><span class="pre">-10.0</span></span> 을 적용한다.
 접근 중과 계속된 stance에는 영향을 주지 않으며 reset 직후 이전 sample이 없는 초기 접촉도 제외한다.
 <span class="docutils literal">FeetContactForceL2</span> class는 first contact부터 <span class="docutils literal">0.10 s</span> 동안 filtered world-frame 접촉 합력
 <span class="docutils literal"><span class="pre">||[F_x,F_y,F_z]||</span></span> 의 최대값을 누적한다. 현재 shaping config는 <span class="docutils literal">feet_contact_force=None</span> 이므로 GRF가
 학습을 shaping하지 않는다. 대신 <span class="docutils literal">feet_contact_force_metrics</span> 가 <span class="docutils literal">metric_only=True</span> 로 같은 peak를
 TensorBoard <span class="docutils literal">Metrics/feet_touchdown/mean_peak_normal_force</span> 에 기록하면서 reward에는 항상 0을 반환한다.
 Contact Forces debug visualization도 그대로 사용할 수 있다.</p>
+<p>추가 <span class="docutils literal">FeetTouchdownDiagnostics</span> term도 항상 0을 반환한다. URDF sole collision box에서 toe <span class="docutils literal">x=0.175 m</span>,
+heel <span class="docutils literal"><span class="pre">x=-0.060</span> m</span>, 좌우 <span class="docutils literal"><span class="pre">y=+/-0.045</span> m</span> 인 네 모서리를 복원하고
+<span class="docutils literal">v_edge = v_foot + omega_foot x (R_foot r_edge)</span> 로 회전 성분까지 포함한 착지 직전 point velocity를
+계산한다. Toe/heel 각각의 낮은 모서리와 네 점 중 최저 모서리 속도를 기록하므로 발 원점 속도로 보이지 않는
+toe/heel slap을 구분할 수 있다. Ground-filtered world-Z normal force는 <span class="docutils literal"><span class="pre">0-20</span> ms</span> 초기 충돌과
+<span class="docutils literal"><span class="pre">20-100</span> ms</span> 체중 인수 구간으로 나누어 기록한다. 이 term은 기존 checkpoint의 action과 reward를 바꾸지
+않고 Play/Teleop 진단에만 사용한다. 학습에서는 TensorBoard에, Teleop에서는 자동 episode 종료 또는 keyboard
+<span class="docutils literal">R</span> reset 뒤 터미널에 같은 metric이 표시된다.</p>
 <p>검증된 기준 checkpoint는
 <span class="docutils literal"><span class="pre">2026-08-12_23-45-39_privileged250_gain240_160_80_air050_w2_tdvel10_ar01_ar2_005_noforce_delay4ms_fresh20k/model_19999.pt</span></span>
 다. 이 checkpoint는 평균 착지 직전 하강속도를 약 <span class="docutils literal">0.044 m/s</span> 로 낮추면서 velocity tracking과 평균 완료
@@ -1836,6 +1897,11 @@ event-weighted 평균을 TensorBoard에 기록한다.</p>
 <ul class="simple">
 <li><p><span class="docutils literal">Metrics/feet_touchdown/mean_pre_touchdown_vertical_speed</span>: 직전 airborne sample의 평균 하강속도 크기 [m/s]</p></li>
 <li><p><span class="docutils literal">Metrics/feet_touchdown/mean_air_time</span>: touchdown에서 완료된 평균 <span class="docutils literal">last_air_time</span> [s]</p></li>
+<li><p><span class="docutils literal">Metrics/feet_touchdown/mean_pre_touchdown_toe_*</span>: 낮은 toe 모서리의 절대 X/Y 및 하강속도 [m/s]</p></li>
+<li><p><span class="docutils literal">Metrics/feet_touchdown/mean_pre_touchdown_heel_*</span>: 낮은 heel 모서리의 절대 X/Y 및 하강속도 [m/s]</p></li>
+<li><p><span class="docutils literal">Metrics/feet_touchdown/mean_pre_touchdown_lower_edge_*</span>: 최저 sole 모서리의 planar/하강속도 [m/s]</p></li>
+<li><p><span class="docutils literal">Metrics/feet_touchdown/mean_peak_normal_force_0_20ms</span>: 초기 접촉 world-Z peak [N]</p></li>
+<li><p><span class="docutils literal">Metrics/feet_touchdown/mean_peak_normal_force_20_100ms</span>: 후속 체중 인수 world-Z peak [N]</p></li>
 </ul>
 <p>두 값은 reward 가중치나 <span class="docutils literal">dt</span> 가 적용되지 않은 물리량이며 매 step CPU 동기화를 만들지 않는다.</p>
 <p>Play 환경은 현재 standing 검증을 위해 <span class="docutils literal">lin_vel_x=0.0 m/s</span>, <span class="docutils literal">lin_vel_y=0.0 m/s</span>,

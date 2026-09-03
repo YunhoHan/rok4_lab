@@ -261,6 +261,7 @@ class RoK4RewardsCfg(RewardsCfg):
             "target_height": 0.054,
             "std": 0.04,
             "velocity_scale": 0.50,
+            "yaw_lift_fraction": 0.50,
             "asset_cfg": SceneEntityCfg("robot", body_names=["L_Foot_Link", "R_Foot_Link"]),
             "sensor_cfg": SceneEntityCfg(
                 "contact_forces",
@@ -315,6 +316,29 @@ class RoK4RewardsCfg(RewardsCfg):
             "metric_only": True,
         },
     )
+    feet_touchdown_diagnostics = RewTerm(
+        func=mdp.FeetTouchdownDiagnostics,
+        weight=1.0,
+        params={
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces",
+                body_names=["L_Foot_Link", "R_Foot_Link"],
+                preserve_order=True,
+            ),
+            "asset_cfg": SceneEntityCfg(
+                "robot",
+                body_names=["L_Foot_Link", "R_Foot_Link"],
+                preserve_order=True,
+            ),
+            # rok4_train.urdf sole box: center x=0.0575 m, size=(0.235, 0.09, 0.014) m.
+            "toe_x": 0.175,
+            "heel_x": -0.060,
+            "half_width": 0.045,
+            "sole_z": 0.0,
+            "early_window_s": 0.02,
+            "late_window_s": 0.10,
+        },
+    )
     feet_touchdown_acc = None
     feet_flat_orientation_l2 = None
     feet_swing_roll_l2 = RewTerm(
@@ -344,13 +368,14 @@ class RoK4RewardsCfg(RewardsCfg):
         func=mdp.feet_lateral_separation_l2,
         weight=-2.0,
         params={
-            "minimum_width": 0.16,
+            "minimum_width": 0.165,
             "asset_cfg": SceneEntityCfg("robot", body_names=["L_Foot_Link", "R_Foot_Link"]),
         },
     )
     stand_still_joint_deviation_l1 = RewTerm(
         func=mdp.stand_still_joint_deviation_l1,
-        weight=-0.05,
+        # Experimental compromise between natural recovery at -0.05 and stronger posture retention at -0.2.
+        weight=-0.1,
         params={
             "command_name": "base_velocity",
             "asset_cfg": SceneEntityCfg("robot", joint_names=ROK4_JOINT_ORDER, preserve_order=True),

@@ -4,6 +4,26 @@
 
 ### Changed
 
+- Increased the experimental signed lateral foot-separation threshold from `0.160 m` to `0.165 m` to provide
+  additional Sim2Real clearance between the left and right ankle assemblies without returning to the previously
+  aggressive `0.170 m` setting.
+- Increased the current experimental exact-zero standing default-pose weight from the validated `-0.05` baseline to
+  `-0.1` as a compromise between standing posture retention and disturbance-recovery freedom.
+- Added a reward-neutral touchdown diagnostic that reconstructs the four RoK4 sole corners, records toe, heel, and
+  lowest-edge pre-touchdown velocity including angular ``omega x r`` motion, and splits world-Z normal-force peaks
+  into 0-20 ms impact and 20-100 ms weight-acceptance windows. Teleop now prints these metrics after automatic or
+  manual episode resets so existing checkpoints can be diagnosed without retraining.
+- Changed pure-yaw swing-clearance shaping from an unsigned planar-speed gate to a 50/50 blend of target-height
+  shaping and commanded yaw-tangential progress. This rewards lifting the foot during in-place turns without
+  rewarding arbitrary forward/backward swing, while linear-command and standing behavior remain unchanged.
+- Extended the event-only touchdown-velocity penalty from downward world-Z speed to the sum of world-XY speed and
+  downward world-Z speed squared. Added separate physical-unit TensorBoard metrics for mean pre-touchdown planar and
+  vertical speed while retaining foot-wise summation and the existing first-contact event mask.
+- Replaced the stale top-level directional-policy label with a validation-specific baseline table that ties each run
+  and checkpoint to its matching code commit and distinguishes current development, MuJoCo Sim2Sim, hardware
+  Sim2Real, and previous references.
+- Added a persistent repository checklist requiring RST/HTML/PDF/changelog synchronization and explicit approval
+  before another branch is merged, fast-forwarded, or moved during a baseline update.
 - Replaced the automatic world-frame velocity-only push with an environment-local mixed disturbance. Each event uses
   the robot's base-yaw frame and exclusively selects either an instantaneous velocity change or an impulse-equivalent
   finite-duration force pulse, while retaining independent 10-15 s push timers.

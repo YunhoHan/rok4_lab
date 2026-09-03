@@ -56,6 +56,7 @@ def _upstream_teleop_script(tmp_path: Path) -> Path:
         "        with torch.inference_mode():\n"
         "                    # agent stepping\n"
         "                    actions = policy(obs)\n"
+        "                    obs, _, dones, _ = env.step(actions)\n"
     )
     script_path = tmp_path / "play.py"
     script_path.write_text(source, encoding="utf-8")
@@ -95,4 +96,6 @@ def test_teleop_source_visualizes_actor_velocity_estimate(tmp_path: Path) -> Non
     assert "RoK4EstimatedVelocityVisualizer" in source
     assert "estimated_base_lin_vel_b = policy_nn.estimate_base_velocity(obs)" in source
     assert "estimated_velocity_visualizer.visualize(estimated_base_lin_vel_b)" in source
+    assert "obs, _, dones, infos = env.step(actions)" in source
+    assert "_print_touchdown_diagnostics(infos)" in source
     compile(source, "play.py", "exec")

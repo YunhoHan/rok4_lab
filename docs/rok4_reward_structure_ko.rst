@@ -394,8 +394,8 @@ RoK4 전용 Reward Terms
    * - ``feet_clearance``
      - ``mdp.feet_swing_clearance_exp``
      - ``0.2``
-     - Foot body-origin target ``0.054 m`` (sole clearance ``0.050 m`` + origin offset ``0.004 m``), std ``0.04 m``, velocity scale ``0.50 m/s``
-     - 선형 명령에서는 yaw frame의 command 방향으로 진행하는 swing Foot 속도만 ``tanh`` gate에 사용한다. 높이 Gaussian은 유지하며, 양발 진행 방향이 반대인 pure-yaw에서는 기존 XY 속도 크기를 사용한다. Air-time 길이는 touchdown reward가 별도로 담당한다.
+     - Foot body-origin target ``0.054 m`` (sole clearance ``0.050 m`` + origin offset ``0.004 m``), std ``0.04 m``, velocity scale ``0.50 m/s``, yaw lift fraction ``0.50``
+     - 선형 명령에서는 yaw frame의 command 방향 진행속도만 ``tanh`` gate에 사용한다. Pure-yaw에서는 높이 점수 50%와 명령 회전 접선 방향 진행 점수 50%를 합쳐 수직 lift를 허용하되 임의의 전후 swing은 추가 보상하지 않는다. Air-time 길이는 touchdown reward가 별도로 담당한다.
    * - ``no_jumps``
      - ``mdp.desired_contacts``
      - ``-2.0``
@@ -410,7 +410,7 @@ RoK4 전용 Reward Terms
      - ``mdp.FeetTouchdownVelocityL2``
      - ``-10.0``
      - safe landing velocity ``0.0 m/s``
-     - 이전 policy step의 공중 발 world-Z 속도를 저장한다. First contact가 발생하면 하강속도 크기의 제곱 ``relu(-v_z_prev)^2`` 을 사건당 한 번 penalty로 만든다.
+     - 이전 policy step의 공중 발 world-XYZ 속도를 저장한다. First contact가 발생하면 ``v_x_prev^2 + v_y_prev^2 + relu(-v_z_prev)^2`` 을 발별로 합산해 사건당 한 번 penalty로 만든다.
    * - ``feet_contact_velocity``
      - ``mdp.feet_contact_velocity_l2``
      - ``None`` (현재 비활성)
@@ -426,6 +426,11 @@ RoK4 전용 Reward Terms
      - ``1.0`` (함수 반환값은 항상 0)
      - landing window ``0.10 s``
      - Reward Manager가 매 step 호출하여 touchdown peak GRF를 집계하지만 reward 합에는 정확히 0을 더한다. TensorBoard ``Metrics/feet_touchdown/mean_peak_normal_force`` 만 기록한다.
+   * - ``feet_touchdown_diagnostics``
+     - ``mdp.FeetTouchdownDiagnostics``
+     - ``1.0`` (함수 반환값은 항상 0)
+     - sole corners: toe ``x=0.175 m``, heel ``x=-0.060 m``, half width ``0.045 m``; force windows ``0-20 ms``, ``20-100 ms``
+     - 발 원점 선형속도에 ``omega x r`` 회전속도를 더해 toe/heel/최저 모서리의 착지 직전 속도를 기록한다. World-Z normal-force peak도 초기 충돌과 이후 체중 인수 구간으로 나누며 reward에는 영향을 주지 않는다.
    * - ``feet_touchdown_acc``
      - ``mdp.feet_touchdown_acc``
      - ``None`` (현재 비활성)
@@ -454,11 +459,11 @@ RoK4 전용 Reward Terms
    * - ``feet_lateral_separation_l2``
      - ``mdp.feet_lateral_separation_l2``
      - ``-2.0``
-     - minimum width ``0.16 m``; feet 순서는 Left, Right
-     - 좌우 Foot 위치 차이를 base yaw frame으로 회전한 뒤 signed lateral width ``y_left - y_right`` 를 유지한다. ``relu(0.16 - signed_width)^2`` 만 반환하므로 정상 ``0.21 m`` 폭과 넓은 폭은 제한하지 않고, 좁아질수록 penalty가 증가하며 좌우 Foot이 교차해 부호가 바뀌면 더 크게 작동한다. Command mask 없이 standing과 moving 모두에 적용된다.
+     - experimental minimum width ``0.165 m``; feet 순서는 Left, Right
+     - 좌우 Foot 위치 차이를 base yaw frame으로 회전한 뒤 signed lateral width ``y_left - y_right`` 를 유지한다. ``relu(0.165 - signed_width)^2`` 만 반환하므로 정상 ``0.21 m`` 폭과 넓은 폭은 제한하지 않고, 좁아질수록 penalty가 증가하며 좌우 Foot이 교차해 부호가 바뀌면 더 크게 작동한다. Command mask 없이 standing과 moving 모두에 적용된다. 이 값은 실기 발목 부품 간 여유를 확인하기 위해 기존 ``0.16 m`` 에서 5 mm 증가시킨 soft penalty 하한이며, 기하학적 hard constraint는 아니다.
    * - ``stand_still_joint_deviation_l1``
      - ``mdp.stand_still_joint_deviation_l1``
-     - ``-0.05``
+     - ``-0.1``
      - ``ROK4_JOINT_ORDER`` 전체 13관절, ``base_velocity.is_standing_env`` mask
      - RoK4 command generator가 standing으로 지정한 환경에서 실제 joint position과 default joint position 차이의 절댓값 합을 penalty로 반환한다. 검증 기준 ``-0.2`` 의 25% 강도로 양발 standing 편향을 남기면서 recovery step과의 경쟁을 줄이는 ablation이다. 기존 Gym의 ``defaultPosStanding`` 에 대응한다.
    * - ``dof_pos_limits``
@@ -602,7 +607,7 @@ Reward Function 요약
      - 정확히 한 발이 first contact가 된 순간 ``last_air_time - target_air_time`` 을 한 번 반환하는 상한 없는 stateless 함수다.
    * - ``feet_swing_clearance_exp``
      - RoK4 local mdp
-     - 선형 명령에서는 유효 swing Foot별 ``tanh(relu(v_foot,yaw·unit(command_xy))/0.50) exp(-(h-0.054)^2/0.04^2)`` 를 평균한다. Pure-yaw에서는 ``v_xy`` 크기를 사용하고 standing에서는 0이다.
+     - 선형 명령에서는 유효 swing Foot별 ``tanh(relu(v_foot,yaw·unit(command_xy))/0.50) exp(-(h-0.054)^2/0.04^2)`` 를 평균한다. Pure-yaw에서는 높이 gate ``0.5`` 와 명령 회전 접선 방향 진행 gate ``0.5`` 를 합치며, standing과 zero command에서는 0이다.
    * - ``desired_contacts``
      - Isaac Lab 공통
      - 지정 body 중 하나라도 최근 force history에서 threshold를 넘으면 0, 모두 접촉하지 않으면 1을 반환한다. Negative weight와 함께 양발 flight penalty로 사용한다.
@@ -656,7 +661,7 @@ Reward Function 요약
      - 현재 joint position과 default joint position 차이의 absolute sum.
    * - ``stand_still_joint_deviation_l1``
      - RoK4 로컬 mdp
-     - ``base_velocity.is_standing_env`` 가 true일 때 전체 13관절의 default-pose absolute error sum을 계산한다. 현재 weight는 ``-0.05`` 이다.
+     - ``base_velocity.is_standing_env`` 가 true일 때 전체 13관절의 default-pose absolute error sum을 계산한다. 현재 실험 weight는 ``-0.1`` 이다.
    * - ``joint_pos_limits``
      - Isaac Lab 공통
      - soft joint position limit을 넘은 정도를 합산한다.
@@ -713,16 +718,16 @@ RoK4-local training ``RoK4MixedPush`` 는 freeze와 다른 환경별 timer다. R
 ``-0.5~0.5 m/s`` 이며, event의 50%는 root velocity에 즉시 더하고 50%는 ``0.05~0.50 s`` 동안
 ``F=m*Delta v/T`` force pulse로 적용한다. 따라서 외란은 이동 command 중에도, exact-zero freeze 중에도, 전환
 부근에도 발생할 수 있다. Freeze 중 외란이 들어와도 command와 ``is_standing_env`` 는 zero/true로 유지되므로
-dense velocity-tracking reward와 약한 ``stand_still_joint_deviation_l1=-0.05`` 가 함께 복구를 평가한다.
+dense velocity-tracking reward와 ``stand_still_joint_deviation_l1=-0.1`` 이 함께 복구를 평가한다.
 ``-0.01`` 후속 실험은 standing stepping과 동작 비용을 증가시켜 채택하지 않았다. Contact reward와
 ``no_jumps`` 는 같은 구간의 실제 발 접촉 상태를 그대로 평가한다. Play/Teleop에서는 자동 event를 끄고 수동
 velocity Push Test UI를 사용한다.
 
 Periodic freeze와 ``standing`` 역할은 command를 ``[0, 0, 0]`` 으로 만드는 동시에 ``is_standing_env=True`` 를
 설정한다. 이 mask는 feet-air-time과 clearance 같은 standing-aware gait term 및
-``stand_still_joint_deviation_l1`` 에 사용한다. 현재 standing weight ``-0.05`` 는 이전 ``-1.0`` 및 ``-0.2``
-보다 약하다. Dense velocity/upright/base-height/smoothness reward가 주된 복구 목적을 담당하고,
-이 항은 exact-zero에서 default pose로 향하는 약한 편향만 제공한다.
+``stand_still_joint_deviation_l1`` 에 사용한다. 현재 실험 weight ``-0.1`` 은 검증된 mixed-push baseline
+``-0.05`` 보다 강하고 이전 ``-0.2`` 보다 약한 절충값이다. Dense velocity/upright/base-height/smoothness
+reward가 주된 복구 목적을 담당하고, 이 항은 exact-zero에서 default pose로 향하는 편향을 제공한다.
 
 이 command는 ``track_lin_vel_xy_exp``, ``track_ang_vel_z_exp``, ``feet_air_time`` 에 직접 영향을 준다. 특히
 ``FeetAirTimeTouchdownBiped`` 는 x/y command norm이 ``0.05`` 이하이면 reward를 0으로 만든다. 즉 거의 정지
@@ -770,17 +775,48 @@ Raw 값에는 ``weight=-1.0`` 과 policy ``dt`` 가 적용된다. 목표는 stan
 평균 자세가 크게 주저앉거나 과도하게 올라가는 것을 막는 약한 기준으로 사용한다.
 
 ``feet_clearance`` 는 touchdown event가 아니라 swing 중 매 policy step 계산하는 dense positive reward다. 유효한
-Foot 집합을 ``S`` 라고 하면 raw reward는 다음과 같다.
+Foot 집합을 ``S`` 라고 하고 높이 score를 ``H_i`` 라고 하면 다음과 같다.
 
 .. math::
 
-   r_{clear}
-   = \frac{1}{|S|}
-     \sum_{i \in S}
-     \tanh\left(\frac{\|v_{i,xy}\|}{0.50}\right)
-     \exp\left(-\frac{(h_i-0.054)^2}{0.04^2}\right)
+   H_i
+   = \exp\left(-\frac{(h_i-0.054)^2}{0.04^2}\right)
 
-여기서 ``h_i = z_FootLink,i,w - z_origin,w`` 이고 ``v_i,xy`` 는 Foot body의 world-frame planar speed다.
+선형 command ``c_xy`` 가 있으면 기존과 동일하게 command 진행 방향 성분만 사용한다.
+
+.. math::
+
+   G_{lin,i}
+   = \tanh\left(
+       \frac{\max(0,\;v_{i,xy}^{yaw}\cdot\hat c_{xy})}{0.50}
+     \right),
+   \qquad
+   r_{clear}
+   = \frac{1}{|S|}\sum_{i\in S}H_i G_{lin,i}
+
+Pure-yaw command에서는 root에서 Foot으로 향하는 yaw-frame 반경 ``r_i`` 로 각 Foot의 명령 회전 접선 방향을
+계산한다. Base의 평행이동을 회전 진행으로 오인하지 않도록 Foot 속도에서 root 선속도를 뺀다.
+
+.. math::
+
+   \hat d_{yaw,i}
+   = \mathrm{sign}(\omega_z)
+     \frac{[-r_{i,y},\;r_{i,x}]}{\|[-r_{i,y},\;r_{i,x}]\|},
+
+.. math::
+
+   G_{yaw,i}
+   = 0.5
+     + 0.5\tanh\left(
+       \frac{\max(0,\;(v_i-v_{root})_{xy}^{yaw}\cdot\hat d_{yaw,i})}{0.50}
+     \right),
+   \qquad
+   r_{clear}
+   = \frac{1}{|S|}\sum_{i\in S}H_i G_{yaw,i}
+
+따라서 pure-yaw에서 목표 높이만 맞춘 수직 lift는 ``0.5 H_i`` 를 받고, 올바른 접선 진행이 커질수록
+``H_i`` 에 접근한다. 반대 접선 방향 이동은 progress bonus 없이 ``0.5 H_i`` 에 머문다. 선형 command와 yaw
+command가 모두 없으면 gate와 reward는 0이다. ``h_i = z_FootLink,i,w - z_origin,w`` 이다.
 ``S`` 에는 ``current_air_time > 0`` 이고 command generator의 ``is_standing_env=False`` 인 발만 포함된다.
 유효한 발이 없으면 0이다. 두 발이 동시에 유효해도 합이 아니라 평균하므로 raw 최대값은 1 미만이다. Weight는
 ``+0.2`` 이다.
@@ -792,7 +828,9 @@ clearance ``0.050 m`` 에 이 origin offset ``0.004 m`` 를 더한 값이다. ``
 scanner를 추가하지 않는다. 속도 gate는 높이 목표에 도달했더라도 거의 정지한 발이 점수를 받는 것을 막는다. 예를 들어
 ``v_xy=0.10 m/s`` 에서는 ``tanh(0.2) ~= 0.197``, ``0.20 m/s`` 에서는 ``tanh(0.4) ~= 0.380``,
 ``0.50 m/s`` 에서는 ``tanh(1) ~= 0.762`` 이며 고속에서는 부드럽게 1에 포화된다. 따라서 이전 ``0.20 m/s``
-scale보다 느린 swing Foot의 clearance shaping을 약하게 만든다.
+scale보다 느린 swing Foot의 clearance shaping을 약하게 만든다. 이 설명은 선형 command와 pure-yaw의 접선
+progress 절반에 적용된다. Pure-yaw의 나머지 절반은 제자리 회전 중 수직 lift 자체를 허용하기 위해 속도 gate 없이
+높이 score를 사용한다.
 
 ``no_jumps`` 는 ``mdp.desired_contacts`` 를 ``weight=-2.0`` 과 force ``threshold=1.0 N`` 으로 사용한다.
 최근 contact-force history에서 좌우 Foot 모두 threshold를 넘지 못한 경우에만 raw value ``1`` 을 반환하므로,
@@ -818,28 +856,60 @@ Contact sensor는 ``update_period=0.002 s`` 와 ``history_length=self.decimation
 이 contact-force history는 policy observation history와 별개의 buffer이다.
 
 현재 soft-landing 실험은 ``FeetTouchdownVelocityL2`` 만 활성화한다.
-Velocity class는 각 발의 이전 policy step world-Z 속도와 접촉 여부를 저장하고, 이전 sample이
-공중이었던 발에 first contact가 발생할 때만 다음 raw penalty를 반환한다.
+Velocity class는 각 발의 이전 policy step world-XYZ 속도와 접촉 여부를 저장하고, 이전 sample이
+공중이었던 발에 first contact가 발생할 때만 다음 raw penalty를 반환한다. 발별 값은 평균하지 않고 합산한다.
 
 .. math::
 
    P_{landing}=\sum_i I_{first,i} I_{air,previous,i}
-   \left[\max(0,-v_{z,previous,i})\right]^2
+   \left[
+     v_{x,previous,i}^2
+     + v_{y,previous,i}^2
+     + \max(0,-v_{z,previous,i})^2
+   \right]
 
 Reward Manager는 여기에 weight ``-10.0`` 과 ``dt=0.01 s`` 를 적용한다. 따라서 접근 중과 계속된 stance에는
-직접 영향을 주지 않는다. 별도 dead zone은 없지만 L2 특성상 작은 하강속도에는 작은 penalty만 생긴다. Reset
-직후에는 이전 sample이 없으므로 초기 접촉을 제외한다.
+직접 영향을 주지 않는다. Planar XY에는 dead zone을 두지 않고, Z는 아래 방향 성분만 사용한다. L2 특성상 작은
+속도에는 작은 penalty만 생긴다. Reset 직후에는 이전 sample이 없으므로 초기 접촉을 제외한다.
 
-현재 검증 기준은
+이 XYZ 확장은 아직 검증 전 개발 실험이다. 이전 검증 기준은
 ``2026-08-12_23-45-39_privileged250_gain240_160_80_air050_w2_tdvel10_ar01_ar2_005_noforce_delay4ms_fresh20k``
-의 ``model_19999.pt`` 다. 마지막 checkpoint에서 평균 착지 직전 하강속도는 약 ``0.044 m/s`` 였고 velocity
-tracking과 평균 완료 air time은 유지되었다. 학습 checkpoint는 Isaac Lab log directory에 보존하며 Git에는
-포함하지 않는다.
+의 ``model_19999.pt`` 다. 이 정책은 Z 전용 penalty로 학습되었으며, 마지막 checkpoint에서 평균 착지 직전
+하강속도는 약 ``0.044 m/s`` 였고 velocity tracking과 평균 완료 air time은 유지되었다. 학습 checkpoint는
+Isaac Lab log directory에 보존하며 Git에는 포함하지 않는다.
 
 ``FeetContactForceL2`` class의 shaping term은 ``feet_contact_force=None`` 이다. 별도
 ``feet_contact_force_metrics`` term은 ``metric_only=True`` 와 weight ``1.0`` 으로 매 step 실행되지만 함수가
 항상 0을 반환하므로 total reward와 policy gradient에 영향을 주지 않는다. 이 logging-only term은 touchdown
 후 ``0.10 s`` 동안의 peak GRF를 집계해 TensorBoard에 기록한다.
+
+``FeetTouchdownDiagnostics`` 도 항상 0을 반환하는 측정 전용 term이다. RoK4 collision sole box의 네 모서리를
+foot body frame에서 다음과 같이 정의한다.
+
+.. math::
+
+   r_{toe,\pm}=[0.175,\ \pm0.045,\ 0]^T,\qquad
+   r_{heel,\pm}=[-0.060,\ \pm0.045,\ 0]^T
+
+각 모서리의 world-frame 위치와 속도는 다음 rigid-body kinematics로 계산한다.
+
+.. math::
+
+   p_{edge}^{w}=p_{foot}^{w}+R_{foot}^{w}r_{edge},\qquad
+   v_{edge}^{w}=v_{foot}^{w}+\omega_{foot}^{w}\times(R_{foot}^{w}r_{edge})
+
+따라서 발 원점 속도가 작더라도 pitch/roll 각속도로 toe 또는 heel이 빠르게 내려오는 foot slap을 측정할 수
+있다. Toe 두 모서리 중 낮은 점, heel 두 모서리 중 낮은 점, 네 모서리 전체 중 가장 낮은 점을 각각 선택한다.
+First contact가 발생하면 직전 policy sample의 절대 X/Y 속도, 하강속도, 최저 모서리 planar speed를 사건당
+한 번 누적한다.
+
+동시에 filtered contact-force history의 world-Z 성분만 사용하여 first contact 이후 ``0-20 ms`` 초기 충돌과
+``20-100 ms`` 체중 인수 구간의 peak normal force를 따로 누적한다. 기존
+``mean_peak_normal_force`` 는 호환성을 위해 이름을 유지한 100 ms 합력 크기 ``||F||`` 이고, 새 두 force
+metric은 실제 ``max(F_z, 0)`` 이므로 서로 같은 물리량이 아니다. 이 진단은 observation, action, network,
+gain, DR 또는 reward gradient를 변경하지 않으며 기존 checkpoint를 Play/Teleop으로 실행해도 사용할 수 있다.
+학습에서는 TensorBoard에 기록되고, Teleop에서는 episode 종료 또는 keyboard ``R`` reset 직후 같은 물리 단위
+평균이 터미널에 출력된다.
 
 Air-time과 touchdown velocity class는 episode 누적값과 event count를 GPU tensor로 유지하고,
 환경 reset 때 ``Metrics/feet_touchdown/*`` 의 event-weighted 평균을 기록한다. 기존 Gym 호환 stateless
@@ -917,12 +987,24 @@ mask가 함께 들어간다. 개념적으로 다음 곱에 가깝다.
 
 규칙적인 교대 보행에서는 touchdown 빈도와 step air-time이 서로 반비례할 수 있으므로 이 scalar 하나로
 ``T_air`` 을 역산할 수 없다. 또한 10k, 15k, 20k 값이 단조 증가하지 않아도 보행이 악화되었다는 뜻이 아니다.
-현재 구현은 정확한 평균 비교를 위해 touchdown ``last_air_time`` 과 착지 직전 수직속도를 event count로 나눈
-물리 단위 TensorBoard metric을 함께 기록한다. 중앙값/상위 백분위와 초당 touchdown 횟수는 아직 집계하지 않는다.
+현재 구현은 정확한 평균 비교를 위해 touchdown ``last_air_time`` 과 착지 직전 planar/vertical 속도를 event
+count로 나눈 물리 단위 TensorBoard metric을 함께 기록한다. 중앙값/상위 백분위와 초당 touchdown 횟수는 아직
+집계하지 않는다.
 
+* ``Metrics/feet_touchdown/mean_pre_touchdown_planar_speed`` [m/s]
 * ``Metrics/feet_touchdown/mean_pre_touchdown_vertical_speed`` [m/s]
 * ``Metrics/feet_touchdown/mean_air_time`` [s]
 * ``Metrics/feet_touchdown/mean_peak_normal_force`` [N]
+* ``Metrics/feet_touchdown/mean_pre_touchdown_toe_abs_vx`` [m/s]
+* ``Metrics/feet_touchdown/mean_pre_touchdown_toe_abs_vy`` [m/s]
+* ``Metrics/feet_touchdown/mean_pre_touchdown_toe_downward_speed`` [m/s]
+* ``Metrics/feet_touchdown/mean_pre_touchdown_heel_abs_vx`` [m/s]
+* ``Metrics/feet_touchdown/mean_pre_touchdown_heel_abs_vy`` [m/s]
+* ``Metrics/feet_touchdown/mean_pre_touchdown_heel_downward_speed`` [m/s]
+* ``Metrics/feet_touchdown/mean_pre_touchdown_lower_edge_planar_speed`` [m/s]
+* ``Metrics/feet_touchdown/mean_pre_touchdown_lower_edge_downward_speed`` [m/s]
+* ``Metrics/feet_touchdown/mean_peak_normal_force_0_20ms`` [N]
+* ``Metrics/feet_touchdown/mean_peak_normal_force_20_100ms`` [N]
 
 ``mean_peak_normal_force`` 는 기존 TensorBoard tag 호환을 위해 이름을 유지한다. 실제 집계값은 filtered
 world-frame 접촉 합력 ``||[F_x,F_y,F_z]||`` 의 landing-window peak다. ``feet_contact_force_metrics`` 는
@@ -945,7 +1027,7 @@ world-frame 접촉 합력 ``||[F_x,F_y,F_z]||`` 의 landing-window peak다. ``fe
    8. torque, joint acceleration, action rate, second action rate를 줄여 움직임을 부드럽게 한다.
    9. ankle limit, hip/torso deviation을 제한한다.
    10. zero command에서 dense velocity/upright/base-height/smoothness reward로 정지 안정성을 유도하고,
-       약한 full-body default-pose penalty ``-0.05`` 로 양발 standing 편향을 보완한다.
+       full-body default-pose penalty ``-0.1`` 로 양발 standing 편향을 보완한다.
    11. Foot를 제외한 body 접촉을 실패 종료로 처리한다.
 
 튜닝 시 우선 확인할 항목

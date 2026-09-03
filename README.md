@@ -2,32 +2,34 @@
 
 Current project version: `0.2.0`
 
-Flat walking baseline: `Yunho Directional Touchdown ADAPT v1` (experimental)
+## Policy Baselines
 
-Current directional-gait reference policy: run
-`2026-08-03_14-58-46_touchdown_air_symmetric_x_fastforward_fresh20k`, checkpoint `model_19999.pt`.
-Teleop evaluation confirmed stable forward, backward, lateral, and yaw motion. Checkpoints `model_9999.pt` and
-`model_14999.pt` remain useful comparison points, but the TensorBoard tracking metrics are effectively converged by
-15k and contact/sliding terms receive only small additional improvements by 20k.
+The commit column identifies the code snapshot matching each trained checkpoint. Validation labels record only tests
+that were actually completed; they are not inferred from branch ancestry or a successful training run.
 
-The previous Sim2Sim-validated reference remains run
-`2026-07-30_00-50-43_adapt_reset_jointphysics_footdr_fresh`, checkpoint `model_5000.pt`. Preserve both the checkpoint
-and its exported ONNX separately; exporting another checkpoint rewrites the run's default `exported/policy.onnx`.
+| Status | Run and checkpoint | Code commit | Verified status |
+|---|---|---|---|
+| **Current development baseline** | `2026-08-24_17-10-31_concurrent_estimator_mixedpush_baseyaw_fresh25k` / `model_24999.pt` | `ccdd543` on `yunho/mixed-push-disturbance` | Isaac Sim Teleop and training-log review complete; MuJoCo Sim2Sim and hardware Sim2Real pending |
+| **Concurrent-estimator Sim2Sim baseline** | `2026-08-21_02-28-25_concurrent_estimator_stand005_fresh25k` / `model_24999.pt` | `df37f44` on `yunho/concurrent-state-estimator` (`785a83c` documents validation) | Isaac Sim Teleop and MuJoCo Sim2Sim complete; estimator Sim2Real pending |
+| **Pre-estimator Sim2Real baseline** | `2026-08-12_23-45-39_privileged250_gain240_160_80_air050_w2_tdvel10_ar01_ar2_005_noforce_delay4ms_fresh20k` / `model_19999.pt` | `2712787` on `yunho/privileged-observation` | Hardware Sim2Real complete |
+| **Previous directional-gait baseline** | `2026-08-03_14-58-46_touchdown_air_symmetric_x_fastforward_fresh20k` / `model_19999.pt` | `1d52838` on `yunho/directional-gait-rework` (`746e5d0` documents validation) | Isaac Sim Teleop complete |
+| **Previous joint-space reference** | `2026-07-15_17-28-41` / `model_4999.pt` | `034a754` on `main` at the time | Superseded by the actuator-space interface |
 
-The `yunho/privileged-observation` experiment keeps this policy as its parent baseline and extends only the training
-critic. The `yunho/concurrent-state-estimator` ONNX policy retains the 240-value observation input and exposes two
-named outputs: the 13-value actuator action and the 3-value body-frame velocity estimate used internally by that
-action. Sim2Sim and Sim2Real consumers should read both outputs, apply only `actions` to the actuators, and log
-`estimated_base_lin_vel_b` for estimator validation.
+The concurrent-estimator ONNX policy retains the 240-value observation input and exposes two named outputs: the
+13-value actuator action and the 3-value body-frame velocity estimate used internally by that action. Deployment
+consumers should apply only `actions` to the actuators and treat `estimated_base_lin_vel_b` as estimator output.
 
-The current concurrent-estimator Sim2Sim reference is run
-`2026-08-21_02-28-25_concurrent_estimator_stand005_fresh25k`, checkpoint `model_24999.pt`, built from commit
-`df37f44`. Isaac Sim Teleop and MuJoCo Sim2Sim validation confirmed that the fused ONNX interface preserves the
-directional gait, stable standing, rapid stopping, and push-recovery behavior while exposing the velocity estimate.
-This is the deployment baseline for subsequent estimator Sim2Real validation; it is not yet a quantitative
-Sim2Real estimator-accuracy result.
+### Baseline Update Checklist
 
-Previous joint-space reference policy: run `2026-07-15_17-28-41`, checkpoint `model_4999.pt`
+Before recording or pushing a new baseline:
+
+1. Update this top-level table and mark exactly one current development baseline.
+2. Verify that the run name, checkpoint filename, and code commit describe the same configuration.
+3. Record Isaac Sim, MuJoCo Sim2Sim, and hardware Sim2Real status separately; use `pending` for untested stages.
+4. Keep the current baseline and previous validated references visibly separate.
+5. Synchronize the relevant RST source, generated HTML/PDF, and `CHANGELOG.md`.
+6. Inspect the branch graph and upstream refs. Do not merge, fast-forward, or move another branch without explicit
+   approval.
 
 RoK4 Lab contains lightweight Isaac Lab scripts and RoK4 asset configuration code used to validate the RoK4 whole-body robot model before building reinforcement-learning tasks.
 
@@ -468,10 +470,11 @@ ONNX/TorchScript policy is called outside Isaac Lab train/play, clamp the policy
 
 The action smoothness rewards use clipped raw policy-action differences, matching the G1 first-order convention.
 `action_rate_l2` and `second_action_rate_l2` use weights `-0.01` and `-0.005`, retaining the previous Gym first-to-second
-order ratio. The command-role ratios use the validated `mixed=0.35` and `standing=0.05` split. The exact-zero standing
-default-pose penalty uses the validated mixed-push value `-0.05`. A controlled `-0.01` ablation produced standing
-stepping, larger action/torque costs, and higher peak contact force, so it was rejected. Action scaling remains part
-of actuator-target generation but is not applied by either smoothness reward. Hip-pitch and knee action indices
+order ratio. The command-role ratios use the validated `mixed=0.35` and `standing=0.05` split. The current experiment
+uses an exact-zero standing default-pose weight of `-0.1`, between the validated mixed-push value `-0.05` and the
+stronger `-0.2` setting. A controlled `-0.01` ablation produced standing stepping, larger action/torque costs, and
+higher peak contact force, so it was rejected. Action scaling remains part of actuator-target generation but is not
+applied by either smoothness reward. Hip-pitch and knee action indices
 `[2, 3, 8, 9]` retain the RoK4-specific `0.5` squared-error multiplier.
 
 The reward functions do not clamp actions internally. In the standard RoK4 RSL-RL train/play path,
@@ -560,7 +563,7 @@ The `mixed`, `x`, `fast_forward`, `y`, `yaw`, and `x_yaw` roles use independent 
 `1.5-3.0 s` standing windows in a `10 s` cycle. Thus 90% of environments train asynchronous moving-to-standing transitions,
 while `standing` remains zero and `walking` never freezes. A normal `10 s` command resampling retains the episode
 role and samples a new command within that role; the next environment reset samples a new role. Exact-zero commands
-set the command term's standing mask and activate `stand_still_joint_deviation_l1` with weight `-0.05`. This weak
+set the command term's standing mask and activate `stand_still_joint_deviation_l1` with weight `-0.1`. This weak
 13-joint default-pose bias targets stable two-foot standing while retaining recovery freedom. `rel_standing_envs` is
 disabled to avoid duplicate standing assignment, and the episode-role scheduler
 is disabled in Play and Teleop configurations.
@@ -610,11 +613,13 @@ This branch adds two height terms without enabling a height scanner. `base_heigh
 weight `-1.0`, measuring root world Z relative to each flat environment origin. `feet_clearance` uses weight `+0.2`
 and rewards valid swing feet with
 `tanh(v_progress / 0.50) * exp(-(h - 0.054)^2 / 0.04^2)`, where `v_progress` is the non-negative swing-foot speed
-along the commanded planar direction in the robot yaw frame. Pure-yaw commands retain the original horizontal-speed
-magnitude gate because their feet move in opposite directions. The term is zero in standing environments and while
-neither foot is in swing. The clearance height is the `Foot_Link` body-origin Z relative to the environment origin, not
-a collision-point or ray-scanner measurement. Its `0.054 m` target explicitly combines the desired `0.050 m` sole
-clearance with the measured `0.004 m` vertical offset from the sole to the body origin.
+along the commanded planar direction in the robot yaw frame. For pure-yaw commands, `yaw_lift_fraction=0.5` gives
+half of the height score for lifting the foot and uses the other half for progress along that foot's commanded tangent
+about the root. Moving in the opposite tangent direction receives no progress bonus. The term is zero with no planar
+or yaw command, in standing environments, and while neither foot is in swing. The clearance height is the
+`Foot_Link` body-origin Z relative to the environment origin, not a collision-point or ray-scanner measurement. Its
+`0.054 m` target explicitly combines the desired `0.050 m` sole clearance with the measured `0.004 m` vertical offset
+from the sole to the body origin.
 
 The `no_jumps` penalty uses Isaac Lab's `mdp.desired_contacts` with weight `-2.0` and a `1.0 N` force threshold. It
 checks the recent contact-force history of both feet and returns a penalty only when neither foot has a qualifying
@@ -629,21 +634,24 @@ impact remained visibly hard. `compute_first_contact(step_dt)` spans the full `1
 `2 ms` contact peak can be missed. A future soft-landing experiment should use a temporally aligned pre-touchdown
 vertical-velocity or contact-force-history signal instead.
 
-The current soft-landing baseline uses a stateful, event-only `feet_touchdown_velocity` term with weight `-10.0`.
-It stores each Foot body's world-Z velocity from the preceding policy step. At first contact, it applies
-`relu(-v_z_prev)^2` only when the previous sample was airborne. This avoids shaping the entire approach or
-established stance. `feet_contact_force` is now `None`: GRF remains available in the debug visualization, but it no
-longer shapes learning. The earlier Gym-compatible continuous `feet_contact_velocity_l2` function also remains
-disabled.
+The current development experiment extends the stateful, event-only `feet_touchdown_velocity` term while retaining
+weight `-10.0`. It stores each Foot body's world-frame XYZ velocity from the preceding policy step. At first contact,
+when the previous sample was airborne, it applies
+`v_x_prev^2 + v_y_prev^2 + relu(-v_z_prev)^2`. This targets pre-touchdown planar scuffing as well as downward impact
+without shaping the entire approach or established stance. `feet_contact_force` remains `None`: GRF stays available
+in the debug visualization but does not shape learning. The earlier Gym-compatible continuous
+`feet_contact_velocity_l2` function also remains disabled.
 
-The validated reference is run
+The previous validated reference remains run
 `2026-08-12_23-45-39_privileged250_gain240_160_80_air050_w2_tdvel10_ar01_ar2_005_noforce_delay4ms_fresh20k`,
-checkpoint `model_19999.pt`. Its final touchdown metric showed a mean pre-touchdown downward speed near `0.044 m/s`
-while preserving velocity tracking and increasing mean completed air time. Checkpoints remain under the external
+checkpoint `model_19999.pt`. It was trained with the earlier Z-only touchdown penalty; its final touchdown metric
+showed a mean pre-touchdown downward speed near `0.044 m/s` while preserving velocity tracking and increasing mean
+completed air time. The XYZ experiment is not yet a validated replacement. Checkpoints remain under the external
 Isaac Lab log directory and are not committed to this repository.
 
-The two active stateful touchdown terms retain GPU episode sums and event counts and publish two event-weighted means
-when environments reset: `Metrics/feet_touchdown/mean_pre_touchdown_vertical_speed` [m/s] and
+The two active stateful touchdown terms retain GPU episode sums and event counts. At environment reset they publish
+`Metrics/feet_touchdown/mean_pre_touchdown_planar_speed` [m/s],
+`Metrics/feet_touchdown/mean_pre_touchdown_vertical_speed` [m/s], and
 `Metrics/feet_touchdown/mean_air_time` [s]. These are direct physical measurements over detected touchdowns, unlike
 `Episode_Reward/*`, and add no per-step GPU-to-CPU logging synchronization. These choices affect training rewards and
 diagnostics only; they do not change observations, Actor/Critic dimensions, checkpoints, or ONNX interfaces.
@@ -665,7 +673,7 @@ gait joint. This is a global default-pose deviation penalty, not a swing-phase k
 The contact-gated `feet_flat_orientation_l2` function remains available for diagnostics, but its reward term is
 currently `None`. It measures foot tilt against world up, which is useful for a flat-ground experiment but can oppose
 toe-off and terrain-normal alignment. The current experiment instead relies on the reduced ankle-side actuator gains
-for passive contact adaptation and a weak `stand_still_joint_deviation_l1=-0.05` term for exact-zero-command posture
+for passive contact adaptation and a weak `stand_still_joint_deviation_l1=-0.1` term for exact-zero-command posture
 stability.
 
 The active `feet_swing_roll_l2` term uses weight `-1.0` to discourage inward or outward sole roll only while a foot
@@ -674,7 +682,8 @@ forward component with weight `-0.1`. This mild one-tenth pitch penalty discoura
 forcing the swing sole fully level; foot yaw remains unconstrained, and feet in contact receive no contribution from
 either term.
 
-The `feet_lateral_separation_l2` anti-cross reward is active with `minimum_width=0.16 m` and `weight=-2.0`. It rotates
+The `feet_lateral_separation_l2` anti-cross reward is active with the experimental `minimum_width=0.165 m` and
+`weight=-2.0`. It rotates
 the left-minus-right foot position into the base yaw frame and preserves the lateral sign, so a narrow stance receives
 a soft quadratic penalty and a left/right foot swap receives a larger one. It has no maximum-width term and applies in
 both standing and moving states; the normal `0.21 m` standing width therefore receives no penalty.
