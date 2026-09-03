@@ -70,6 +70,13 @@ checkpoint와 fused 240D ONNX export는 ``docs/rok4_concurrent_state_estimator_k
 
 **현재 개발 baseline**
 
+* Run: ``2026-09-02_15-48-05_concurrent_estimator_tdmetrics_minwidth0165_fresh25k``
+* Checkpoint: ``model_24999.pt``
+* Code: ``ce08e9c`` on ``yunho/mixed-push-disturbance``
+* 검증: 학습 및 로그 검토 완료. Isaac Sim Teleop, MuJoCo Sim2Sim, hardware Sim2Real은 대기 상태다.
+
+**이전 mixed-push baseline**
+
 * Run: ``2026-08-24_17-10-31_concurrent_estimator_mixedpush_baseyaw_fresh25k``
 * Checkpoint: ``model_24999.pt``
 * Code: ``ccdd543`` on ``yunho/mixed-push-disturbance``

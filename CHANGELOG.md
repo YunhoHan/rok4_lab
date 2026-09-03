@@ -4,6 +4,9 @@
 
 ### Changed
 
+- Recorded `2026-09-02_15-48-05_concurrent_estimator_tdmetrics_minwidth0165_fresh25k/model_24999.pt`, trained from
+  code commit `ce08e9c`, as the current development baseline while preserving the previous mixed-push reference and
+  marking Isaac Sim Teleop, MuJoCo Sim2Sim, and hardware Sim2Real validation as pending.
 - Increased the experimental signed lateral foot-separation threshold from `0.160 m` to `0.165 m` to provide
   additional Sim2Real clearance between the left and right ankle assemblies without returning to the previously
   aggressive `0.170 m` setting.

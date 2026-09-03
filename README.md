@@ -9,7 +9,8 @@ that were actually completed; they are not inferred from branch ancestry or a su
 
 | Status | Run and checkpoint | Code commit | Verified status |
 |---|---|---|---|
-| **Current development baseline** | `2026-08-24_17-10-31_concurrent_estimator_mixedpush_baseyaw_fresh25k` / `model_24999.pt` | `ccdd543` on `yunho/mixed-push-disturbance` | Isaac Sim Teleop and training-log review complete; MuJoCo Sim2Sim and hardware Sim2Real pending |
+| **Current development baseline** | `2026-09-02_15-48-05_concurrent_estimator_tdmetrics_minwidth0165_fresh25k` / `model_24999.pt` | `ce08e9c` on `yunho/mixed-push-disturbance` | Training and log review complete; Isaac Sim Teleop, MuJoCo Sim2Sim, and hardware Sim2Real pending |
+| **Previous mixed-push baseline** | `2026-08-24_17-10-31_concurrent_estimator_mixedpush_baseyaw_fresh25k` / `model_24999.pt` | `ccdd543` on `yunho/mixed-push-disturbance` | Isaac Sim Teleop and training-log review complete; MuJoCo Sim2Sim and hardware Sim2Real pending |
 | **Concurrent-estimator Sim2Sim baseline** | `2026-08-21_02-28-25_concurrent_estimator_stand005_fresh25k` / `model_24999.pt` | `df37f44` on `yunho/concurrent-state-estimator` (`785a83c` documents validation) | Isaac Sim Teleop and MuJoCo Sim2Sim complete; estimator Sim2Real pending |
 | **Pre-estimator Sim2Real baseline** | `2026-08-12_23-45-39_privileged250_gain240_160_80_air050_w2_tdvel10_ar01_ar2_005_noforce_delay4ms_fresh20k` / `model_19999.pt` | `2712787` on `yunho/privileged-observation` | Hardware Sim2Real complete |
 | **Previous directional-gait baseline** | `2026-08-03_14-58-46_touchdown_air_symmetric_x_fastforward_fresh20k` / `model_19999.pt` | `1d52838` on `yunho/directional-gait-rework` (`746e5d0` documents validation) | Isaac Sim Teleop complete |
