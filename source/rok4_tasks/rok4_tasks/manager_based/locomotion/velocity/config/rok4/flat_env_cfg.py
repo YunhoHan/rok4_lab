@@ -236,7 +236,7 @@ class RoK4RewardsCfg(RewardsCfg):
     )
     base_height_l2 = RewTerm(
         func=mdp.base_height_relative_l2,
-        weight=-1.0,
+        weight=-5.0,
         params={"target_height": 0.907},
     )
     feet_air_time = RewTerm(
@@ -298,6 +298,37 @@ class RoK4RewardsCfg(RewardsCfg):
             ),
             "asset_cfg": SceneEntityCfg("robot", body_names=["L_Foot_Link", "R_Foot_Link"]),
             "safe_landing_velocity": 0.0,
+        },
+    )
+    feet_touchdown_pitch_l2 = RewTerm(
+        func=mdp.FeetTouchdownPitchL2,
+        weight=-1.0,
+        params={
+            "asset_cfg": SceneEntityCfg(
+                "robot", body_names=["L_Foot_Link", "R_Foot_Link"], preserve_order=True
+            ),
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces", body_names=["L_Foot_Link", "R_Foot_Link"], preserve_order=True
+            ),
+        },
+    )
+    feet_touchdown_edge_velocity = RewTerm(
+        func=mdp.FeetTouchdownEdgeVelocityL2,
+        weight=-0.1,
+        params={
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces", body_names=["L_Foot_Link", "R_Foot_Link"], preserve_order=True
+            ),
+            "asset_cfg": SceneEntityCfg(
+                "robot", body_names=["L_Foot_Link", "R_Foot_Link"], preserve_order=True
+            ),
+            "landing_window_s": 0.10,
+            "pre_touchdown_scale": 5.0,
+            # Same sole collision corners as the reward-neutral touchdown diagnostic.
+            "toe_x": 0.175,
+            "heel_x": -0.060,
+            "half_width": 0.045,
+            "sole_z": 0.0,
         },
     )
     feet_contact_velocity = None
@@ -372,13 +403,17 @@ class RoK4RewardsCfg(RewardsCfg):
             "asset_cfg": SceneEntityCfg("robot", body_names=["L_Foot_Link", "R_Foot_Link"]),
         },
     )
-    stand_still_joint_deviation_l1 = RewTerm(
-        func=mdp.stand_still_joint_deviation_l1,
-        # Experimental compromise between natural recovery at -0.05 and stronger posture retention at -0.2.
-        weight=-0.1,
+    stand_still_joint_deviation_l1 = None
+    feet_standing_contact = RewTerm(
+        func=mdp.feet_standing_contact,
+        weight=-0.2,
         params={
             "command_name": "base_velocity",
-            "asset_cfg": SceneEntityCfg("robot", joint_names=ROK4_JOINT_ORDER, preserve_order=True),
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces",
+                body_names=["L_Foot_Link", "R_Foot_Link"],
+                preserve_order=True,
+            ),
         },
     )
     dof_pos_limits = RewTerm(
@@ -396,12 +431,12 @@ class RoK4RewardsCfg(RewardsCfg):
     )
     joint_deviation_hip = RewTerm(
         func=mdp.joint_deviation_l1,
-        weight=-0.05,
+        weight=-0.2,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Hip_Yaw_Joint", ".*_Hip_Roll_Joint"])},
     )
     joint_deviation_hip_pitch = RewTerm(
         func=mdp.joint_deviation_l1,
-        weight=-0.005,
+        weight=-0.01,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Hip_Pitch_Joint"])},
     )
     joint_deviation_torso = RewTerm(
@@ -436,8 +471,8 @@ class RoK4RewardsCfg(RewardsCfg):
         weight=-1.0e-5,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=ROK4_JOINT_ORDER, preserve_order=True)},
     )
-    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
-    second_action_rate_l2 = RewTerm(func=mdp.second_action_rate_l2, weight=-0.005)
+    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.05)
+    second_action_rate_l2 = RewTerm(func=mdp.second_action_rate_l2, weight=-0.01)
 
 
 @configclass

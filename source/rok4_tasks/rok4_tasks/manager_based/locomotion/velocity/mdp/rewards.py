@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+import math
 from typing import TYPE_CHECKING
 
 import torch
@@ -16,6 +17,7 @@ from rok4_tasks.assets.robots.rok4 import ROK4_JOINT_ORDER
 from .observations import _adapt_actuator
 
 if TYPE_CHECKING:
+    from isaaclab.assets import Articulation
     from isaaclab.envs import ManagerBasedRLEnv
 
 ROK4_RELAXED_ACTION_IDS = (2, 3, 8, 9)
@@ -134,6 +136,40 @@ class FeetAirTimeTouchdownBiped(ManagerTermBase):
             raise ValueError(f"target_air_time must be non-negative, received {target_air_time}.")
 
 
+def feet_standing_contact(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    sensor_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Count missing foot contacts at exactly zero velocity command.
+
+    Apply a negative reward weight to penalize single support and flight during
+    standing. No default joint pose, foot placement, load balance, or recovery
+    gate is imposed. Recovery steps at zero command also incur this cost.
+
+    Args:
+        env: Environment providing velocity commands and contact sensor data.
+        command_name: Three-component command: XY velocity [m/s] and yaw rate [rad/s].
+        sensor_cfg: Sensor selection containing exactly two feet, with air-time tracking enabled.
+
+    Returns:
+        Missing-contact count (0, 1, or 2) per environment, or zero for any
+        nonzero command, including pure yaw. Shape is (num_envs,).
+    """
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    if not contact_sensor.cfg.track_air_time:
+        raise ValueError("feet_standing_contact requires track_air_time=True on the contact sensor.")
+    contact_time = contact_sensor.data.current_contact_time[:, sensor_cfg.body_ids]
+    if contact_time.shape[1] != 2:
+        raise ValueError(f"Expected exactly two feet, received {contact_time.shape[1]} bodies.")
+
+    in_contact = contact_time > 0.0
+    command = env.command_manager.get_command(command_name)
+    standing = torch.all(command[:, :3] == 0.0, dim=1)
+    missing_contacts = torch.sum((~in_contact).to(contact_time.dtype), dim=1)
+    return missing_contacts * standing
+
+
 def feet_touchdown_acc(
     env: ManagerBasedRLEnv,
     sensor_cfg: SceneEntityCfg,
@@ -162,10 +198,11 @@ def feet_touchdown_acc(
 
 
 class FeetTouchdownVelocityL2(ManagerTermBase):
-    """Penalize pre-touchdown planar and downward foot velocity [(m/s)^2].
+    """Penalize pre-touchdown planar and downward foot COM velocity [(m/s)^2].
 
-    The term stores each selected foot's world-frame velocity from the previous
-    policy step. When first contact is reported, it penalizes the preceding
+    The term stores each selected foot's COM world-frame velocity
+    from the previous policy step, not link-origin or sole-point velocity.
+    When first contact is reported, it penalizes the preceding
     planar speed and the squared amount by which the preceding downward speed
     exceeded :paramref:`safe_landing_velocity`. This event-only formulation
     does not shape the airborne approach or established stance.
@@ -287,12 +324,199 @@ class FeetTouchdownVelocityL2(ManagerTermBase):
             )
 
 
+def _sole_point_kinematics(
+    asset: Articulation,
+    asset_cfg: SceneEntityCfg,
+    sole_points_b: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Reconstruct sole-point positions and velocities from the same link reference."""
+    body_pos_w = asset.data.body_pos_w[:, asset_cfg.body_ids]
+    body_quat_w = asset.data.body_quat_w[:, asset_cfg.body_ids]
+    body_link_lin_vel_w = asset.data.body_link_lin_vel_w[:, asset_cfg.body_ids]
+    body_ang_vel_w = asset.data.body_ang_vel_w[:, asset_cfg.body_ids]
+    point_shape = (*body_pos_w.shape[:2], sole_points_b.shape[0], 3)
+    point_offsets_b = sole_points_b.view(1, 1, -1, 3).expand(point_shape)
+    body_quat_points_w = body_quat_w.unsqueeze(2).expand(*point_shape[:-1], 4)
+    point_offsets_w = quat_apply(body_quat_points_w, point_offsets_b)
+    point_pos_w = body_pos_w.unsqueeze(2) + point_offsets_w
+    point_vel_w = body_link_lin_vel_w.unsqueeze(2) + torch.linalg.cross(
+        body_ang_vel_w.unsqueeze(2).expand(point_shape), point_offsets_w, dim=-1
+    )
+    return point_pos_w, point_vel_w
+
+
+class FeetTouchdownEdgeVelocityL2(ManagerTermBase):
+    """Penalize the fastest descending sole corner near touchdown [(m/s)^2].
+
+    Add the previous policy sample cost times pre_touchdown_scale once at a new
+    landing, then evaluate unscaled current samples for a fixed window starting
+    at first contact. Each foot takes the
+    maximum squared downward speed of its four corners; foot costs are summed.
+    Upward and horizontal translation are not penalized. Recontact inside the
+    window neither restarts it nor repeats the pre-touchdown cost. The window
+    persists through brief contact loss and rounds up to a policy-step boundary.
+    Reward Manager supplies the weight and dt; this term applies neither.
+    """
+
+    def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
+        """Initialize independent per-foot sample history and landing windows."""
+        super().__init__(cfg, env)
+        sensor_cfg = cfg.params["sensor_cfg"]
+        asset_cfg = cfg.params["asset_cfg"]
+        self._geometry = tuple(
+            cfg.params.get(name, default)
+            for name, default in (
+                ("toe_x", 0.175), ("heel_x", -0.060), ("half_width", 0.045), ("sole_z", 0.0)
+            )
+        )
+        toe_x, heel_x, half_width, sole_z = self._geometry
+        if not all(math.isfinite(value) for value in self._geometry) or toe_x <= heel_x or half_width <= 0.0:
+            raise ValueError("Invalid sole geometry: require finite offsets, toe_x > heel_x, and half_width > 0.")
+        self._landing_window_s = cfg.params.get("landing_window_s", 0.10)
+        self._pre_touchdown_scale = cfg.params.get("pre_touchdown_scale", 1.0)
+        if not math.isfinite(self._pre_touchdown_scale) or self._pre_touchdown_scale < 0.0:
+            raise ValueError("pre_touchdown_scale must be finite and non-negative.")
+        self._step_dt = env.step_dt
+        if not math.isfinite(self._step_dt) or self._step_dt <= 0.0:
+            raise ValueError("Policy step_dt must be finite and positive.")
+        if not math.isfinite(self._landing_window_s) or self._landing_window_s < self._step_dt:
+            raise ValueError("landing_window_s must be finite and at least one policy step.")
+        sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+        if not sensor.cfg.track_air_time:
+            raise ValueError("FeetTouchdownEdgeVelocityL2 requires track_air_time=True.")
+        num_feet = len(sensor_cfg.body_ids)
+        if num_feet == 0 or num_feet != len(asset_cfg.body_ids):
+            raise ValueError("Expected matching nonempty sensor and asset foot selections.")
+
+        self._sole_points_b = torch.tensor(
+            [
+                [toe_x, half_width, sole_z],
+                [toe_x, -half_width, sole_z],
+                [heel_x, half_width, sole_z],
+                [heel_x, -half_width, sole_z],
+            ],
+            device=env.device,
+        )
+        self._window_steps = max(1, math.ceil(self._landing_window_s / self._step_dt - 1.0e-9))
+        self._early_steps = max(1, math.ceil(0.02 / self._step_dt - 1.0e-9))
+        self._window_ms = round(self._window_steps * self._step_dt * 1000.0)
+        shape = (env.num_envs, num_feet)
+        self._steps_left = torch.zeros(shape, dtype=torch.long, device=env.device)
+        self._previous_speed = torch.zeros(shape, device=env.device)
+        self._previous_in_contact = torch.zeros(shape, dtype=torch.bool, device=env.device)
+        self._has_previous_sample = torch.zeros_like(self._previous_in_contact)
+        self._early_peak_speed = torch.zeros(shape, device=env.device)
+        self._late_peak_speed = torch.zeros(shape, device=env.device)
+        self._early_peak_sum = torch.zeros(env.num_envs, device=env.device)
+        self._late_peak_sum = torch.zeros_like(self._early_peak_sum)
+        self._completed_landings = torch.zeros_like(self._early_peak_sum)
+
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        sensor_cfg: SceneEntityCfg,
+        asset_cfg: SceneEntityCfg,
+        landing_window_s: float = 0.10,
+        toe_x: float = 0.175,
+        heel_x: float = -0.060,
+        half_width: float = 0.045,
+        sole_z: float = 0.0,
+        pre_touchdown_scale: float = 1.0,
+    ) -> torch.Tensor:
+        """Return raw edge cost and advance fixed landing windows.
+
+        Args:
+            env: Environment supplying foot states and the policy timestep.
+            sensor_cfg: Ordered foot contact selection, matching asset_cfg.
+            asset_cfg: Ordered foot-body selection.
+            landing_window_s: Post-contact evaluation duration [s].
+            toe_x: Front sole offset from the foot-link origin [m].
+            heel_x: Rear sole offset from the foot-link origin [m].
+            half_width: Sole lateral half-width [m].
+            sole_z: Sole height in the foot-link frame [m].
+            pre_touchdown_scale: Multiplier on the previous sample's squared
+                speed cost, applied once per landing. Does not scale logged speeds.
+
+        Returns:
+            Summed foot penalties [(m/s)^2], shape (num_envs,).
+        """
+        if (
+            landing_window_s != self._landing_window_s
+            or env.step_dt != self._step_dt
+            or (toe_x, heel_x, half_width, sole_z) != self._geometry
+        ):
+            raise ValueError("Landing window, policy timestep, and sole geometry cannot change after initialization.")
+        if pre_touchdown_scale != self._pre_touchdown_scale:
+            raise ValueError("pre_touchdown_scale cannot change after initialization.")
+        asset = env.scene[asset_cfg.name]
+        sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+        _, point_vel_w = _sole_point_kinematics(asset, asset_cfg, self._sole_points_b)
+        speed = torch.relu(-point_vel_w[..., 2]).amax(dim=-1)
+        in_contact = sensor.data.current_contact_time[:, sensor_cfg.body_ids] > 0.0
+        first_contact = sensor.compute_first_contact(env.step_dt)[:, sensor_cfg.body_ids]
+        if (
+            speed.shape != self._steps_left.shape
+            or in_contact.shape != speed.shape
+            or first_contact.shape != speed.shape
+        ):
+            raise ValueError("Foot velocity/contact shapes do not match stored landing state.")
+
+        new_landing = first_contact & self._has_previous_sample & (~self._previous_in_contact)
+        new_landing &= self._steps_left == 0
+        self._steps_left = torch.where(new_landing, self._window_steps, self._steps_left)
+        active = self._steps_left > 0
+        elapsed_steps = self._window_steps - self._steps_left
+        penalty = torch.sum(
+            speed.square() * active + pre_touchdown_scale * self._previous_speed.square() * new_landing,
+            dim=1,
+        )
+
+        early = active & (elapsed_steps < self._early_steps)
+        late = active & (~early)
+        self._early_peak_speed = torch.where(
+            early, torch.maximum(self._early_peak_speed, speed), self._early_peak_speed
+        )
+        self._late_peak_speed = torch.where(
+            late, torch.maximum(self._late_peak_speed, speed), self._late_peak_speed
+        )
+        self._steps_left = (self._steps_left - 1).clamp_min(0)
+        complete = active & (self._steps_left == 0)
+        self._early_peak_sum += torch.sum(self._early_peak_speed * complete, dim=1)
+        self._late_peak_sum += torch.sum(self._late_peak_speed * complete, dim=1)
+        self._completed_landings += torch.sum(complete, dim=1)
+        self._early_peak_speed.masked_fill_(complete, 0.0)
+        self._late_peak_speed.masked_fill_(complete, 0.0)
+        self._previous_speed.copy_(speed)
+        self._previous_in_contact.copy_(in_contact)
+        self._has_previous_sample.fill_(True)
+        return penalty
+
+    def reset(self, env_ids: Sequence[int] | None = None) -> None:
+        """Log completed-window peak speeds [m/s] and clear selected environments."""
+        if env_ids is None:
+            env_ids = slice(None)
+        for name, values in (
+            ("mean_peak_edge_downward_speed_0_20ms", self._early_peak_sum),
+            (f"mean_peak_edge_downward_speed_20_{self._window_ms}ms", self._late_peak_sum),
+        ):
+            _log_episode_event_average(
+                self._env, f"Metrics/feet_touchdown/{name}", values, self._completed_landings, env_ids
+            )
+        for values in (
+            self._steps_left, self._previous_speed, self._previous_in_contact, self._has_previous_sample,
+            self._early_peak_speed, self._late_peak_speed, self._early_peak_sum, self._late_peak_sum,
+            self._completed_landings,
+        ):
+            values[env_ids] = 0
+
+
 class FeetTouchdownDiagnostics(ManagerTermBase):
     """Record sole-edge approach speed and split touchdown normal-force peaks.
 
     The diagnostic reconstructs the four corners of each rectangular sole from
-    the foot-body pose and velocity. Point velocities include the rigid-body
-    angular contribution ``omega x r``. It reports toe, heel, and lowest-corner
+    the foot-body link-origin pose and velocity. Point velocities include the
+    rigid-body angular contribution ``omega x r``, with ``r`` measured from that
+    same link origin. It reports toe, heel, and lowest-corner
     approach speeds at first contact, then separates the normal-force peak into
     early-impact and subsequent weight-acceptance windows. The returned tensor
     is always zero, so this term never contributes to the policy reward.
@@ -463,24 +687,7 @@ class FeetTouchdownDiagnostics(ManagerTermBase):
 
     def _sole_point_kinematics(self, asset, asset_cfg: SceneEntityCfg) -> tuple[torch.Tensor, torch.Tensor]:
         """Return sole-corner world positions [m] and velocities [m/s]."""
-        body_pos_w = asset.data.body_pos_w[:, asset_cfg.body_ids]
-        body_quat_w = asset.data.body_quat_w[:, asset_cfg.body_ids]
-        body_lin_vel_w = asset.data.body_lin_vel_w[:, asset_cfg.body_ids]
-        body_ang_vel_w = asset.data.body_ang_vel_w[:, asset_cfg.body_ids]
-
-        point_count = self._sole_points_b.shape[0]
-        point_shape = (*body_pos_w.shape[:2], point_count, 3)
-        point_offsets_b = self._sole_points_b.view(1, 1, point_count, 3).expand(point_shape)
-        body_quat_points_w = body_quat_w.unsqueeze(2).expand(*point_shape[:-1], 4)
-        point_offsets_w = quat_apply(body_quat_points_w, point_offsets_b)
-        point_pos_w = body_pos_w.unsqueeze(2) + point_offsets_w
-        body_ang_vel_points_w = body_ang_vel_w.unsqueeze(2).expand(point_shape)
-        point_vel_w = body_lin_vel_w.unsqueeze(2) + torch.linalg.cross(
-            body_ang_vel_points_w,
-            point_offsets_w,
-            dim=-1,
-        )
-        return point_pos_w, point_vel_w
+        return _sole_point_kinematics(asset, asset_cfg, self._sole_points_b)
 
     def _accumulate_point_metrics(self, valid_touchdown: torch.Tensor) -> None:
         """Accumulate pre-touchdown toe, heel, and lowest-corner velocities."""
@@ -992,6 +1199,84 @@ def feet_swing_pitch_l2(
 ) -> torch.Tensor:
     """Penalize sagittal sole tilt only while each foot is in swing."""
     return _feet_swing_tilt_l2(env, asset_cfg, sensor_cfg, axis=0)
+
+
+class FeetTouchdownPitchL2(ManagerTermBase):
+    """Penalize sagittal sole tilt once per observed airborne-to-contact transition.
+
+    Use the same dimensionless yaw-removed sole-normal X component squared as
+    :func:`feet_swing_pitch_l2`. At first contact, take the larger error from the
+    preceding policy sample and the current sample, then sum selected feet.
+    Continued stance and toe-off incur no cost from this term. Both toe-up and
+    toe-down are penalized; this does not prescribe heel-first contact.
+    """
+
+    def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
+        """Initialize per-foot error, contact and sample-validity histories."""
+        super().__init__(cfg, env)
+        sensor_cfg = cfg.params["sensor_cfg"]
+        asset_cfg = cfg.params["asset_cfg"]
+        sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+        if not sensor.cfg.track_air_time:
+            raise ValueError("FeetTouchdownPitchL2 requires track_air_time=True.")
+        num_feet = len(sensor_cfg.body_ids)
+        if num_feet == 0 or num_feet != len(asset_cfg.body_ids):
+            raise ValueError("Expected matching nonempty sensor and asset foot selections.")
+        shape = (env.num_envs, num_feet)
+        self._previous_pitch_error = torch.zeros(shape, device=env.device)
+        self._previous_in_contact = torch.zeros(shape, dtype=torch.bool, device=env.device)
+        self._has_previous_sample = torch.zeros_like(self._previous_in_contact)
+
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        asset_cfg: SceneEntityCfg,
+        sensor_cfg: SceneEntityCfg,
+    ) -> torch.Tensor:
+        """Compute the unweighted, dimensionless touchdown-pitch cost.
+
+        Args:
+            env: Environment supplying foot poses and the policy timestep [s].
+            asset_cfg: Ordered foot-body selection for world-frame orientations.
+            sensor_cfg: Matching ordered foot-contact selection.
+
+        Returns:
+            Summed per-foot squared normal components, shape (num_envs,).
+            Reward Manager applies the configured weight and timestep [s].
+        """
+        asset = env.scene[asset_cfg.name]
+        sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+        foot_quat_w = asset.data.body_quat_w[:, asset_cfg.body_ids]
+        foot_up_local = torch.zeros_like(foot_quat_w[..., :3])
+        foot_up_local[..., 2] = 1.0
+        foot_up_w = quat_apply(foot_quat_w, foot_up_local)
+        foot_up_yaw = quat_apply_inverse(yaw_quat(foot_quat_w), foot_up_w)
+        pitch_error = foot_up_yaw[..., 0].square()
+        in_contact = sensor.data.current_contact_time[:, sensor_cfg.body_ids] > 0.0
+        first_contact = sensor.compute_first_contact(env.step_dt)[:, sensor_cfg.body_ids]
+        if (
+            pitch_error.shape != self._previous_pitch_error.shape
+            or in_contact.shape != pitch_error.shape
+            or first_contact.shape != pitch_error.shape
+        ):
+            raise ValueError("Foot orientation/contact shapes do not match stored touchdown-pitch state.")
+
+        valid_touchdown = first_contact & self._has_previous_sample & (~self._previous_in_contact)
+        penalty = torch.sum(
+            torch.maximum(self._previous_pitch_error, pitch_error) * valid_touchdown, dim=1
+        )
+        self._previous_pitch_error.copy_(pitch_error)
+        self._previous_in_contact.copy_(in_contact)
+        self._has_previous_sample.fill_(True)
+        return penalty
+
+    def reset(self, env_ids: Sequence[int] | None = None) -> None:
+        """Clear selected histories so initial contacts are not treated as landings."""
+        if env_ids is None:
+            env_ids = slice(None)
+        self._previous_pitch_error[env_ids] = 0.0
+        self._previous_in_contact[env_ids] = False
+        self._has_previous_sample[env_ids] = False
 
 
 def feet_stance_width_l2(

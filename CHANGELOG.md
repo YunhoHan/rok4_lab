@@ -2,8 +2,90 @@
 
 ## Unreleased
 
+### Fixed
+
+- Fixed the flat-task PDF print style to preserve code-block line breaks while wrapping long lines, keeping
+  the actuator gain arrays and framework trees readable.
+- Fixed toe/heel/lowest-corner velocity diagnostics on 2026-09-09 to combine link-origin velocity with
+  link-origin-relative sole offsets. Previously the diagnostic mixed foot COM velocity with those offsets.
+  Initially kept the touchdown reward on its existing COM velocity signal and left all reward weights and force metrics
+  unchanged. Re-evaluate existing checkpoints for corrected point-speed metrics; old aggregated point speeds
+  cannot be directly compared or repaired without the missing per-sample motion data.
+
+### Added
+
+- Added `FeetTouchdownPitchL2` at weight `-1.0` on 2026-09-16 while retaining swing pitch `-0.1`.
+  Evaluated the larger previous/current yaw-removed sole-normal X-component error once per observed
+  airborne-to-contact transition, summed feet, and excluded reset contacts and continued stance.
+  Added regression coverage for sample timing, reset isolation, body ordering, mirroring and yaw invariance.
+  Kept the separate 100 ms edge-velocity window, COM velocity, other rewards, gains and deployment unchanged.
+  Updated README/RST/HTML/PDF with the event formula, sampling limitations and untrained experiment status;
+  withdrew the earlier diagnostic-only proposal without changing committed baseline references.
+- Added the 2026-09-14 landing-edge experiment: `FeetTouchdownEdgeVelocityL2` at weight `-0.1` supplements the
+  unchanged COM touchdown cost with the fastest descending sole corner. Added the previous airborne sample once,
+  followed by current policy samples for a fixed 100 ms per-foot window; contact chatter cannot extend the window.
+  Added reset/bounce/timing/rotation/mirroring tests and completed-window early/late edge-speed metrics in m/s.
+  Shared the corrected link-origin point-kinematics helper with diagnostics without changing existing metrics.
+  Kept GRF shaping disabled, standing/clearance/air-time/gains/DR unchanged, and introduced no recovery gate.
+  Documented the completed gain-only comparison separately from this untrained experiment and retained all
+  committed baseline references and deployment interfaces.
+- Added the 2026-09-08 `feet_standing_contact` experiment at weight `-0.1`: counted each missing foot contact
+  only when all three velocity commands were exactly zero. Kept touchdown air-time, estimator inputs, base weights,
+  gains, command roles, freeze, and pushes unchanged, with the standing-pose term still disabled. This introduces
+  no recovery gate or load-sharing target; zero-command protective steps also incur the new cost.
+- Documented the preceding hip-deviation Teleop result and same-checkpoint estimated/true-velocity diagnostic
+  separately from unperformed Sim2Sim/Sim2Real validation, without changing any committed baseline reference.
+
 ### Changed
 
+- Increased only the pre-touchdown part of the sole-edge speed cost by setting `pre_touchdown_scale=5.0`
+  on 2026-09-17. Retained the default `1.0` for existing callers, weight `-0.1`, and the 100 ms post-contact
+  window. Applied the multiplier after squaring; retained unscaled physical metrics and bounce/reset behavior.
+  Added regression tests for pre-only scaling, invalid scales, unchanged window costs, and physical metrics.
+  Recorded the completed touchdown-pitch comparison and user-reported stable standing/heel-first Teleop
+  separately from the untrained experiment and unreported Sim2Sim/Sim2Real validation. Updated README/RST/HTML/PDF
+  without changing gains, other rewards, deployment interfaces, or committed baseline references.
+- Restored only `feet_swing_pitch_l2.weight` from `-0.2` to `-0.1` on 2026-09-16 after the completed trial showed
+  user-reported worse toe-down swing and a new tilted-foot standing behavior. Kept all other training settings
+  unchanged and added no toe-contact penalty, recovery gate, or diagnostic instrumentation. Documented that
+  swing-masked average cost is not touchdown posture and that replay requires the matching earlier checkpoint.
+- Increased only `feet_swing_pitch_l2.weight` from `-0.1` to `-0.2` on 2026-09-15 for a fresh-training comparison.
+  Retained the existing swing-only sole-normal formula, roll `-1.0`, COM touchdown `-10.0`, edge velocity
+  `-0.1 / 100 ms`, and metric-only GRF. Kept gains, all other rewards, DR, commands/pushes, and deployment unchanged.
+  Recorded the completed edge experiment's log comparison and user-reported airborne heel-down/toe-down rotation
+  separately from the untrained follow-up and unreported Sim2Sim/Sim2Real validation; preserved committed baselines.
+- Changed the nominal per-leg actuator gains on 2026-09-10 from
+  `[240, 240, 160, 160, 80, 80] / [12, 12, 8, 8, 8, 8]` to
+  `[240, 240, 180, 180, 120, 120] / [12, 12, 9, 9, 10, 10]` for a fresh comparison.
+  Kept torso `100/5`, COM touchdown rewards, all reward weights, DR, observations, commands, pushes, and the
+  fixed 4 ms delay unchanged. Gain randomization remains disabled. Updated effective joint gain matrices
+  and stale current-gain tables; documented Kd choices as experimental heuristics, not validated optima.
+  Recorded completion and user-reported Isaac Sim observations of the preceding COM-restoration run separately
+  from pending validation of the new gains. Old checkpoints require their original gains for identical-controller replay.
+- Restored `FeetTouchdownVelocityL2` to foot COM velocity on 2026-09-09 after the link-origin trial showed severe
+  early termination. Kept the previous policy-step sample, event masks, XY/downward-Z penalty, weight `-10.0`,
+  all other training settings, and the corrected toe/heel point diagnostics. The two touchdown-speed metrics
+  again describe COM velocity; the `tdlink` run still describes origin velocity under those same tags.
+  Updated the regression test to distinguish COM, origin, and post-impact samples. Documented the pending
+  fresh COM-restoration run without changing committed baselines or claiming new simulator/hardware validation.
+- Changed `FeetTouchdownVelocityL2` from foot COM to foot link-origin world-frame velocity for a separate fresh
+  experiment on 2026-09-09. Retained the previous policy-step sample, event masks, XY/downward-Z penalty, weight
+  `-10.0`, standing-contact weight `-0.2`, and all other training settings. Existing touchdown-speed metric names
+  referred to the link origin during that trial; do not interpret COM curves as the same measurement. Kept the diagnostic
+  point-velocity fix and Actor/ONNX interfaces unchanged. Recorded user-reported quiet standing and walking in
+  Isaac Sim for `2026-09-08_16-59-33_concurrent_estimator_hip020_standcontact020_fresh25k/model_24999.pt` as the
+  COM comparison policy, not as new Sim2Sim/Sim2Real validation or a replacement committed baseline.
+- Increased only `feet_standing_contact` from `-0.1` to `-0.2` for a fresh-training follow-up. The `standcontact010`
+  run still stepped at zero command in model-5000 Teleop, and its 500-iteration-average contact cost remained near
+  `-0.023` through iteration 7122. Kept the reward function, all other weights and environment settings unchanged;
+  stronger contact shaping is experimental and may restrict zero-command recovery steps.
+- Increased only hip yaw/roll deviation from `-0.1` to `-0.2` for the 2026-09-07 follow-up to the no-standing-pose
+  experiment. Kept the standing-pose term disabled and all other training settings unchanged; this targets excessive
+  outward leg posture without claiming quiet standing or recovery validation.
+- Disabled the command-gated full-body standing pose term for a controlled ablation and strengthened the generic
+  base-height, hip-deviation, and first/second raw-action smoothness weights to `-5.0`, `-0.1`/`-0.01`, and
+  `-0.05`/`-0.01`, respectively. This tests a K1-inspired but RoK4 100 Hz-specific standing formulation while
+  preserving the validated `stand_still_joint_deviation_l1=-0.1` rollback reference.
 - Recorded `2026-09-02_15-48-05_concurrent_estimator_tdmetrics_minwidth0165_fresh25k/model_24999.pt`, trained from
   code commit `ce08e9c`, as the current development baseline while preserving the previous mixed-push reference and
   marking Isaac Sim Teleop, MuJoCo Sim2Sim, and hardware Sim2Real validation as pending.
