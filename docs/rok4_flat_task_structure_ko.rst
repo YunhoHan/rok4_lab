@@ -2,7 +2,7 @@ RoK4 Flat RSL-RL Task 구조 문서
 ========================================================================
 
 :작성일: 2026-07-15
-:최종 업데이트: 2026-08-26
+:최종 업데이트: 2026-09-18
 :대상 저장소: RoK4 repository root (``${ROK4_LAB_ROOT}``)
 :기준 환경: Isaac Lab v2.3.2, Isaac Sim 5.1.0, ``env_isaaclab``
 
@@ -13,7 +13,7 @@ RoK4 Flat RSL-RL Task 구조 문서
      body, main {
        background-color: white;
      }
-     code, span.docutils.literal, span.docutils.literal span.pre {
+     :not(pre) > code, span.docutils.literal, span.docutils.literal span.pre {
        overflow-wrap: anywhere;
        word-break: break-all;
        white-space: normal !important;
@@ -21,6 +21,10 @@ RoK4 Flat RSL-RL Task 구조 문서
      pre.code {
        break-inside: avoid;
        page-break-inside: avoid;
+     }
+     pre.code > code {
+       white-space: pre-wrap;
+       overflow-wrap: anywhere;
      }
    }
    </style>
@@ -69,6 +73,18 @@ checkpoint와 fused 240D ONNX export는 ``docs/rok4_concurrent_state_estimator_k
 검증 상태를 추정하지 않고 실제 수행한 단계만 기록한다.
 
 **현재 개발 baseline**
+
+* Run: ``2026-09-17_11-46-47_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_fresh25k``
+* Checkpoint: ``model_24999.pt``
+* Code snapshot: ``903318c`` on ``yunho/mixed-push-disturbance``
+* 검증: 25,000 iteration 학습과 로그 검토 완료. 9월 18일 사용자가 Isaac Sim keyboard Teleop에서
+  착지가 더 부드러워졌다고 관찰하고 보존을 승인했다. MuJoCo Sim2Sim과 hardware Sim2Real은 대기 상태다.
+* 학습 당시에는 ``2c6fe26`` 기반 미커밋 작업본을 사용했다. ``903318c`` 는 학습 이후 저장된
+  reward/gain 설정을 확인하고 보존한 code snapshot이며, 이 문서는 그 뒤의 검증 기록이다.
+* Checkpoint SHA-256:
+  ``8c9a006bf91a5674b1a7aca8b7082d2d6365c1c718b4b174c267a08d292f7a09``
+
+**이전 lateral-clearance baseline**
 
 * Run: ``2026-09-02_15-48-05_concurrent_estimator_tdmetrics_minwidth0165_fresh25k``
 * Checkpoint: ``model_24999.pt``
@@ -424,16 +440,24 @@ Isaac Lab config가 joint name으로 안전하게 resolve하도록 dictionary로
      -> RoK4AdaptActuator.compute()에서 canonical actuator 순서로 변환
      -> tau_psi = Kp (psi_target - psi) - Kd psi_dot
 
-현재 actuator-interface 설정은 hip yaw/roll의 좌우 stiffness는 대부분 유지하면서 ADAPT-coupled
-hip pitch/knee 계열을 더 낮춰 착지 compliance를 시험한다. 이 값은 joint-space gain이 아니며
-``RoK4AdaptActuator.compute()`` 의 ``psi`` 오차와 속도에 적용된다. 가운데 pair는 ADAPT 행렬을 통해
-ankle pitch에도 기여한다.
+2026-09-10 actuator-interface 실험은 hip yaw/roll ``240/12`` 를 유지하면서 ADAPT-coupled
+hip pitch/knee를 ``160/8 -> 180/9``, 발목 pair를 ``80/8 -> 120/10`` 으로 높인다. 이 값은 joint-space gain이 아니며
+``RoK4AdaptActuator.compute()`` 의 ``psi`` 오차와 속도에 적용된다. 발목 pair 변경은 knee의 유효 stiffness와
+knee/ankle-pitch 교차항에도 영향을 준다.
 
 .. code-block:: text
 
-   한쪽 다리 Kp: [240, 240, 120, 120, 40, 40]
-   한쪽 다리 Kd: [12,  12,  12,  12,  4,  4]
+   한쪽 다리 Kp: [240, 240, 180, 180, 120, 120]
+   한쪽 다리 Kd: [12,  12,    9,   9,  10,  10]
    Torso yaw:     Kp=100, Kd=5
+
+Hip-pitch/knee는 기존 Kp/Kd 비율을 유지한다. 발목 Kd는 단일 축의 고정 관성 근사에서
+``8 * sqrt(120/80) = 9.80`` 을 반올림한 ``10`` 이며 coupled robot의 최적값이나 안정성을 보장하지 않는다.
+해당 gain-only run에서는 reward와 가중치, COM 착지 속도, observation, command/freeze/push, DR, 4 ms delay를 유지했다.
+Gain randomization은 없다. ``2026-09-10_19-45-38_concurrent_estimator_gain240_180_120_kd12_9_10_standcontact020_fresh25k``
+의 ``model_24999.pt`` 까지 학습과 로그 검토가 완료되었다. 별도 동작/실기 검증은 그 사실만으로 확인되지 않는다.
+9월 14일 추가한 아래 landing-edge reward는 같은 gain의 별도 fresh 실험이다. 이전 checkpoint를 Play/Teleop으로
+불러와도 현재 gain이 적용되므로 과거 run의 동일 조건 재현과 새 gain 교체 실험을 구분한다.
 
 ``ROK4_KP`` 와 ``ROK4_KD`` 는 이전 이름을 import하는 코드의 호환 alias다. 현재 ``ROK4_TRAIN_CFG`` 의 실제
 제어 경로는 ``ROK4_ACTUATOR_KP`` 와 ``ROK4_ACTUATOR_KD`` 를 직접 사용한다.
@@ -865,11 +889,10 @@ action이라는 점이다. motor target만 scale, default actuator pose, ADAPT m
    checkpoint를 이 브랜치에서 resume/play하지 말고 actuator-interface 학습을 새로 시작해야 한다.
 
 ``action_rate_l2`` 와 ``second_action_rate_l2`` reward는 observation의 ``last_action`` 과 같은
-``clipped_raw_action`` 좌표에서 각각 1차와 2차 차분을 계산하고 weight ``-0.01``, ``-0.005`` 를 사용한다.
-Command role 비율도 검증 기준인 ``mixed=0.35``, ``standing=0.05`` 를 유지한다. Exact-zero standing
-default-pose weight는 현재 실험 절충값 ``-0.1`` 을 사용한다. 이는 mixed-push 검증값 ``-0.05`` 보다 강하고
-이전 ``-0.2`` 보다 약하다. 다른 설정을 고정하고 ``-0.01`` 로 낮춘 후속 실험에서는 제자리 stepping,
-action/torque 비용 증가, peak contact force 증가가 확인되어 채택하지 않았다.
+``clipped_raw_action`` 좌표에서 각각 1차와 2차 차분을 계산하고 weight ``-0.05``, ``-0.01`` 을 사용한다.
+이는 이전 ``-0.01``, ``-0.005`` 보다 각각 5배와 2배 강한 no-standing-pose ablation이다. K1에는 2차 항이
+없지만 RoK4에서는 100 Hz policy의 고주파 교대 진동을 직접 억제하기 위해 유지한다. Command role 비율은
+검증 기준인 ``mixed=0.35``, ``standing=0.05`` 를 유지하고 exact-zero standing default-pose term은 ``None`` 이다.
 Reward 함수 자체는 clamp하지 않지만 RoK4 RSL-RL runner의 ``clip_actions=1.0`` 이 ActionManager 이전에
 정책 출력을 제한한다. Action scale은 actuator target 생성에만
 사용하며 두 smoothness reward에는 적용하지 않는다. 다만 Hip Pitch/Knee action index ``2,3,8,9`` 는 RoK4의
@@ -951,10 +974,49 @@ Exact-zero command는 periodic freeze window와 ``standing`` 역할에서 생성
 ``[0, 0, 0]`` 으로 만드는 동시에 ``is_standing_env=True`` 를 설정한다. 일반 ``mixed`` moving command는
 크기가 작더라도 standing으로 변환하지 않으므로 연속적인 저속 command 범위를 유지한다.
 
-모든 exact-zero standing에서 weight ``-0.1`` 인 ``stand_still_joint_deviation_l1`` 이 command term의
-``is_standing_env`` mask를 사용하여 전체 13관절의 실제 joint position을 default joint pose 근처로 유도한다.
-이는 검증된 ``-0.05`` 와 이전 ``-0.2`` 사이의 절충 강도다. 양발 standing 편향은 유지하면서 외란이나
-급정지 중 recovery step과의 경쟁을 제한하며, 작은 non-zero 이동 command에는 적용하지 않는다.
+현재 ablation은 ``stand_still_joint_deviation_l1=None`` 을 유지하고 exact-zero 양발 접촉 항을 별도로 추가한다.
+일반 동작 비용 중 base-height는 ``-5.0``, hip
+yaw/roll deviation은 ``-0.2``, hip-pitch deviation은 ``-0.01``, 1차/2차 raw-action rate는 ``-0.05``/``-0.01``
+를 유지한다. Command term의 ``is_standing_env`` mask와 정확한 zero command 생성은 그대로 유지된다.
+
+2026-09-08에 추가한 ``feet_standing_contact`` 의 현재 가중치는 ``-0.2`` 이다. 최초 ``-0.1`` 실험 이후
+이 가중치만 두 배로 올린 fresh 학습을 준비한다. ``[vx, vy, wz]`` 가 모두 정확히 0일 때만 좌우
+``current_contact_time > 0`` 을 검사해 접촉하지 않는 발 수를 반환한다. 양발 접촉/한발 접촉/무접촉 raw 값은
+각각 ``0/1/2`` 이며 policy ``dt=0.01 s`` 를 포함한 step reward는 ``0/-0.002/-0.004`` 이다. Tiny non-zero
+명령과 pure-yaw는 제외하고, 기본 관절각이나 발 위치, 좌우 하중 비율을 요구하지 않는다. 정지 중 push의
+보호 스텝도 벌점을 받지만 발을 다른 위치에 내려놓아 양발이 접촉하면 즉시 0이 된다. 발끝 접촉이나 미끄럼을
+이 항 하나로 막지는 못한다. 기존 ``no_jumps`` 는 유지하므로 정지 중 flight에는 두 항이 함께 적용될 수 있다.
+Air-time, base 높이/Z 속도, gain, estimator, command/freeze/push는 변경하지 않는다. Recovery gate는 없다.
+기본 ``Episode_Reward/feet_standing_contact`` 로그만 사용하며 새 custom metric/history buffer는 추가하지 않는다.
+상세 수식과 로그 해석은 ``docs/rok4_reward_structure_ko.rst`` 의 정지 양발 접촉 항 설명을 참조한다.
+
+비교 checkpoint는
+``2026-09-07_15-53-13_concurrent_estimator_k1style_nostand_bh5_hip020_hippitch001_ar05_ar2_01_fresh25k/model_24999.pt``
+이다. 사용자는 Isaac Sim에서 팔자 자세 개선과 횡보/회전/회복 동작 유지를 확인했으나 정지 stepping은 남았다.
+같은 seed와 checkpoint의 30초 임시 진단에서도 true velocity 대체만으로 stepping은 사라지지 않았다.
+진단은 원본 policy/export를 수정하지 않았으며 일반 Actor는 estimator 출력을 계속 사용한다. 이번 접촉 항은
+fresh 학습 실험이다. 최초 ``-0.1`` run은
+``2026-09-08_13-40-45_concurrent_estimator_hip020_standcontact010_fresh25k`` 이며, 사용자는 ``model_5000.pt`` 에서
+제자리 stepping을 확인했다. 접촉 항의 직전 500회 평균은 5000에서 ``-0.02365``, 7122에서 ``-0.02318`` 로
+거의 그대로였다. 이 로그는 정지 구간만의 지지율이 아니며 가중치 부족을 확정하는 근거도 아니다. 다음 ``-0.2``
+실험은 함수와 나머지 설정을 그대로 유지했다. 그 결과인
+``2026-09-08_16-59-33_concurrent_estimator_hip020_standcontact020_fresh25k/model_24999.pt`` 에서 사용자는
+Isaac Sim의 제자리 stepping 해소와 보행 유지를 확인했다. 이 run의 Sim2Sim/Sim2Real 검증은 보고되지 않았다.
+2026-09-09 후속 ``tdlink`` 실험은 ``-0.2`` 를 유지하고 착지 속도 reward만 링크 원점 기준으로 바꿨으나,
+중간 로그에서 심한 조기 종료가 관찰되었다. 사용자 요청으로 현재 reward는 COM 기준으로 복원했다.
+복원 run은 ``2026-09-09_17-36-08_concurrent_estimator_hip020_standcontact020_tdcom_restore_fresh25k`` 이며
+``model_24999.pt`` 까지 완료했다. 사용자는 Isaac Sim Teleop에서 기존과 비슷한 보행/정지와 잔여 착지 충격,
+전방 외란 recovery의 toe 걸림을 보고했다. 이 run의 MuJoCo Sim2Sim/Sim2Real 검증은 보고되지 않았다.
+이 두 COM run의 gain은 ``240/12, 160/8, 80/8`` 이며 이후 9월 10일 gain 실험과 구분한다.
+가중치가 다른 두 run은 ``Episode_Reward/feet_standing_contact`` 를 각각의 signed weight로 나눠 비교한다.
+기존 baseline 기록과 실행 중인 학습 프로세스는 변경하지 않는다.
+검증된 rollback 기준은 전체 13관절의 실제 joint position을 default joint pose 근처로 유도하는 weight
+``-0.1`` 설정이다.
+
+2026-09-07 후속 실험은 2026-09-04 no-standing-pose 학습 대비 hip yaw/roll deviation만 ``-0.1 -> -0.2`` 로
+변경한다. 이전 Teleop에서 관찰한 팔자 자세를 먼저 줄여보는 실험이며, 제자리 stepping 해결을 보장하지 않는다.
+Standing term은 계속 ``None`` 이고 나머지 reward, gain, command 역할, freeze, push는 유지한다. Fresh 학습 후
+정지 자세와 횡보/회전, 급정거, 외란 recovery step을 함께 확인하며 검증된 baseline을 대체하지 않는다.
 
 Episode timeout, periodic freeze, push timer 관계
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1050,9 +1112,17 @@ penalty ``1`` 을 반환한다. 따라서 정상 single stance와 toe-off는 허
 ``compute_first_contact(step_dt)`` 는 최근 ``10 ms`` 내 접촉을 검출하지만 reward가 읽는 ``body_lin_acc_w`` 는
 5번째 physics substep 이후의 최신 가속도이므로, 앞선 ``2 ms`` substep에서 발생한 충격 peak와 시간적으로
 어긋날 수 있다. 함수와 단위 테스트는 비교용으로 남긴다. 현재 soft-landing 실험은 stateful
-``FeetTouchdownVelocityL2`` 를 활성화한다. 이전 policy step에서 공중이었던 발의 world-XYZ 속도를 저장하고,
+``FeetTouchdownVelocityL2`` 를 유지한다. 이전 policy step에서 공중이었던 발 링크 COM의 world-XYZ 속도를 저장하고,
 first contact가 발생하면 ``v_x_prev^2 + v_y_prev^2 + relu(-v_z_prev)^2`` 를 사건당 한 번 계산해 weight
 ``-10.0`` 을 적용한다.
+현재 ``body_lin_vel_w`` 는 ``body_com_lin_vel_w`` 의 alias이며 각 발 링크 자체의 COM 속도다.
+반면 ``body_pos_w`` 는 ``body_link_pos_w`` 의 alias이므로 링크 원점 위치다. 2026-09-09 ``tdlink`` trial에서는
+``body_link_lin_vel_w`` 로 바꿨지만, 중간 학습 부진 관찰 후 기존 COM reward 정의로 복원했다.
+원점 속도는 ``v_origin = v_com + omega x (p_origin - p_com)`` 이며 COM과 다른 물리량일 수 있다.
+이 복원이 원점 속도의 물리적 오류를 의미하지는 않는다. World 좌표계, 10 ms 이전 sample, 가중치와 다른
+reward/gain/observation/command/freeze/push는 유지한다. 착지 속도 metric은 다시 COM 기준이므로
+원점 trial의 같은 tag와 동일 지점의 물리량으로 비교하지 않는다. 기존 COM 정책은 그대로 재생할 수 있고,
+복원 후 실험은 원점 trial을 resume하지 않는 fresh 학습으로 진행한다.
 접근 중과 계속된 stance에는 영향을 주지 않으며 reset 직후 이전 sample이 없는 초기 접촉도 제외한다.
 ``FeetContactForceL2`` class는 first contact부터 ``0.10 s`` 동안 filtered world-frame 접촉 합력
 ``||[F_x,F_y,F_z]||`` 의 최대값을 누적한다. 현재 shaping config는 ``feet_contact_force=None`` 이므로 GRF가
@@ -1060,14 +1130,89 @@ first contact가 발생하면 ``v_x_prev^2 + v_y_prev^2 + relu(-v_z_prev)^2`` �
 TensorBoard ``Metrics/feet_touchdown/mean_peak_normal_force`` 에 기록하면서 reward에는 항상 0을 반환한다.
 Contact Forces debug visualization도 그대로 사용할 수 있다.
 
-추가 ``FeetTouchdownDiagnostics`` term도 항상 0을 반환한다. URDF sole collision box에서 toe ``x=0.175 m``,
+2026-09-14에는 별도 ``FeetTouchdownEdgeVelocityL2`` 를 ``feet_touchdown_edge_velocity=-0.1`` 로 추가했다.
+기존 COM 속도 cost ``-10`` 을 대체하지 않으며 gain과 다른 보상은 유지한다. Foot collision sole 네 모서리의
+``v_point = v_link_origin + omega x (R * r_link)`` 에서 가장 빠른 하강 Z 속도를 제곱하고 발별로 합산한다.
+직전 공중 policy sample을 새 착지에서 한 번 더하고, 첫 접촉부터 ``0.10 s`` 동안 현재 sample을 매 10 ms마다
+평가한다. 첫 sample 포함 10회이며 수평속도/각도 목표는 이 항에 없다. Weight와 dt는 Reward Manager가 적용한다.
+Timer는 발별 독립이고 일시적인 contact loss에도 유지한다. Window 안의 재접촉은 timer나 직전 sample cost를
+다시 시작하지 않는다. Reset은 cache/timer를 지우며 duration은 policy 경계로 올림한다.
+
+새 class는 ``mean_peak_edge_downward_speed_0_20ms`` 와 ``mean_peak_edge_downward_speed_20_100ms`` 를
+``Metrics/feet_touchdown/`` 아래 m/s로 기록한다. 직전 공중 sample을 제외한 완료 window의 최대 하강속도
+peak 평균이며 기존 COM/force metric을 바꾸지 않는다. GPU tensor로 누적하고 reset 때만 집계한다.
+``Episode_Reward/feet_touchdown_edge_velocity`` 는 계수/dt가 적용된 실제 추가 비용이다.
+Recovery gate는 도입하지 않았고 정지 접촉 ``-0.2``, clearance, air-time, DR, push/freeze, network/ONNX는 유지한다.
+모서리 run ``2026-09-14_16-41-13_concurrent_estimator_edgevel01_window100_fresh25k/model_24999.pt`` 의 학습과
+로그 검토는 완료했다. 사용자는 Isaac Sim Teleop에서 공중에서 heel-down에서 toe-down으로 회전한 뒤 toe-first로
+착지하는 현상을 보고했다. Sim2Sim/Sim2Real 검증은 보고되지 않았다. 정상 발 구름/복구 스텝 저하와 100 ms 밖으로
+밀린 force peak도 확인한다. 상세 수식, 로그 비교와 검증 기준은 reward 구조 문서의 모서리 실험 절에 정리한다.
+
+2026-09-15 후속 실험에서는 ``feet_swing_pitch_l2.weight`` 만 ``-0.1 -> -0.2`` 로 바꿨다.
+공중 발의 yaw-removed sole normal forward 성분 제곱을 사용하는 기존 함수는 그대로이며,
+지지 발 자세나 heel-first 착지를 강제하지 않는다. Roll ``-1.0``, COM ``-10.0``, 모서리 ``-0.1 / 100 ms``,
+metric-only GRF, gain 및 나머지 학습 조건은 유지했다. Fresh 25,000 iteration 학습과 로그 검토를 완료했으나,
+사용자는 ``2026-09-15_10-32-59_concurrent_estimator_edgevel01_window100_swingpitch02_fresh25k/model_24999.pt`` 의
+Isaac Sim Teleop에서 공중 toe-down 악화와 정지 중 새 발 세움 현상을 보고했다. Sim2Sim/Sim2Real 검증은 보고되지 않았다.
+2026-09-16에는 pitch weight를 ``-0.1`` 로 복원한 뒤, 별도 승인으로 ``FeetTouchdownPitchL2`` 를 추가했다.
+``feet_touchdown_pitch_l2.weight=-1.0`` 이며 기존 swing pitch는 그대로 유지한다. 직전 sample이 공중이었던 발의
+첫 접촉에서 이전/현재 yaw-removed sole-normal X 성분 제곱 중 큰 값만 착지당 한 번 평가하고 발별 합산한다.
+지속 지지/일반 swing/toe-off에서는 새 항이 0이며 reset 초기 접촉은 제외한다. COM 속도와 100 ms edge 속도 항은
+변경하지 않았다. 새 자세 항에는 100 ms 유지 window나 recovery/command gate가 없다.
+
+이전/현재 sample은 10 ms 간격으로 정확한 충돌 순간 측정은 아니다. Toe-up/down을 모두 벌주지만 heel-first를
+강제하거나 부드러운 충격을 보장하지 않는다. Contact flag는 면접촉 판정이 아니므로 toe만 닿아도 기존 swing pitch는
+꺼질 수 있고, 바로 그 첫 접촉 자세를 새 항으로 평가한다. TensorBoard ``Episode_Reward/feet_touchdown_pitch_l2`` 에
+자동 기록하며 추가 custom metric은 만들지 않았다. 진단 우선 제안은 철회했고 별도 recorder는 추가하지 않았다.
+``2026-09-16_12-19-45_concurrent_estimator_edgevel01_window100_tdpitch1_fresh25k/model_24999.pt`` 까지 학습과
+로그 검토를 완료했다. 사용자는 Isaac Sim Teleop에서 안정적인 standing과 toe 대신 heel 착지를 보고했지만
+첫 충격은 크다고 관찰했다. Sim2Sim/Sim2Real 검증은 보고되지 않았다. 기존 committed baseline과 checkpoint는
+바꾸지 않으며 reward 설정 변경만으로 이미 학습된 정책의 action이 바뀌지는 않는다.
+
+2026-09-17에는 ``feet_touchdown_edge_velocity.params.pre_touchdown_scale=5.0`` 만 추가했다.
+각 발의 네 가상 모서리 world 속도를 회전 성분까지 계산하고, 그중 최대 하강 Z 속도의 제곱을 사용한다.
+직전 policy sample 비용은 5배, 접촉 후 100 ms 비용은 그대로다. Reward Manager의 ``weight=-0.1`` 과
+``dt=0.01 s`` 를 적용하므로 실효 계수는 직전 ``-0.5``, 접촉 후 ``-0.1`` 이다.
+
+.. code-block:: text
+
+   each foot: link-origin velocity + omega x rotated corner offset
+       -> maximum downward Z speed among four corners
+   new landing: 5 * previous_speed**2, once
+   fixed 100 ms: current_speed**2, ten policy samples
+       -> sum feet -> Reward Manager multiplies -0.1 * 0.01
+
+기본값 ``1.0`` 은 이전 호출과 호환된다. 제곱한 비용에 5를 곱하지 속도 자체에 곱하지 않는다.
+현재 sample/물리 속도 metric은 5배가 아니며 window/reset/재접촉 처리는 그대로다. COM ``-10``,
+착지 pitch ``-1``, swing pitch ``-0.1``, gains와 나머지 설정은 유지한다.
+9월 16일 run의 마지막 500 iteration에서 초기/후기 Fz peak 평균은 약 ``1922 / 1446 N`` 으로,
+9월 14일 ``766 / 2508 N`` 에 비해 첫 충격으로 비중이 옮겨갔다. 이는 평균이며 최대 충격값이 아니다.
+직전 비용 강화는 이 첫 충격을 줄이려는 실험이지 force 한계 보장이 아니다. 수식/샘플 계산은 reward 구조
+문서의 9월 17일 절을 참고한다. 이 설정의 9월 17일 run을 9월 18일 현재 개발 baseline으로 보존했다.
+Run/checkpoint/code snapshot과 검증 상태는 문서 상단에 명시했다.
+
+새 run의 마지막 500 iteration 평균은 착지창 접촉 합력 peak 약 ``1966 N``, 초기/후기 Fz peak 약
+``1693 / 1494 N``, 직전 heel 하강속도 ``0.363 m/s`` 다. 이전 ``tdpitch1`` 에 비해 첫 충격은 줄고
+후기 충격은 조금 증가했다. 평균 air-time은 ``0.367 -> 0.355 s`` 로 짧아졌다. 사용자는 keyboard
+Teleop에서 부드러워졌다고 관찰했지만, 이 통계는 드문 큰 충격이 없어졌다는 뜻은 아니다.
+Sim2Sim/Sim2Real 검증은 새로 수행하지 않았다. 자세한 비교표는 reward 구조 문서에 정리했다.
+
+기존 ``FeetTouchdownDiagnostics`` term 자체는 여전히 항상 0을 반환한다. URDF sole collision box에서 toe ``x=0.175 m``,
 heel ``x=-0.060 m``, 좌우 ``y=+/-0.045 m`` 인 네 모서리를 복원하고
-``v_edge = v_foot + omega_foot x (R_foot r_edge)`` 로 회전 성분까지 포함한 착지 직전 point velocity를
+``v_edge = v_link_origin + omega_foot x (R_foot r_edge)`` 로 회전 성분까지 포함한 착지 직전 point velocity를
 계산한다. Toe/heel 각각의 낮은 모서리와 네 점 중 최저 모서리 속도를 기록하므로 발 원점 속도로 보이지 않는
 toe/heel slap을 구분할 수 있다. Ground-filtered world-Z normal force는 ``0-20 ms`` 초기 충돌과
 ``20-100 ms`` 체중 인수 구간으로 나누어 기록한다. 이 term은 기존 checkpoint의 action과 reward를 바꾸지
 않고 Play/Teleop 진단에만 사용한다. 학습에서는 TensorBoard에, Teleop에서는 자동 episode 종료 또는 keyboard
 ``R`` reset 뒤 터미널에 같은 metric이 표시된다.
+
+2026-09-09에는 이 진단의 속도 기준점을 수정했다. 기존 ``body_lin_vel_w`` 는 COM 속도인데 ``r_edge`` 는
+링크 원점 기준이어서 기준점이 섞였다. 이제 ``body_link_lin_vel_w`` 를 사용한다. COM 기준 식으로는
+``v_edge = v_com + omega x (p_edge - p_com)`` 와 같다. 과거 toe/heel/최저 모서리 속도 집계값은 물리적으로
+정정된 point velocity로 해석하면 안 되며, 기존 checkpoint를 다시 평가해야 한다. 이 진단 수정 당시에는
+COM 착지 reward/metric을 유지했다. 이후 별도 원점 reward 실험을 거쳐 현재 착지 reward/metric은 다시
+COM으로 복원했으나, 이 올바른 toe/heel 진단식은 유지한다. 진단만 바로잡는 데에는 재학습이 필요 없다.
+Force 집계 방식과 Actor/ONNX 계약도 유지하며 기존 checkpoint 자체나 실행 중인 학습 process를 수정하지 않는다.
 
 검증된 기준 checkpoint는
 ``2026-08-12_23-45-39_privileged250_gain240_160_80_air050_w2_tdvel10_ar01_ar2_005_noforce_delay4ms_fresh20k/model_19999.pt``
@@ -1083,7 +1228,7 @@ Concurrent estimator를 포함한 최신 MuJoCo Sim2Sim 기준은 commit ``df37f
 양발 정지, 급정지 및 push recovery 동작을 확인했다. 상세한 estimator graph, supervised MSE 학습, export 및
 검증 경계는 ``rok4_concurrent_state_estimator_ko.rst`` 를 기준으로 한다.
 
-두 활성 stateful term은 각각 air time과 착지 직전 속도의 episode 합과 touchdown 횟수를 GPU tensor로
+Air-time과 COM touchdown term은 각각 air time과 착지 직전 속도의 episode 합과 touchdown 횟수를 GPU tensor로
 누적하고 environment reset 시 다음
 event-weighted 평균을 TensorBoard에 기록한다.
 
@@ -1158,15 +1303,19 @@ Actor observation은 5-step history를 사용한다.
    actuator_vel_rel
    last_action
 
-Actor에는 다음 정보를 넣지 않는다.
+배포 observation 240D에는 다음 실측/시뮬레이터 정답 정보를 직접 넣지 않는다.
 
 .. code-block:: text
 
    camera image
    terrain height scan
-   base linear velocity
+   measured / simulator ground-truth base linear velocity
 
-따라서 현재 구조는 estimator가 없는 history MLP 방식의 blind walking baseline이다.
+현재 구조에는 concurrent estimator가 있다. 정규화된 240D 중 command history ``30:45`` 를 제외한
+225D로 body-frame base velocity 3D를 추정하고, 그 값을 ``detach()`` 하여 240D와 결합한다.
+내부 policy MLP 입력은 243D지만 외부 Actor/ONNX 입력은 240D 그대로다. Camera/height scan을 쓰지 않는
+blind 정책이라는 사실과 estimator가 없다는 말은 다르다. Critic은 clean history 240D와 current privileged
+10D, 합계 250D를 사용하며 실제 base velocity는 critic과 estimator 지도학습 target으로만 제공한다.
 
 ``source/rok4_tasks/rok4_tasks/manager_based/locomotion/velocity/config/rok4/domain_randomization_cfg.py``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1344,7 +1493,7 @@ RSL-RL PPO runner 설정 파일이다.
    * - experiment name
      - ``rok4_flat``
    * - max iterations
-     - ``5000``
+     - config 기본값 ``5000``; 현재 baseline CLI override는 ``25000``
    * - steps per env
      - ``24``
    * - actor hidden dims
@@ -1370,9 +1519,10 @@ RSL-RL PPO runner 설정 파일이다.
    * - symmetry data augmentation
      - original:left-right mirror = ``1:1``, mirror loss는 ``False``
 
-현재 actor는 blind noisy policy history만 사용하고, critic은 같은 항목의 clean history와 current base/Foot state를
-받는 asymmetric 구조다. Privileged 10D에는 history를 적용하지 않는다. Explicit estimator는 아직 넣지 않았으며
-rough terrain 단계에서 검토한다.
+현재 actor의 외부 입력은 noisy policy history 240D이며, 내부 MLP는 여기에 estimator 출력 3D를 더한
+243D를 사용한다. Estimator는 command를 제외한 225D와 ``[256,128]`` MLP로 속도를 추정하고
+별도 MSE로 학습한다. Critic은 같은 항목의 clean history와 current base/Foot state를 받는 asymmetric
+구조이며 250D다. Privileged 10D에는 history를 적용하지 않는다.
 
 ``entropy_coef`` 는 exploration standard deviation을 키우는 방향의 entropy 항에 곱해지는 계수다. 현재
 ``0.002`` 는 최초 ``0.008`` 과 저-noise 실험값 ``0.001`` 사이의 중간 설정이다. 최초 설정보다 특정 관절의

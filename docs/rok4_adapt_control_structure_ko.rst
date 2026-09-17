@@ -2,7 +2,7 @@ RoK4 ADAPT Action/Actuator 제어 구조 문서
 ================================================================================
 
 :작성일: 2026-07-16
-:최종 업데이트: 2026-08-11
+:최종 업데이트: 2026-09-18
 :대상 저장소: RoK4 repository root (``${ROK4_LAB_ROOT}``)
 :기준 환경: Isaac Lab v2.3.2, Isaac Sim 5.1.0, ``env_isaaclab``
 
@@ -36,10 +36,11 @@ RoK4 ADAPT Action/Actuator 제어 구조 문서
 이 문서는 RoK4의 policy action이 ADAPT actuator position target을 거쳐 PhysX joint effort가 되기까지의 전체
 제어 경로를 설명한다. 특히 다음처럼 코드만 보면 혼동하기 쉬운 부분을 구분한다.
 
-현재 actuator-space reference policy는
+초기 actuator-space reference policy는
 ``2026-07-24_19-34-26_symmetry_aug_nojumps2_swing_roll100_fresh/model_9999.pt`` 이며 experimental
 ``Yunho Symmetry ADAPT v1`` baseline으로 기록한다. 이 policy는 현재 ADAPT action/observation interface의
-pre-domain-randomization 및 pre-observation-noise-tuning reference다.
+pre-domain-randomization 및 pre-observation-noise-tuning reference다. 현재 baseline과 검증 상태는
+README 상단 ``Policy Baselines`` 표를 기준으로 하며 이 과거 정책의 gain과 현재 실험 gain을 구분한다.
 
 * ``actions.py`` 와 ``rok4_adapt.py`` 의 관계는 상속이 아니라 runtime 객체 참조다.
 * policy는 actuator torque가 아니라 normalized actuator position offset을 출력한다.
@@ -267,31 +268,39 @@ Actuator PD와 position-error 변환을 이 식에 대입하면 다음과 같다
 같은 구조를 유지하기 위해 diagonal ``K_psi`` 를 사용한다. 원하는 ``K_q`` 는 gain 해석과 설계 기준으로만
 사용하며 full-matrix actuator PD는 적용하지 않는다.
 
-다음 compliance 실험의 한쪽 coupled actuator block은
-``K_psi=diag(160,160,80,80)``, ``D_psi=diag(8,8,8,8)`` 이다. Joint 순서는
+2026-09-10 gain 실험의 한쪽 coupled actuator block은
+``K_psi=diag(180,180,120,120)``, ``D_psi=diag(9,9,10,10)`` 이다. Joint 순서는
 ``[hip_pitch, knee_pitch, ankle_pitch, ankle_roll]`` 이며 변환 결과는 근사적으로 다음과 같다.
 
 .. code-block:: text
 
-   K_q = [ 320,   0,   0,     0     ]
-         [   0, 480, 160,     0     ]
-         [   0, 160, 160,     0     ]
-         [   0,   0,   0,   107.69  ]
+   K_q = [ 360,   0,   0,     0     ]
+         [   0, 600, 240,     0     ]
+         [   0, 240, 240,     0     ]
+         [   0,   0,   0,   161.54  ]
 
-   D_q = [  16,  0,  0,    0    ]
-         [   0, 32, 16,    0    ]
-         [   0, 16, 16,    0    ]
-         [   0,  0,  0,   10.77 ]
+   D_q = [  18,  0,  0,    0    ]
+         [   0, 38, 20,    0    ]
+         [   0, 20, 20,    0    ]
+         [   0,  0,  0,   13.46 ]
 
 Actuator-space 기준 Kp/Kd 비율은 hip yaw/roll ``20:1``, coupled hip-pitch/knee pair ``20:1``,
-ankle-side pair ``10:1``, torso yaw ``20:1`` 이다. ADAPT coupling 때문에 joint-space 대각항의 비율은
-hip pitch ``20:1``, knee ``15:1``, ankle pitch/roll ``10:1`` 로 나타난다. 이 설정은 실기에서 저주파
-관절 흔들림이 없었던 ``160/10, 80/7.5`` profile에 가까운 stiffness를 복원하면서 hip-pitch damping은
-조금 낮추고 ankle damping은 조금 높인 절충안이다. Force penalty는 first contact 뒤
-100 ms 구간을 계속 관찰하여 초기 충격과 뒤따르는 sole slap을 모두 포함한다.
+ankle-side pair ``12:1``, torso yaw ``20:1`` 이다. ADAPT coupling 때문에 joint-space 대각항의 비율은
+hip pitch ``20:1``, knee 약 ``15.79:1``, ankle pitch/roll ``12:1`` 로 나타난다.
+Kp의 단위는 ``N m/rad``, Kd는 ``N m s/rad`` 이며 이 비율 자체가 감쇠비는 아니다.
+
+비교 대상인 9월 8일 COM run과 9월 9일 COM 복원 run은 ``160/8, 80/8`` 을 사용했다.
+Hip-pitch/knee Kd ``9`` 는 기존 actuator Kp/Kd 비율을 유지한 실험값이다. 발목 Kd ``10`` 은
+단일 축의 유효 관성이 일정하다는 근사에서 ``D_new = D_old * sqrt(K_new / K_old)`` 를 적용한
+``8 * sqrt(120/80) = 9.80`` 을 반올림했다. 이 근사는 ADAPT coupling, 접촉, delay, saturation이 있는
+실제 로봇의 감쇠비나 안정성을 보장하지 않는다. 이 gain은 9월 10일 이후 착지 실험에서도 유지했고 Kp/Kd DR은
+추가하지 않았다. 현재 ``2026-09-17_11-46-47_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_fresh25k`` 의
+``model_24999.pt`` 를 code snapshot ``903318c`` 와 함께 개발 baseline으로 보존했다. 9월 18일 사용자가
+Isaac Sim keyboard Teleop에서 착지 개선을 관찰했으며, 이 정책의 Sim2Sim/Sim2Real 검증은 대기 상태다.
+현재 force는 first contact 뒤 100 ms의 peak를 기록만 하고 reward에는 0을 반환한다.
 
 따라서 hip pitch와 knee/ankle pitch를 독립 gain으로 해석하면 안 된다. 예를 들어 knee torque에는 knee error의
-대각항 ``480`` 뿐 아니라 ankle-pitch error의 교차항 ``160`` 이 함께 들어간다. Equal actuator pair를 사용하는
+대각항 ``600`` 뿐 아니라 ankle-pitch error의 교차항 ``240`` 이 함께 들어간다. Equal actuator pair를 사용하는
 이유도 중요하다. 첫 pair의 gain이 다르면 그 차이만큼 hip-pitch/knee 교차항이 새로 생기고, 마지막 pair의
 gain이 다르면 knee/ankle-pitch와 ankle-roll 사이에 교차항이 생긴다.
 
@@ -508,17 +517,21 @@ Actuator PD의 실제 수식과 output
    tau_q_applied     = J^-T tau_psi_applied
 
 현재 gain은 canonical actuator 순서에서 hip yaw/roll의 lateral stiffness를 유지하고, ADAPT로 결합된
-sagittal chain과 ankle-side pair를 함께 낮춰 착지 compliance를 시험한다. 같은 숫자를 joint-space에 직접
-적용하는 것이 아니라 위 수식의 ``Kp`` 와 ``Kd`` 로 사용한다. 가운데 actuator pair는 ADAPT 행렬을 통해
-ankle pitch에도 기여하므로 특정 joint 하나만 독립적으로 부드럽게 만드는 설정은 아니다.
+sagittal chain과 ankle-side pair의 Kp/Kd를 높이는 실험이다. 같은 숫자를 joint-space에 직접
+적용하는 것이 아니라 위 수식의 ``Kp`` 와 ``Kd`` 로 사용한다. 위 행렬처럼 ankle-side pair를 바꾸면
+knee의 대각항과 knee/ankle-pitch 교차항도 바뀌므로 독립 joint gain 설정이 아니다.
 
 .. code-block:: text
 
-   Left leg actuator Kp:  [240, 240, 120, 120, 40, 40]
-   Left leg actuator Kd:  [12,  12,  12,  12,  4,  4]
-   Right leg actuator Kp: [240, 240, 120, 120, 40, 40]
-   Right leg actuator Kd: [12,  12,  12,  12,  4,  4]
+   Left leg actuator Kp:  [240, 240, 180, 180, 120, 120]
+   Left leg actuator Kd:  [12,  12,    9,   9,  10,  10]
+   Right leg actuator Kp: [240, 240, 180, 180, 120, 120]
+   Right leg actuator Kd: [12,  12,    9,   9,  10,  10]
    Torso yaw actuator:    Kp=100, Kd=5
+
+이 값은 ``ROK4_TRAIN_CFG`` 와 이를 복사한 ``ROK4_TEST_CFG`` 에 공통 적용된다. Play/Teleop도 현재 config의
+gain을 사용하므로 이전 checkpoint를 같은 제어 조건으로 비교하려면 해당 학습 당시 gain을 사용해야 한다.
+Checkpoint나 ONNX를 로드한다고 이전 PD gain이 자동 복원되는 것은 아니다.
 
 Custom actuator는 두 종류의 torque를 별도로 보관한다.
 

@@ -2,7 +2,7 @@ RoK4 Reward Structure
 =============================================================
 
 작성일: 2026-07-15
-최종 업데이트: 2026-08-21
+최종 업데이트: 2026-09-18
 
 .. raw:: html
 
@@ -14,6 +14,11 @@ RoK4 Reward Structure
      }
      body, main {
        background-color: white;
+     }
+     :not(pre) > code, span.docutils.literal, span.docutils.literal span.pre {
+       overflow-wrap: anywhere;
+       word-break: break-all;
+       white-space: normal !important;
      }
      table {
        width: 100% !important;
@@ -28,6 +33,9 @@ RoK4 Reward Structure
        white-space: normal;
        overflow-wrap: anywhere;
      }
+     table.standing-contact-table, table.edge-velocity-table {
+       font-size: 12px;
+     }
      pre.code {
        break-inside: avoid;
        page-break-inside: avoid;
@@ -37,7 +45,13 @@ RoK4 Reward Structure
 
 이 문서는 ``RoK4-Isaac-Velocity-Flat-v0`` task의 현재 reward 구조와 reward function 설정을 정리한다.
 현재 reward는 Isaac Lab G1 velocity task 구조를 출발점으로 RoK4 ADAPT actuator 좌표, direct velocity
-command, standing transition에 맞게 조정한 flat walking baseline이다. 현재 reference는
+command, standing transition에 맞게 조정한 flat walking 실험이다. 현재 개발 baseline은 아래의
+``2026-09-17 착지 직전 모서리 비용 강화`` 설정으로 학습한 다음 정책이다.
+Run: ``2026-09-17_11-46-47_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_fresh25k``,
+checkpoint: ``model_24999.pt``, post-training code snapshot: ``903318c``.
+9월 18일 사용자가 Isaac Sim keyboard Teleop에서 착지가 부드러워졌다고 관찰했다.
+Sim2Sim/Sim2Real 검증은 대기 상태이며 전체 baseline 목록은 README 상단 표를 기준으로 한다.
+다음 reference는 과거 symmetry 비교용으로 보존한 정책이다:
 ``2026-07-24_19-34-26_symmetry_aug_nojumps2_swing_roll100_fresh/model_9999.pt`` 이며 experimental
 ``Yunho Symmetry ADAPT v1`` 으로 기록한다. 이 checkpoint는 domain randomization과 policy observation
 noise를 조정하기 전의 비교 기준이며, 이후 실험에서도 보존한다.
@@ -151,15 +165,18 @@ Isaac Lab 원본 source를 수정하지 않는다. Isaac Lab의 부모 class와 
                           ├─ no_jumps
                           ├─ feet_slide
                           ├─ feet_touchdown_velocity
+                          ├─ feet_touchdown_edge_velocity (직전 비용 x5 + 접촉 후 100 ms)
                           ├─ feet_contact_velocity (현재 None: 비활성)
                           ├─ feet_contact_force (현재 None: 비활성)
                           ├─ feet_touchdown_acc (현재 None: 비활성)
                           ├─ feet_flat_orientation_l2 (현재 None: 비활성)
                           ├─ feet_swing_roll_l2 (swing 중 roll 억제)
                           ├─ feet_swing_pitch_l2 (swing 중 pitch를 약하게 억제)
+                          ├─ FeetTouchdownPitchL2 (첫 착지에서 pitch 오차 1회 평가)
                           ├─ feet_stance_width_l2 (현재 None: 비활성)
                           ├─ feet_lateral_separation_l2 (signed lateral anti-cross)
-                          ├─ stand_still_joint_deviation_l1 (exact-zero standing, 약한 default-pose bias)
+                          ├─ stand_still_joint_deviation_l1 (현재 None: no-standing-pose ablation)
+                          ├─ feet_standing_contact (exact-zero 명령의 미접촉 발 수)
                           ├─ dof_pos_limits
                           ├─ joint_action_target_pos_limits
                           ├─ joint_deviation_hip
@@ -238,6 +255,74 @@ wrapper에서 ``[-1, 1]`` 로 잘린 raw actuator action이다.
 ROBOTIS K1 Rev1의 reward 함수도 별도 clamp 없이 ``ActionManager.action`` 을 읽지만, K1 runner에는
 ``clip_actions`` 설정이 없어 기본값 ``None`` 을 사용한다. 따라서 K1은 unclipped raw action 차분, RoK4 표준
 학습은 wrapper-clipped raw action 차분이라는 차이가 있다.
+
+K1-inspired no-standing-pose 가중치 비교
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+현재 실험은 K1 설정을 그대로 복제하지 않는다. RoK4의 policy 주기는 ``0.01 s`` 이고 K1은 ``0.02 s`` 이며,
+action 차원과 scale도 다르다. 다음 표는 이 차이를 남긴 상태에서 사용하는 중간 강도 설정이다.
+
+2026-09-07 후속 실험에서는 첫 no-standing-pose 학습의 hip yaw/roll weight ``-0.1`` 만 ``-0.2`` 로 바꾼다.
+비교 run은 ``2026-09-04_14-27-20_concurrent_estimator_k1style_nostand_bh5_hip010_hippitch001_ar05_ar2_01_fresh25k``
+이며 Teleop에서 팔자 자세와 제자리 stepping이 관찰되었다. 이번 변경은 팔자 자세를 먼저 확인하기 위한
+단일 가중치 실험이다. Standing term은 ``None`` 을 유지하며 아래 표의 다른 현재 값과 외란/환경 구성도
+변경하지 않는다. 팔자 감소가 제자리 stepping 해결을 의미하지 않으며 횡보와 recovery step 제한 여부도
+평가해야 한다. 이후 사용자는 Isaac Sim에서 팔자 자세 개선과 횡보/회전/회복 동작 유지를 확인했으나
+정지 stepping은 남았다. 같은 seed/checkpoint의 30초 true-velocity 대체 진단도 stepping을 없애지 못했다.
+이 결과만으로 모든 초기 상태에서 estimator 영향이 없다고 단정하지 않는다. 원본 학습/추론/export는 그대로이며
+2026-09-08 후속 실험에서는 별도 ``feet_standing_contact=-0.1`` 항을 추가했다. 그 run의 ``model_5000.pt`` 도
+제자리 stepping이 남았으며, 7122까지의 접촉 비용 추세도 거의 평평했다. 이후 ``-0.2`` 학습의
+``2026-09-08_16-59-33_concurrent_estimator_hip020_standcontact020_fresh25k/model_24999.pt`` 에서는 사용자가
+Isaac Sim의 제자리 stepping 해소와 보행 유지를 확인했다. 이 run의 Sim2Sim/Sim2Real 검증은 보고되지 않았다.
+2026-09-09에는 이 설정을 유지하고 착지 속도 reward만 링크 원점 기준으로 바꾸는 ``tdlink`` 실험을 진행했다.
+중간 로그에서 심한 조기 종료가 관찰되어, 사용자 요청으로 현재 코드를 발 COM 기준으로 복원했다.
+복원 fresh run은 2026-09-10에 24,999 iteration까지 완료했다. 아래 soft-landing 설명에 API와 비교 시
+주의점을 기록한다. 이후 nominal gain 실험은 reward 함수를 바꾸지 않으며 과거 COM run과 gain이 다르다.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 28 18 18 18
+
+   * - term
+     - 이전 RoK4
+     - 현재 RoK4
+     - K1
+   * - policy period
+     - ``0.01 s``
+     - ``0.01 s``
+     - ``0.02 s``
+   * - ``stand_still_joint_deviation_l1``
+     - ``-0.1``
+     - ``None``
+     - 없음
+   * - ``feet_standing_contact``
+     - 없음
+     - ``-0.2`` (최초 ``-0.1`` 에서 강화)
+     - 별도 항 없음
+   * - ``base_height_l2``
+     - ``-1.0``
+     - ``-5.0``
+     - ``-10.0``
+   * - hip yaw/roll deviation
+     - ``-0.05``
+     - ``-0.2``
+     - ``-0.5``
+   * - hip pitch deviation
+     - ``-0.005``
+     - ``-0.01``
+     - 별도 항 없음
+   * - ``action_rate_l2``
+     - ``-0.01``
+     - ``-0.05``
+     - ``-0.10``
+   * - ``second_action_rate_l2``
+     - ``-0.005``
+     - ``-0.01``
+     - 없음
+
+Reward Manager는 각 raw term에 weight와 policy ``dt`` 를 곱한다. 그러나 같은 연속 action 궤적에서는
+``a_t-a_(t-1)`` 자체가 policy period에 비례하므로 action-rate 강도는 weight만으로 직접 비교할 수 없다.
+RoK4는 K1에 없는 2차 차분 항을 유지하여 ``a_t-2a_(t-1)+a_(t-2)`` 형태의 고주파 교대 진동을 별도로 억제한다.
 
 .. code-block:: text
 
@@ -383,9 +468,9 @@ RoK4 전용 Reward Terms
      - world frame yaw angular velocity command를 추종하게 한다.
    * - ``base_height_l2``
      - ``mdp.base_height_relative_l2``
-     - ``-1.0``
+     - ``-5.0``
      - flat environment origin 기준 ``target_height=0.907 m``
-     - root world Z에서 각 environment origin Z를 뺀 base height가 gait-ready IK 기준 높이와 달라지는 정도를 제곱 penalty로 만든다.
+     - root world Z에서 각 environment origin Z를 뺀 base height가 gait-ready IK 기준 높이와 달라지는 정도를 제곱 penalty로 만든다. K1의 ``-10.0`` 을 그대로 복제하지 않고 절반 강도로 자세 유지 효과와 보행 경직을 함께 확인한다.
    * - ``feet_air_time``
      - ``mdp.FeetAirTimeTouchdownBiped``
      - ``2.0``
@@ -394,7 +479,7 @@ RoK4 전용 Reward Terms
    * - ``feet_clearance``
      - ``mdp.feet_swing_clearance_exp``
      - ``0.2``
-     - Foot body-origin target ``0.054 m`` (sole clearance ``0.050 m`` + origin offset ``0.004 m``), std ``0.04 m``, velocity scale ``0.50 m/s``, yaw lift fraction ``0.50``
+     - Foot body-origin target ``0.054 m``, std ``0.04 m``, velocity scale ``0.50 m/s``, yaw lift fraction ``0.50``. 현재 train collision sole은 local Z=0이므로 별도 4 mm를 빼지 않는다.
      - 선형 명령에서는 yaw frame의 command 방향 진행속도만 ``tanh`` gate에 사용한다. Pure-yaw에서는 높이 점수 50%와 명령 회전 접선 방향 진행 점수 50%를 합쳐 수직 lift를 허용하되 임의의 전후 swing은 추가 보상하지 않는다. Air-time 길이는 touchdown reward가 별도로 담당한다.
    * - ``no_jumps``
      - ``mdp.desired_contacts``
@@ -416,6 +501,16 @@ RoK4 전용 Reward Terms
      - ``None`` (현재 비활성)
      - 실험값: landing height ``0.03 m``, approach threshold ``-0.6 m/s``, impact threshold ``0.0 m/s``, weight ``-10.0``
      - 기존 Gym의 접근/착지 velocity penalty 함수는 비교용으로 남아 있지만, 접근 구간까지 shaping해 보행 형태가 변한 실험 이후 활성 term에서 제외했다.
+   * - ``feet_touchdown_edge_velocity``
+     - ``mdp.FeetTouchdownEdgeVelocityL2``
+     - ``-0.1``
+     - 고정 landing window ``0.10 s``, ``pre_touchdown_scale=5.0``; collision sole 네 모서리
+     - 발마다 가장 빠른 모서리 하강 Z 속도를 제곱한다. 직전 sample 비용만 5배, 접촉부터 현재 sample 10회는 기존대로다. COM 항은 유지한다. 수평속도/각도 목표/command gate는 없다.
+   * - ``feet_touchdown_pitch_l2``
+     - ``mdp.FeetTouchdownPitchL2``
+     - ``-1.0``
+     - 이전/현재 policy sample의 yaw-removed 발 법선 X 성분 제곱
+     - 직전 sample이 공중인 발의 첫 접촉에서 두 오차 중 큰 값을 발별 합산한다. 기존 swing pitch는 -0.1로 유지한다. 지속 지지/일반 swing/toe-off에는 새 비용이 없으며 reset 초기 접촉은 제외한다.
    * - ``feet_contact_force``
      - ``mdp.FeetContactForceL2``
      - ``None`` (현재 비활성)
@@ -450,7 +545,7 @@ RoK4 전용 Reward Terms
      - ``mdp.feet_swing_pitch_l2``
      - ``-0.1``
      - 좌우 Foot body quaternion과 contact sensor
-     - 같은 yaw-removed sole normal의 forward 성분 제곱을 swing 발에만 적용한다. Roll 항의 1/10 가중치로 지속적인 toe-up을 약하게 억제하되 toe-off와 전후 swing 적응은 허용한다.
+     - 같은 yaw-removed sole normal의 forward 성분 제곱을 swing 발에만 적용한다. Roll 항의 1/10 가중치로 toe-up/toe-down 기울임을 억제한다. 지지 발에는 적용하지 않으며 heel-first 착지를 강제하지 않는다.
    * - ``feet_stance_width_l2``
      - ``mdp.feet_stance_width_l2``
      - ``None`` (현재 비활성)
@@ -463,9 +558,14 @@ RoK4 전용 Reward Terms
      - 좌우 Foot 위치 차이를 base yaw frame으로 회전한 뒤 signed lateral width ``y_left - y_right`` 를 유지한다. ``relu(0.165 - signed_width)^2`` 만 반환하므로 정상 ``0.21 m`` 폭과 넓은 폭은 제한하지 않고, 좁아질수록 penalty가 증가하며 좌우 Foot이 교차해 부호가 바뀌면 더 크게 작동한다. Command mask 없이 standing과 moving 모두에 적용된다. 이 값은 실기 발목 부품 간 여유를 확인하기 위해 기존 ``0.16 m`` 에서 5 mm 증가시킨 soft penalty 하한이며, 기하학적 hard constraint는 아니다.
    * - ``stand_still_joint_deviation_l1``
      - ``mdp.stand_still_joint_deviation_l1``
-     - ``-0.1``
+     - ``None`` (현재 ablation; rollback ``-0.1``)
      - ``ROK4_JOINT_ORDER`` 전체 13관절, ``base_velocity.is_standing_env`` mask
-     - RoK4 command generator가 standing으로 지정한 환경에서 실제 joint position과 default joint position 차이의 절댓값 합을 penalty로 반환한다. 검증 기준 ``-0.2`` 의 25% 강도로 양발 standing 편향을 남기면서 recovery step과의 경쟁을 줄이는 ablation이다. 기존 Gym의 ``defaultPosStanding`` 에 대응한다.
+     - 함수는 RoK4 command generator가 standing으로 지정한 환경에서 실제 joint position과 default joint position 차이의 절댓값 합을 반환한다. 현재는 term을 등록하지 않고 별도의 양발 접촉 항을 시험한다. 검증된 ``-0.1`` 을 복원 기준으로 보존한다. 기존 Gym의 ``defaultPosStanding`` 에 대응한다.
+   * - ``feet_standing_contact``
+     - ``mdp.feet_standing_contact``
+     - ``-0.2``
+     - ``command_name="base_velocity"``; 좌우 Foot contact sensor
+     - 세 command가 정확히 0일 때만 미접촉 발 수를 반환한다. 양발/한발/무접촉은 raw ``0/1/2`` 이며 자세, 발 위치, 하중 분배는 요구하지 않는다. 정지 중 보호 스텝에도 적용되므로 회복 동작 저하를 확인한다.
    * - ``dof_pos_limits``
      - ``mdp.joint_pos_limits``
      - ``-1.0``
@@ -479,14 +579,14 @@ RoK4 전용 Reward Terms
 
    * - ``joint_deviation_hip``
      - ``mdp.joint_deviation_l1``
-     - ``-0.05``
+     - ``-0.2``
      - ``.*_Hip_Yaw_Joint``, ``.*_Hip_Roll_Joint``
-     - RoK4의 회전된 hip joint frame에서는 lateral foot placement가 이름상 yaw/roll 두 축의 조합으로 생성된다. ``-0.1`` 에서 절반으로 완화하여 ``flat_orientation_l2=-5.0`` 으로 상체 기울임은 억제하면서 다리가 옆으로 내딛을 자유를 준다. 완전히 끄지는 않아 과도한 hip 편차와 넓은 stance를 계속 억제한다.
+     - RoK4의 회전된 hip joint frame에서는 lateral foot placement가 이름상 yaw/roll 두 축의 조합으로 생성된다. 첫 no-standing-pose 실험의 ``-0.1`` 보다 두 배 강화해 과도한 편차를 줄여본다. 이 항은 standing/moving 모두에 적용되는 기본 자세 편차 비용이며 발 heading 각도 자체의 penalty가 아니다. 횡보와 recovery step을 과도하게 제한하는지도 확인한다.
    * - ``joint_deviation_hip_pitch``
      - ``mdp.joint_deviation_l1``
-     - ``-0.005``
+     - ``-0.01``
      - ``.*_Hip_Pitch_Joint``
-     - 전후진 보폭을 만드는 핵심 관절을 yaw/roll과 같은 강도로 묶지 않으면서, default pose에서 과도하게 벗어나 다리 전체를 크게 휘두르는 전략을 약하게 억제한다. Swing phase나 무릎 굽힘을 직접 판정하는 reward는 아니다.
+     - 전후진 및 recovery 보폭을 만드는 핵심 관절이므로 yaw/roll의 1/20 가중치 크기를 유지하면서, default pose에서 과도하게 벗어나 다리 전체를 크게 휘두르는 전략을 약하게 억제한다. Swing phase나 무릎 굽힘을 직접 판정하는 reward는 아니다.
    * - ``joint_deviation_torso``
      - ``mdp.joint_deviation_l1``
      - ``-0.1``
@@ -519,14 +619,14 @@ RoK4 전용 Reward Terms
      - clip 전 요청 ``tau_psi`` 가 설정된 torque limit을 넘은 양을 합산해 saturation 요구를 표시한다.
    * - ``action_rate_l2``
      - ``mdp.action_rate_l2``
-     - ``-0.01``
+     - ``-0.05``
      - clipped raw action 전체 13차원; index ``2,3,8,9`` weight ``0.5``
-     - ``a_t - a_{t-1}`` 의 weighted 제곱합을 줄인다. Action scale은 적용하지 않는다.
+     - ``a_t - a_{t-1}`` 의 weighted 제곱합을 줄인다. 이전 ``-0.01`` 보다 다섯 배 강화했지만 100 Hz RoK4의 step 간 action 차이는 50 Hz K1보다 작으므로 K1 ``-0.10`` 의 단순 절반과 물리적으로 동일하지 않다. Action scale은 적용하지 않는다.
    * - ``second_action_rate_l2``
      - ``mdp.second_action_rate_l2``
-     - ``-0.005``
+     - ``-0.01``
      - clipped raw action 전체 13차원; index ``2,3,8,9`` weight ``0.5``
-     - raw action의 2차 차분, 즉 ``a_t - 2 a_{t-1} + a_{t-2}`` 의 weighted 제곱합으로 action curvature를 완화한다.
+     - raw action의 2차 차분, 즉 ``a_t - 2 a_{t-1} + a_{t-2}`` 의 weighted 제곱합으로 action curvature와 고주파 교대 진동을 완화한다. K1에는 없는 RoK4 전용 항으로 유지한다.
        reset 직후 첫 두 policy step은 history가 부족하므로 0으로 처리한다.
 
 Gym과 Lab의 action-limit 신호 차이
@@ -661,7 +761,7 @@ Reward Function 요약
      - 현재 joint position과 default joint position 차이의 absolute sum.
    * - ``stand_still_joint_deviation_l1``
      - RoK4 로컬 mdp
-     - ``base_velocity.is_standing_env`` 가 true일 때 전체 13관절의 default-pose absolute error sum을 계산한다. 현재 실험 weight는 ``-0.1`` 이다.
+     - ``base_velocity.is_standing_env`` 가 true일 때 전체 13관절의 default-pose absolute error sum을 계산한다. 현재 ablation에서는 term이 ``None`` 이며 rollback 기준은 ``-0.1`` 이다.
    * - ``joint_pos_limits``
      - Isaac Lab 공통
      - soft joint position limit을 넘은 정도를 합산한다.
@@ -717,17 +817,87 @@ RoK4-local training ``RoK4MixedPush`` 는 freeze와 다른 환경별 timer다. R
 ``Uniform(10, 15) s`` 에서 표본화한다. Base-yaw ``Delta vx`` 는 ``-0.5~1.0 m/s``, ``Delta vy`` 는
 ``-0.5~0.5 m/s`` 이며, event의 50%는 root velocity에 즉시 더하고 50%는 ``0.05~0.50 s`` 동안
 ``F=m*Delta v/T`` force pulse로 적용한다. 따라서 외란은 이동 command 중에도, exact-zero freeze 중에도, 전환
-부근에도 발생할 수 있다. Freeze 중 외란이 들어와도 command와 ``is_standing_env`` 는 zero/true로 유지되므로
-dense velocity-tracking reward와 ``stand_still_joint_deviation_l1=-0.1`` 이 함께 복구를 평가한다.
-``-0.01`` 후속 실험은 standing stepping과 동작 비용을 증가시켜 채택하지 않았다. Contact reward와
+부근에도 발생할 수 있다. Freeze 중 외란이 들어와도 command와 ``is_standing_env`` 는 zero/true로 유지된다.
+현재 ablation에서는 standing 전용 joint-deviation term 없이 dense velocity-tracking, 일반 동작 비용과
+새 ``feet_standing_contact`` 로 복구와 정지를 평가하며, 기존 pose ``-0.1`` 을 rollback 기준으로 유지한다. Contact reward와
 ``no_jumps`` 는 같은 구간의 실제 발 접촉 상태를 그대로 평가한다. Play/Teleop에서는 자동 event를 끄고 수동
 velocity Push Test UI를 사용한다.
 
 Periodic freeze와 ``standing`` 역할은 command를 ``[0, 0, 0]`` 으로 만드는 동시에 ``is_standing_env=True`` 를
 설정한다. 이 mask는 feet-air-time과 clearance 같은 standing-aware gait term 및
-``stand_still_joint_deviation_l1`` 에 사용한다. 현재 실험 weight ``-0.1`` 은 검증된 mixed-push baseline
-``-0.05`` 보다 강하고 이전 ``-0.2`` 보다 약한 절충값이다. Dense velocity/upright/base-height/smoothness
-reward가 주된 복구 목적을 담당하고, 이 항은 exact-zero에서 default pose로 향하는 편향을 제공한다.
+``stand_still_joint_deviation_l1`` 에 사용할 수 있다. 현재 ablation은 이 term을 ``None`` 으로 두고,
+새 접촉 항에서 실제 command의 exact-zero 여부를 직접 검사한다. 검증된 pose ``-0.1`` 설정은
+exact-zero에서 default pose로 향하는 편향이 다시 필요할 때 복원한다.
+
+정지 양발 접촉 패널티 (2026-09-08)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+비교 checkpoint는
+``2026-09-07_15-53-13_concurrent_estimator_k1style_nostand_bh5_hip020_hippitch001_ar05_ar2_01_fresh25k/model_24999.pt``
+이다. 이번 변경은 기본 자세로 복귀시키지 않고 정지 중 반복적인 single support를 직접 억제해보는 실험이다.
+``feet_air_time`` 과는 별도 함수/term이며 base-height ``-5.0``, base-Z velocity ``-0.2``, hip deviation,
+action-rate, gain, estimator, command/freeze/push 구성은 그대로다. ``feet_standing_contact=None`` 으로만 바꾸면
+이 새 목적함수를 비활성화할 수 있다.
+
+최초 ``-0.1`` run은 ``2026-09-08_13-40-45_concurrent_estimator_hip020_standcontact010_fresh25k`` 이다.
+사용자는 ``model_5000.pt`` Teleop에서 제자리 stepping을 확인했고, 직전 500회 평균 접촉 cost는
+5000에서 ``-0.02365``, 7122에서 ``-0.02318`` 이었다. 다음 실험은 가중치만 ``-0.1 -> -0.2`` 로 바꿨고,
+사용자는 그 run의 마지막 checkpoint에서 제자리 stepping 해소와 보행 유지를 확인했다. 위 비교 기록은
+Isaac Sim 관찰이며 실기 검증을 뜻하지 않는다. 링크 원점 실험과 COM 복원 모두 아래 수식과 표의 ``-0.2`` 를 유지한다.
+
+.. code-block:: text
+
+   c_i = 1[current_contact_time_i > 0]  (i = L, R)
+   I_stop = 1[(vx == 0) and (vy == 0) and (wz == 0)]
+   P_support = I_stop * ((1 - c_L) + (1 - c_R))
+   r_support = -0.2 * P_support * dt
+
+``vx, vy`` 는 ``m/s``, ``wz`` 는 ``rad/s`` 이다. 서로 단위가 다른 세 값을 하나의 norm threshold로
+묶지 않고 각 성분이 정확히 0인지 본다. 따라서 작은 non-zero 이동, pure-yaw, 선형+회전 명령에는 이 항이
+작동하지 않는다. 새 command deadzone이나 stable/recovery threshold는 추가하지 않는다.
+
+.. list-table:: 정지 명령에서의 기여
+   :header-rows: 1
+   :widths: 35 20 25
+   :class: standing-contact-table
+
+   * - 현재 접촉 상태
+     - Raw penalty
+     - Step reward (dt = 0.01 s)
+   * - 양발 접촉
+     - 0
+     - 0
+   * - 한발 접촉
+     - 1
+     - -0.002
+   * - 양발 미접촉
+     - 2
+     - -0.004
+
+접촉 판정은 기존 ``ContactSensor`` 의 ``track_air_time=True`` 와 현재 접촉 시간 buffer를 사용한다.
+새 GRF 크기 threshold나 최근 force history 최대값을 계산하는 항이 아니다. Stateless 함수이므로
+별도 class, reset state, per-step CPU logging 또는 history buffer가 없다. 양발 센서 선택이 아니거나
+air-time tracking이 꺼져 있으면 명시적으로 오류를 낸다.
+
+이 항은 touchdown 순간만이 아니라 정지 명령 동안 매 step 적용된다. Recovery로 발 위치를 바꿔도
+다시 양발이 접촉하면 이 항의 벌점은 0이다. 그러나 보호 스텝을 드는 동안에는 비용을 받으므로 외란 복구나
+급정거를 방해할 수 있다. 또한 발끝만 닿아도 접촉으로 인정될 수 있고, 양발 하중 균등/발바닥 수평/미끄럼
+방지를 요구하지 않는다. ``no_jumps`` 는 유지하므로 정지 중 flight는 두 항에서 동시에 벌점을 받을 수 있다.
+Quiet standing뿐 아니라 횡보/회전/push recovery, toe dragging을 같은 command 조건에서 함께 검증한다.
+
+TensorBoard의 ``Episode_Reward/feet_standing_contact`` 는 Reward Manager가 자동 기록한다. 새 custom
+metric은 없다. 이 값은 weighted episode sum을 최대 episode 길이 ``20 s`` 로 나눈 값이며, 정지 구간에
+조건부로 계산한 양발 지지율은 아니다. 20초 전체가 정지 명령이며 한발 지지만 유지하면 약 ``-0.2``, flight만
+유지하면 약 ``-0.4``, 양발 접촉만 유지하면 ``0`` 이다. Moving 시간이 많거나 조기 종료되어도 절댓값이 작아질
+수 있으므로, 로그가 0에 가까워졌다는 사실만으로 제자리 stepping 해결을 주장하지 않는다.
+
+가중치를 바꾼 두 run을 비교할 때는 각각의 ``Episode_Reward/feet_standing_contact`` 를 그 run의 signed
+weight로 나눈다. 동일한 미접촉 노출이면 ``weight=-0.1`` 의 로그 ``-0.02`` 와 ``weight=-0.2`` 의 로그
+``-0.04`` 는 모두 weight-normalized cost ``0.2`` 다. 이 보정 후에도 정지 시간/조기 종료 차이는 남으므로
+quiet standing과 보호 스텝 유지 여부를 별도로 확인한다.
+
+기존 command-aware 보상 (변경 없음)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 이 command는 ``track_lin_vel_xy_exp``, ``track_ang_vel_z_exp``, ``feet_air_time`` 에 직접 영향을 준다. 특히
 ``FeetAirTimeTouchdownBiped`` 는 x/y command norm이 ``0.05`` 이하이면 reward를 0으로 만든다. 즉 거의 정지
@@ -770,9 +940,9 @@ Policy interval ``0.01 s`` 까지 포함한 touchdown-error 기울기는 ``0.02`
    p_{base-height}
    = \left(z_{base,w} - z_{origin,w} - 0.907\right)^2
 
-Raw 값에는 ``weight=-1.0`` 과 policy ``dt`` 가 적용된다. 목표는 standing에서만이 아니라 전체 보행에 적용되므로
-몸통의 자연스러운 상하 진동도 작은 penalty를 받는다. 첫 실험에서는 높이를 완전히 고정하는 강한 제약이 아니라
-평균 자세가 크게 주저앉거나 과도하게 올라가는 것을 막는 약한 기준으로 사용한다.
+Raw 값에는 ``weight=-5.0`` 과 policy ``dt`` 가 적용된다. 목표는 standing에서만이 아니라 전체 보행에 적용되므로
+몸통의 자연스러운 상하 진동도 penalty를 받는다. 이는 이전 ``-1.0`` 보다 다섯 배 강하고 K1 ``-10.0`` 의
+절반인 중간 실험값이다. 평균 자세 유지가 개선되는지와 보행 경직 및 착지 충격이 증가하는지를 함께 확인한다.
 
 ``feet_clearance`` 는 touchdown event가 아니라 swing 중 매 policy step 계산하는 dense positive reward다. 유효한
 Foot 집합을 ``S`` 라고 하고 높이 score를 ``H_i`` 라고 하면 다음과 같다.
@@ -841,11 +1011,11 @@ single stance와 toe-off는 직접 억제하지 않는다. 또한 이 term만으
 
 ``feet_swing_roll_l2`` 는 ``weight=-1.0`` 로 활성화되어 swing 중 발바닥이 안쪽 또는 바깥쪽으로 말리는
 현상을 억제한다. 각 Foot의 local ``+Z`` 법선을 world frame으로 회전한 뒤 그 Foot 자체의 yaw frame으로 옮기고,
-lateral 성분 ``n_y^2`` 만 penalty로 반환한다. 새 ``feet_swing_pitch_l2`` 는 같은 벡터의 forward 성분
-``n_x^2`` 를 사용하되 ``weight=-0.1`` 만 적용하여 지속적인 toe-up을 약하게 억제한다. Contact sensor의
+lateral 성분 ``n_y^2`` 만 penalty로 반환한다. ``feet_swing_pitch_l2`` 는 같은 벡터의 forward 성분
+``n_x^2`` 를 사용하며 현재 ``weight=-0.1`` 로 toe-up과 toe-down 양쪽 기울임을 억제한다. Contact sensor의
 ``current_contact_time`` 이 0인 발에만 적용하고 swing 발 수로 평균하므로 지지 발은 두 항 모두 0이다.
-Pitch 가중치는 roll의 1/10이므로 비활성 ``feet_flat_orientation_l2`` 처럼 발 전체를 항상 world-up에
-고정하지 않으며, 필요한 toe-off와 sagittal swing을 더 높은 우선순위의 tracking/clearance 항이 사용할 수 있다.
+Pitch 가중치는 roll의 1/10이며 비활성 ``feet_flat_orientation_l2`` 처럼 지지 발까지 world-up으로 당기지 않는다.
+이는 soft penalty이므로 특정 각도나 heel-first 착지를 보장하지 않으며 필요한 swing 적응도 제한할 수 있다.
 
 Contact sensor는 ``update_period=0.002 s`` 와 ``history_length=self.decimation=5`` 를 사용한다. 따라서
 ``no_jumps``, ``feet_slide``, ``undesired_contacts``, ``illegal_body_contact`` 처럼 ``net_forces_w_history`` 를
@@ -855,8 +1025,9 @@ Contact sensor는 ``update_period=0.002 s`` 와 ``history_length=self.decimation
 ``compute_first_contact(env.step_dt)`` 와 완료된 ``last_air_time`` 을 사용한다.
 이 contact-force history는 policy observation history와 별개의 buffer이다.
 
-현재 soft-landing 실험은 ``FeetTouchdownVelocityL2`` 만 활성화한다.
-Velocity class는 각 발의 이전 policy step world-XYZ 속도와 접촉 여부를 저장하고, 이전 sample이
+현재 soft-landing 실험은 ``FeetTouchdownPitchL2`` 를 유지하면서 ``FeetTouchdownEdgeVelocityL2`` 의
+직전 sample 비용만 5배로 강화한다. 아래 ``FeetTouchdownVelocityL2`` COM 항의 정의는 변경하지 않았다.
+Velocity class는 각 발 링크 COM의 이전 policy step world-XYZ 속도와 접촉 여부를 저장하고, 이전 sample이
 공중이었던 발에 first contact가 발생할 때만 다음 raw penalty를 반환한다. 발별 값은 평균하지 않고 합산한다.
 
 .. math::
@@ -872,7 +1043,296 @@ Reward Manager는 여기에 weight ``-10.0`` 과 ``dt=0.01 s`` 를 적용한다.
 직접 영향을 주지 않는다. Planar XY에는 dead zone을 두지 않고, Z는 아래 방향 성분만 사용한다. L2 특성상 작은
 속도에는 작은 penalty만 생긴다. Reset 직후에는 이전 sample이 없으므로 초기 접촉을 제외한다.
 
-이 XYZ 확장은 아직 검증 전 개발 실험이다. 이전 검증 기준은
+위 식의 ``v`` 는 Foot 링크 자체의 COM ``C`` 속도다. 로봇 전체 COM 속도가 아니다.
+현재 ``body_lin_vel_w`` 는 ``body_com_lin_vel_w`` 의 alias다. Isaac Lab의 위치와 속도 기본 alias는
+기준점이 다르므로 이름의 ``body`` 만으로 판단하지 않는다.
+
+.. code-block:: python
+
+   body_pos_w      # body_link_pos_w: link-origin position
+   body_lin_vel_w  # body_com_lin_vel_w: link COM linear velocity
+   body_vel_w     # body_com_vel_w: COM linear velocity + angular velocity
+
+2026-09-09 ``tdlink`` 실험에서는 ``body_link_lin_vel_w`` 를 사용했지만, 학습 부진 관찰 후 COM으로 복원했다.
+원점 ``O`` 와 COM ``C`` 의 속도 관계는 다음과 같다. 모든 벡터는 world frame이다.
+
+.. math::
+
+   v_O^w = v_C^w + \omega_{foot}^w \times (p_O^w - p_C^w)
+
+이 차이는 좌표계가 아니라 같은 world frame에서 평가하는 점의 차이다. 회전 중 두 속도는 다를 수 있다.
+이번 복원은 원점 속도가 물리적으로 잘못되었다는 결론이 아니라 기존에 학습되던 reward 정의로 돌아가는
+선택이다. 이전 10 ms sample, first-contact 조건, 발별 합산, 가중치와 나머지 학습 설정은 유지한다.
+아래 두 TensorBoard tag도 다시 COM 속도를 집계한다. ``tdlink`` 로그는 같은 tag라도 원점 속도이므로
+동일 지점의 측정처럼 직접 비교하거나 합치지 않는다.
+
+* ``Metrics/feet_touchdown/mean_pre_touchdown_planar_speed`` [m/s]
+* ``Metrics/feet_touchdown/mean_pre_touchdown_vertical_speed`` [m/s]
+
+2026-09-14 착지 모서리 하강속도 실험
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+이 절의 계수 1 수식과 예시는 최초 실험을 보존한 것이다. 현재 코드는 아래 2026-09-17 절처럼
+직전 sample 제곱 비용에만 ``pre_touchdown_scale=5.0`` 을 곱한다. 좌표/점 선택/window 규칙은 동일하다.
+
+목적은 COM이 천천히 움직여도 발 회전으로 toe/heel이 빠르게 내려오는 움직임을 약하게 억제하는 것이다.
+이 항은 force penalty도, 발을 항상 수평으로 고정하는 orientation penalty도 아니다.
+기존 COM 항 ``-10.0`` 을 유지하고 새 ``feet_touchdown_edge_velocity`` 만 ``weight=-0.1`` 로 추가한다.
+Recovery gate, 정지 접촉 ``-0.2``, clearance, air-time, gain, DR, command/push 분포는 바꾸지 않는다.
+
+Foot마다 toe 두 점과 heel 두 점의 world 속도를 계산한다. 실제 접촉점 API가 아니라 train collision box의
+가상 모서리다. Toe ``x=0.175``, heel ``x=-0.060``, ``y=+/-0.045``, ``z=0`` [m]를 사용한다.
+위치와 속도는 모두 같은 링크 원점 기준이며, 기존 진단과 새 보상이 동일한 kinematics helper를 사용한다.
+
+.. math::
+
+   v_{i,p}^{w}=v_{i,O}^{w}+\omega_i^{w}\times(R_i^{w}r_p),\qquad
+   s_i(k)=\max_p\max(0,-v_{i,p,z}^{w}(k)),\qquad P_i(k)=s_i(k)^2
+
+네 점의 값을 합산하지 않고 가장 빠른 하강점을 선택하므로, 두 toe 점이 같은 속도라고 벌점을 두 배로
+만들지 않는다. 좌우 발의 비용은 합산한다. 가장 낮은 위치의 점을 선택하는 기존 진단과도 선택 기준이 다르다.
+수평 또는 상승하는 병진운동만으로는 새 벌점이 생기지 않지만, 회전하여 어느 모서리가 내려오면 생긴다.
+
+.. list-table:: 평가 시점
+   :header-rows: 1
+   :widths: 25 75
+   :class: edge-velocity-table
+
+   * - 구간
+     - 처리
+   * - 일반 swing
+     - 비용 0. 직전 policy sample의 최대 모서리 하강속도만 저장한다.
+   * - 새 착지 감지
+     - 직전 sample이 공중이었고 유효한 history가 있을 때 ``P_i(k-1)`` 를 한 번 더한다.
+   * - 첫 접촉부터 100 ms
+     - 현재 ``P_i(k)`` 를 10 ms마다 평가한다. 첫 접촉 sample도 포함하여 총 10회다.
+   * - 이후 지지
+     - 새 항은 0. 다시 swing 후 새 착지하면 다음 window를 연다.
+
+새 window 시작 mask를 ``B_i``, 현재 window mask를 ``W_i`` 라고 하면:
+
+.. math::
+
+   r_{edge}(k)=-0.1\,\Delta t\sum_i[B_i(k)P_i(k-1)+W_i(k)P_i(k)]
+
+함수는 raw 합만 반환한다. Weight와 ``dt=0.01 s`` 는 Reward Manager가 한 번만 곱한다.
+하강속도 ``0.4 m/s`` 가 직전 sample과 window 10회 내내 동일한 한 발의 예라면
+``-0.1 * 0.01 * 0.4^2 * 11 = -0.00176`` 이다. 실제 평균 비용은 실제 속도와 착지 빈도에 따라 달라진다.
+기존 event-only COM 항의 ``-10`` 과 가중치 숫자만 비교하지 않는다. ``-0.1`` 은 최초 실험값이며 최적값이 아니다.
+
+Window는 발별 독립 정수 policy-step counter로 관리한다. 잠깐 contact가 끊겨도 남은 window는 유지하고,
+그 안의 재접촉으로 timer를 연장하거나 직전 sample 비용을 다시 더하지 않는다. 환경 reset은 cache와 timer를
+지우므로 초기 접촉에는 비용이 없다. Duration이 policy dt의 정수배가 아니면 다음 경계로 올림한다.
+예를 들어 ``0.025 s`` 요청은 현재 dt에서 ``0.030 s`` 다. 100 ms는 정확히 10회다.
+
+현재 reward는 policy sample만 보므로 sensor force history의 2 ms 속도 이력을 사용하는 것이 아니다.
+짧은 충격을 놓칠 수 있으며, 일반 heel-to-toe 구름도 억제할 수 있다. 정지 명령 중 recovery 착지도 평가하지만
+command/push 상태를 판정하여 보상을 풀어주는 recovery gate는 아니다.
+
+추가 TensorBoard metric은 완료된 window마다 네 모서리 중 최대 하강속도의 시간 peak를 기록한다:
+
+* ``Metrics/feet_touchdown/mean_peak_edge_downward_speed_0_20ms`` [m/s]
+* ``Metrics/feet_touchdown/mean_peak_edge_downward_speed_20_100ms`` [m/s]
+
+이 둘은 직전 공중 sample을 제외한 접촉 후 값이다. 제곱 비용이나 단일 전체 최대값이 아니며, 완료된
+window의 peak를 환경 reset 때 event 수로 나눈 값이다. Reset으로 중단된 window는 이 집계에서 제외한다.
+기존 COM/force/직전 toe/heel metric 의미는 바꾸지 않는다. 계수/``dt`` 가 포함된 새 episode 비용은
+``Episode_Reward/feet_touchdown_edge_velocity`` 로 별도 기록된다.
+
+직전 비교 run은
+``2026-09-10_19-45-38_concurrent_estimator_gain240_180_120_kd12_9_10_standcontact020_fresh25k/model_24999.pt`` 이다.
+학습과 로그 검토는 완료했으나 이로부터 새로운 Sim2Sim/Sim2Real 검증을 추론하지 않는다.
+모서리 run은 ``2026-09-14_16-41-13_concurrent_estimator_edgevel01_window100_fresh25k/model_24999.pt`` 까지
+학습과 로그 검토를 완료했다. 사용자는 Isaac Sim Teleop에서 공중 heel-down/toe-down 회전 후 toe-first 착지를
+보고했다. Sim2Sim/Sim2Real 검증은 보고되지 않았으며 기존 committed baseline을 교체하지 않는다.
+동일 command/push에서 초기/후기 force, 모서리 속도, 정지, tracking, air-time을 비교한다. Force 파형은
+300 ms까지 확인하여 충격을 window 밖으로 미룬 것은 아닌지 본다. 모서리 속도만 줄고 force가 남으면
+체중 이동이나 접촉 모델 등 다른 원인도 고려하며 계수를 무조건 올리지 않는다.
+
+2026-09-15 스윙 pitch 가중치 실험
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+당시 변경은 ``feet_swing_pitch_l2.weight: -0.1 -> -0.2`` 하나였다. 같은 상태에서 pitch 비용만 두 배이며
+각도를 두 배로 제한한다는 뜻이 아니다. 기존 함수, COM 착지 ``-10.0``, 모서리 하강 ``-0.1 / 100 ms``,
+roll ``-1.0``, 정지 접촉 ``-0.2``, gain, clearance, air-time, DR, command/push, Actor/ONNX는 유지한다.
+Force는 여전히 기록 전용이며 recovery gate나 새 접촉 조건을 추가하지 않는다.
+
+직전 모서리 run과 9월 10일 gain run의 마지막 500 iteration 평균을 비교하면 착지창 force peak는
+``3368 -> 2712 N``, 후기 ``20-100 ms`` Fz peak는 ``3158 -> 2508 N`` 로 감소했지만,
+스윙 pitch 비용 절댓값은 ``0.000523 -> 0.002173`` 으로 약 4.15배 커졌다. 이는 각도가 4.15배라는 뜻이 아니다.
+사용자의 toe-first 관찰과 일치하는 가설은 접촉 후 회전이 공중으로 앞당겨졌다는 것이지만,
+시간별 pitch/contact 자료 없이 원인으로 확정하지 않는다. 모서리 속도 비용에는 착지 자세 목표가 없다.
+
+이번 실험은 기존 swing-only pitch 제약을 강화하여 공중에서 과도한 toe-down 회전을 줄이려는 것이다.
+지지 발의 구름을 직접 제한하거나 heel strike를 강제하는 방식은 아니다.
+``2026-09-15_10-32-59_concurrent_estimator_edgevel01_window100_swingpitch02_fresh25k/model_24999.pt`` 까지
+학습과 로그 검토를 완료했다. 직전 run 대비 마지막 500 iteration force peak 평균은 ``2712 -> 2236 N`` 이지만
+toe 직전 하강속도는 ``0.418 -> 0.464 m/s`` 로 증가했다. 가중치를 제거한 pitch 비용은 약 72% 감소했으나,
+사용자는 Isaac Sim Teleop에서 더 심한 공중 toe-down과 새 정지 발 세움 현상을 보고했다.
+Sim2Sim/Sim2Real 검증은 보고되지 않았으며 이 실험을 새 baseline으로 채택하지 않았다.
+
+2026-09-16 스윙 pitch 복원
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+사용자 승인으로 pitch weight만 ``-0.2 -> -0.1`` 로 복원했다. COM/edge 보상, gain 및 나머지 설정은 유지한다.
+새 벌점, recovery gate, 기록 기능은 추가하지 않았다. 이미 학습된 ``-0.2`` 정책의 action은 설정 복원만으로
+바뀌지 않으므로 이전 동작 비교에는 9월 14일 checkpoint를 사용한다. 새 학습은 실행하지 않았다.
+
+복원 당시 제안한 진단 우선 계획은 이후 철회했고, 아래 착지 자세 항을 사용자 승인으로 추가했다.
+새 recorder는 구현하지 않았다. Contact flag는 Foot body의 접촉 여부이며 발바닥 전체 접촉 판정이 아니다.
+Toe만 닿아도 contact로 판단되면 기존 swing pitch는 꺼진다. 이 시점의 자세를 별도 평가하는 것이 새 항의 목적이다.
+
+2026-09-16 착지 pitch 추가
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``feet_touchdown_pitch_l2 = RewTerm(func=mdp.FeetTouchdownPitchL2, weight=-1.0)`` 을 추가했다.
+기존 ``feet_swing_pitch_l2=-0.1`` 을 대체하지 않는다. COM 착지 속도 ``-10.0``, 모서리 속도 ``-0.1`` 과
+``100 ms`` window, 나머지 reward/gain/DR/command/push/Actor/Critic/ONNX는 변경하지 않는다.
+``2026-09-16_12-19-45_concurrent_estimator_edgevel01_window100_tdpitch1_fresh25k/model_24999.pt`` 까지 학습과
+로그 검토를 완료했다. 사용자는 Isaac Sim Teleop에서 안정적인 standing과 전진 heel strike, toe 착지 해소를
+보고했다. 다만 첫 충격은 크고 착지 후 충격은 작다고 관찰했다. Sim2Sim/Sim2Real 검증은 보고되지 않았으며
+committed baseline은 그대로 유지한다.
+
+발의 local +Z 법선을 world로 회전하고 그 발의 yaw를 제거한다. 기존 swing pitch와 동일한 식이다.
+``e_i`` 는 각도 [rad] 자체가 아니라 무차원 벡터 성분의 제곱이다.
+
+.. math::
+
+   n_i^{yaw}(k) = R_z(-yaw_i(k)) R_i(k) [0,0,1]^T
+
+   e_i(k) = (n_{i,x}^{yaw}(k))^2
+
+ZYX roll/pitch/yaw 기준으로 ``e = sin(pitch)^2 * cos(roll)^2`` 이므로 roll이 작을 때
+``sin(pitch)^2`` 에 가깝다. Toe-up/down 부호에 무관하며 heel-first를 지정하지 않는다.
+
+환경/발별로 이전 오차, 이전 접촉 flag, 이전 sample 유효 여부를 저장한다.
+``I_td`` 는 ``first_contact AND has_previous_sample AND NOT previous_in_contact`` 다.
+첫 접촉 순간에는 다음 raw cost를 발별로 합산하고 Reward Manager가 weight와 policy dt를 한 번 적용한다.
+
+.. math::
+
+   P_{td,pitch}(k) = \sum_i I_{td,i}(k) \max(e_i(k-1), e_i(k))
+
+   r_{td,pitch}(k) = -1.0 \times 0.01 \times P_{td,pitch}(k)
+
+.. code-block:: text
+
+   ordinary swing  -> save current error/contact; new pitch cost = 0
+   first contact   -> max(previous error, current error); charge once
+   continued stance -> new pitch cost = 0
+   toe-off         -> new pitch cost = 0
+   next landing    -> evaluate a new observed airborne-to-contact transition
+   reset           -> clear selected histories; skip initial contact sample
+
+이 항에는 command/recovery gate, 각도 deadband, 착지 후 자세 유지 window가 없다. 정지 중 recovery 착지도
+같은 방식으로 평가한다. 양발이 동시에 착지하면 두 비용을 합산하며 공중 발 수로 나누지 않는다.
+접촉이 끊어진 상태가 policy sample로 관측된 뒤 다시 착지하면 새 사건이다. 별도의 bounce debounce는 없다.
+
+이전/현재 sample은 policy dt ``10 ms`` 간격이며 정확한 충돌 직전/직후 physics sample을 뜻하지 않는다.
+Contact sensor의 ``2 ms x 5`` force history에서 pitch 최대값을 찾는 것도 아니다. 현재 자세는 충돌 후 변화를
+이미 포함할 수 있으므로 두 sample 중 큰 값을 사용해 현재 sample만의 빠른 정렬로 오차가 사라지는 것을 줄인다.
+10 ms 사이에 발생한 더 큰 회전은 놓칠 수 있다.
+
+가중치 ``-1.0`` 은 event-only 시작 실험값이지 검증된 최적값이 아니다. Roll이 0이고 두 sample 중 큰 pitch가
+20도이면 raw cost는 약 ``0.117``, 한 발 착지의 weighted step reward는 약 ``-0.00117`` 이다.
+작은 heel-first에도 작은 벌점, 큰 toe-up/down에는 큰 벌점이 생긴다. 평평한 착지, 낮은 GRF 또는 양발 전체 면접촉을
+보장하지 않으며 stance toe-off에 이 항을 계속 적용하지도 않는다. 이 실험은 평지 world-horizontal 기준이다.
+
+TensorBoard의 ``Episode_Reward/feet_touchdown_pitch_l2`` 는 Reward Manager가 자동으로 기록하는
+weighted reward 합 / 최대 episode 시간이다. 실제 pitch 각도나 착지당 평균 오차가 아니다.
+추가 custom metric이나 매 step GPU-to-CPU 집계는 넣지 않았다. 기존 toe/heel/force 진단은 유지한다.
+
+2026-09-17 착지 직전 모서리 비용 강화
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+착지 pitch의 관찰된 개선은 유지하고 첫 충격을 줄이기 위해, 기존 모서리 항에
+``pre_touchdown_scale=5.0`` 하나만 지정한다. 함수 기본값은 ``1.0`` 이므로 이 옵션을 생략한
+이전 설정은 기존 계산과 같다. ``0`` 은 직전 비용 없이 접촉 후 window만 평가하며, 음수/NaN/무한대는 거부한다.
+Gain, COM 착지 ``-10``, 착지 pitch ``-1``, swing pitch ``-0.1``, force 기록 전용 설정과 나머지 학습 조건은 유지한다.
+
+``s_i`` 는 네 모서리 중 최대 하강속도, ``B_i`` 는 새 착지, ``W_i`` 는 활성 window mask다.
+현재 전체 식은 다음과 같다.
+
+.. math::
+
+   r_{edge}(k)=-0.1\,\Delta t\sum_i
+   [5 B_i(k)s_i(k-1)^2 + W_i(k)s_i(k)^2]
+
+.. code-block:: python
+
+   weight = -0.1
+   landing_window_s = 0.10
+   pre_touchdown_scale = 5.0
+   # Raw cost: scale AFTER squaring, not (5 * speed)**2.
+   penalty = (5.0 * previous_speed.square() * new_landing
+              + speed.square() * active).sum(dim=1)
+
+직전 비용의 실효 계수는 ``-0.5``, 현재 window 비용은 ``-0.1`` 이다. 둘 다 Reward Manager가
+``dt=0.01 s`` 를 한 번 곱한다. 예를 들어 한 발의 직전 하강속도가 ``0.4 m/s`` 이면 해당 비용만
+``-0.00016 -> -0.0008`` 이다. 같은 착지에서 현재 속도가 ``0.1 m/s`` 이면 현재 sample 비용
+``-0.00001`` 은 그대로다. 속도 자체를 5배로 만들어 25배 비용을 주는 것이 아니다.
+
+이전 값은 첫 접촉을 감지하기 한 policy step 전에 저장한 값이다. 2 ms physics 기준의 정확한
+충돌 직전 속도나 force history의 최대 속도는 아니다. 네 모서리 XYZ 속도를 계산하지만 비용에는
+world-Z 하강 성분의 최댓값만 사용한다. 좌우 발 비용은 합산하고 네 모서리 비용은 합산하지 않는다.
+재접촉 중복 방지, 발별 100 ms window와 reset 처리는 유지한다. 물리 속도 metric에 5를 곱하지 않으며
+새 metric이나 CPU 집계를 추가하지 않는다.
+
+비교 run은 위 9월 16일 ``tdpitch1`` 의 ``model_24999.pt`` 다. 마지막 500 iteration 평균에서
+초기 ``0-20 ms`` Fz peak는 약 ``1922 N``, 후기 ``20-100 ms`` 는 약 ``1446 N`` 이다.
+9월 14일 모서리-only run의 같은 값은 약 ``766 / 2508 N`` 이었다. 이는 전역 최대 force가 아니라
+window별 peak 평균이다. 개선된 후기 구간까지 일괄 강화하지 않고 직전 비용만 조절하는 이유다.
+계수 5는 실험값이며 충격 감소를 보장하지 않는다. 이 설정으로 fresh 25,000 iteration 학습을 마쳤고
+9월 18일 사용자 Teleop 관찰을 바탕으로 현재 개발 baseline으로 보존했다. 코드 snapshot은 ``903318c`` 다.
+학습 당시에는 ``2c6fe26`` 기반 미커밋 코드를 사용했고, snapshot은 학습 완료 후 저장 설정과 대조하여 만들었다.
+이 기록은 새 Sim2Sim/Sim2Real 검증을 의미하지 않는다.
+
+.. list-table:: 마지막 500 iteration 평균 비교 (2026-09-18)
+   :header-rows: 1
+   :widths: 50 25 25
+   :class: edge-velocity-table
+
+   * - 항목
+     - 9월 16일 pre1
+     - 9월 17일 pre5
+   * - 착지창 접촉 합력 크기 peak [N]
+     - 2129
+     - 1966
+   * - 초기 0-20 ms Fz peak [N]
+     - 1922
+     - 1693
+   * - 후기 20-100 ms Fz peak [N]
+     - 1446
+     - 1494
+   * - 직전 heel 하강속도 [m/s]
+     - 0.456
+     - 0.363
+   * - 보상 대상 touchdown 평균 air-time [s]
+     - 0.367
+     - 0.355
+   * - XY 추종 오차 지표
+     - 0.1469
+     - 0.1409
+
+모든 force는 착지 사건 peak의 집계 평균이며 전역 최대값이 아니다. 첫 충격과 heel 하강속도는 감소했지만
+후기 force는 약 3.3% 증가했고 air-time은 조금 짧아졌다. Standing contact 벌점 절댓값은 약 10.6% 감소,
+no-jumps 벌점 절댓값은 약 21.4% 증가했다. 각도/발걸음 빈도나 드문 충격을 이 값만으로 확정하지 않는다.
+사용자의 부드러운 착지 관찰은 Isaac Sim keyboard Teleop 단계의 결과로만 기록한다.
+
+이전 COM 비교 기록
+^^^^^^^^^^^^^^^^^^^
+
+COM 기준 비교 정책은
+``2026-09-08_16-59-33_concurrent_estimator_hip020_standcontact020_fresh25k/model_24999.pt`` 이다.
+사용자는 Isaac Sim에서 정지 stepping 해소와 보행 유지를 확인했다. 원점 기준 trial은
+``2026-09-09_15-26-01_concurrent_estimator_hip020_standcontact020_tdlink_fresh25k`` 이며 중간 학습이 부진했다.
+COM 복원 run은 ``2026-09-09_17-36-08_concurrent_estimator_hip020_standcontact020_tdcom_restore_fresh25k`` 이며
+``model_24999.pt`` 까지 fresh 학습을 완료했다. 사용자는 Isaac Sim Teleop에서 이전과 비슷한 보행/정지와
+잔여 착지 후 충격, 전방 recovery toe 걸림을 보고했다. MuJoCo Sim2Sim/Sim2Real 검증은 보고되지 않았다.
+이 run은 이전 ``240/12, 160/8, 80/8`` actuator gain을 사용한다. 2026-09-10 새 gain 실험은
+``240/12, 180/9, 120/10`` 이며 reward 함수/가중치와 4 ms delay, DR, observation, command는 유지한다.
+새 gain의 학습과 검증은 별도이며 기존 checkpoint가 자동으로 새 제어 조건에 검증된 것은 아니다.
+이전 실기 검증 기준은
 ``2026-08-12_23-45-39_privileged250_gain240_160_80_air050_w2_tdvel10_ar01_ar2_005_noforce_delay4ms_fresh20k``
 의 ``model_19999.pt`` 다. 이 정책은 Z 전용 penalty로 학습되었으며, 마지막 checkpoint에서 평균 착지 직전
 하강속도는 약 ``0.044 m/s`` 였고 velocity tracking과 평균 완료 air time은 유지되었다. 학습 checkpoint는
@@ -891,12 +1351,27 @@ foot body frame에서 다음과 같이 정의한다.
    r_{toe,\pm}=[0.175,\ \pm0.045,\ 0]^T,\qquad
    r_{heel,\pm}=[-0.060,\ \pm0.045,\ 0]^T
 
-각 모서리의 world-frame 위치와 속도는 다음 rigid-body kinematics로 계산한다.
+각 모서리의 world-frame 위치와 속도는 다음 rigid-body kinematics로 계산한다. ``O`` 는 Foot 링크 원점,
+``C`` 는 그 발 링크 자체의 COM이다. Local sole offset은 회전 행렬로 world frame으로 변환한다.
 
 .. math::
 
-   p_{edge}^{w}=p_{foot}^{w}+R_{foot}^{w}r_{edge},\qquad
-   v_{edge}^{w}=v_{foot}^{w}+\omega_{foot}^{w}\times(R_{foot}^{w}r_{edge})
+   p_{edge}^{w}=p_O^{w}+R_{foot}^{w}r_{edge},\qquad
+   v_{edge}^{w}=v_O^{w}+\omega_{foot}^{w}\times(R_{foot}^{w}r_{edge})
+
+동일한 계산을 COM 기준으로 쓰면 다음과 같다.
+
+.. math::
+
+   v_{edge}^{w}=v_C^{w}+\omega_{foot}^{w}\times(p_{edge}^{w}-p_C^{w})
+
+2026-09-09 수정 전 진단은 ``v_C`` 에 원점 기준 lever arm을 더하는 오류가 있었다. 수정 후에는
+``body_link_lin_vel_w`` 로 ``v_O`` 를 받아 위치와 속도의 기준점을 일치시킨다. 기존 toe/heel/최저 모서리
+속도 로그는 잘못된 기준점으로 계산한 값이며, 원래 per-sample 각속도/자세/COM offset이 없으면 집계값만으로
+복원할 수 없다. 기존 checkpoint를 재학습 없이 다시 평가하되 이전 곡선과 수정 후 곡선을 직접 합치지 않는다.
+이 진단 수정 자체는 기록 전용 term에 한정되었다. 그 뒤 착지 reward를 원점으로 바꾸는 별도 실험을 거쳐
+현재 reward/착지 속도 metric은 다시 COM 기준으로 복원했다. Toe/heel 진단은 원점 속도와 원점 기준
+lever arm을 사용하는 수정된 계산을 유지한다. Force 집계 방식, Actor/ONNX 계약, 기존 checkpoint도 유지한다.
 
 따라서 발 원점 속도가 작더라도 pitch/roll 각속도로 toe 또는 heel이 빠르게 내려오는 foot slap을 측정할 수
 있다. Toe 두 모서리 중 낮은 점, heel 두 모서리 중 낮은 점, 네 모서리 전체 중 가장 낮은 점을 각각 선택한다.
@@ -1024,10 +1499,10 @@ world-frame 접촉 합력 ``||[F_x,F_y,F_z]||`` 의 landing-window peak다. ``fe
    5. standing과 moving 모두에서 좌우 Foot의 signed lateral separation 하한만 두어 다리 교차를 억제한다.
    6. foot-flat orientation과 목표 stance-width 함수는 구현되어 있지만 현재 비활성이다.
    7. 발 미끄러짐을 줄인다.
-   8. torque, joint acceleration, action rate, second action rate를 줄여 움직임을 부드럽게 한다.
-   9. ankle limit, hip/torso deviation을 제한한다.
-   10. zero command에서 dense velocity/upright/base-height/smoothness reward로 정지 안정성을 유도하고,
-       full-body default-pose penalty ``-0.1`` 로 양발 standing 편향을 보완한다.
+   8. torque, joint acceleration, 강화된 action rate와 second action rate로 움직임과 고주파 진동을 줄인다.
+   9. ankle limit, hip/torso deviation을 제한하며 hip yaw/roll은 ``-0.2``, hip pitch는 ``-0.01`` 을 사용한다.
+   10. zero command에서 dense velocity/upright/base-height/smoothness reward로 정지 안정성을 유도하며,
+       현재 ablation은 full-body standing default-pose penalty를 사용하지 않는다.
    11. Foot를 제외한 body 접촉을 실패 종료로 처리한다.
 
 튜닝 시 우선 확인할 항목

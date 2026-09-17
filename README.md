@@ -9,7 +9,8 @@ that were actually completed; they are not inferred from branch ancestry or a su
 
 | Status | Run and checkpoint | Code commit | Verified status |
 |---|---|---|---|
-| **Current development baseline** | `2026-09-02_15-48-05_concurrent_estimator_tdmetrics_minwidth0165_fresh25k` / `model_24999.pt` | `ce08e9c` on `yunho/mixed-push-disturbance` | Training and log review complete; Isaac Sim Teleop, MuJoCo Sim2Sim, and hardware Sim2Real pending |
+| **Current development baseline** | `2026-09-17_11-46-47_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_fresh25k` / `model_24999.pt` | `903318c` on `yunho/mixed-push-disturbance` | Training/log review complete; user-reported softer landing in Isaac Sim keyboard Teleop; MuJoCo Sim2Sim and hardware Sim2Real pending |
+| **Previous lateral-clearance baseline** | `2026-09-02_15-48-05_concurrent_estimator_tdmetrics_minwidth0165_fresh25k` / `model_24999.pt` | `ce08e9c` on `yunho/mixed-push-disturbance` | Training and log review complete; Isaac Sim Teleop, MuJoCo Sim2Sim, and hardware Sim2Real pending |
 | **Previous mixed-push baseline** | `2026-08-24_17-10-31_concurrent_estimator_mixedpush_baseyaw_fresh25k` / `model_24999.pt` | `ccdd543` on `yunho/mixed-push-disturbance` | Isaac Sim Teleop and training-log review complete; MuJoCo Sim2Sim and hardware Sim2Real pending |
 | **Concurrent-estimator Sim2Sim baseline** | `2026-08-21_02-28-25_concurrent_estimator_stand005_fresh25k` / `model_24999.pt` | `df37f44` on `yunho/concurrent-state-estimator` (`785a83c` documents validation) | Isaac Sim Teleop and MuJoCo Sim2Sim complete; estimator Sim2Real pending |
 | **Pre-estimator Sim2Real baseline** | `2026-08-12_23-45-39_privileged250_gain240_160_80_air050_w2_tdvel10_ar01_ar2_005_noforce_delay4ms_fresh20k` / `model_19999.pt` | `2712787` on `yunho/privileged-observation` | Hardware Sim2Real complete |
@@ -31,6 +32,186 @@ Before recording or pushing a new baseline:
 5. Synchronize the relevant RST source, generated HTML/PDF, and `CHANGELOG.md`.
 6. Inspect the branch graph and upstream refs. Do not merge, fast-forward, or move another branch without explicit
    approval.
+
+### Current Baseline: Pre-Touchdown Edge Weight (2026-09-18)
+
+The run in the first table row completed fresh training through iteration 24999 with 4096 environments and seed 42.
+On September 18, the user reported softer landing in Isaac Sim keyboard Teleop and approved preserving this policy.
+This is not a new Sim2Sim/Sim2Real validation or a guarantee that every impact is small.
+`903318c` is the post-training code snapshot matching the saved reward/gain settings; training itself used the
+uncommitted working tree based on `2c6fe26`. This documentation update records the result after that code commit.
+Checkpoint SHA-256:
+
+```text
+8c9a006bf91a5674b1a7aca8b7082d2d6365c1c718b4b174c267a08d292f7a09
+```
+
+Changed only `feet_touchdown_edge_velocity.params.pre_touchdown_scale` to `5.0`. The public default is `1.0`,
+preserving previous behavior when omitted. For each foot, the term reconstructs four virtual sole-corner world
+velocities from link-origin translation and rotation, then selects the fastest downward Z speed.
+It does not sum four corner costs, penalize XYZ speed, or use measured contact-point velocities.
+
+At a new landing, the cached previous policy sample's squared speed now has effective coefficient `-0.5`.
+Current samples during the unchanged 100 ms window retain coefficient `-0.1`. Reward Manager multiplies both
+by `dt=0.01 s` once. The scale multiplies the squared cost, not the speed before squaring.
+Recontact does not restart the window or reapply the pre-contact cost. Physical-unit metrics remain unscaled.
+COM touchdown `-10.0`, touchdown pitch `-1.0`, swing pitch `-0.1`, metric-only GRF, gains, and all other settings
+are unchanged relative to the September 16 comparison. The completed baseline uses per-leg actuator Kp
+`[240,240,180,180,120,120]`, Kd `[12,12,9,9,10,10]`, a 4 ms delay and 10 ms policy interval.
+Standing-pose shaping is disabled; exact-zero-command foot contact is `-0.2`. Actor/ONNX input remains 240D,
+with an internal 225D-to-3D estimator, a 243D policy MLP input, and a clean 250D critic.
+
+Comparison: `2026-09-16_12-19-45_concurrent_estimator_edgevel01_window100_tdpitch1_fresh25k/model_24999.pt`.
+That run completed training and log review. The user reported stable standing and heel-first forward landings
+instead of toe landings in Isaac Sim Teleop, but the first impact remained large.
+Final-500-iteration average early/late Fz peaks were approximately `1922 / 1446 N`, versus `766 / 2508 N`
+in the September 14 edge-only comparison. These are averaged window peaks, not global maxima.
+The factor 5 is an experimental choice targeting the first impact, not a force bound or proven optimum.
+The new baseline's final-500-iteration means, compared with September 16, are:
+
+| Metric | Previous pre1 | Current pre5 |
+|---|---:|---:|
+| Landing-window normal-force magnitude peak | 2129 N | 1966 N |
+| Early 0-20 ms Fz peak | 1922 N | 1693 N |
+| Late 20-100 ms Fz peak | 1446 N | 1494 N |
+| Pre-touchdown heel downward speed | 0.456 m/s | 0.363 m/s |
+| Rewarded-touchdown air time | 0.367 s | 0.355 s |
+| XY tracking error metric | 0.1469 | 0.1409 |
+
+All force values are averaged event peaks, not global maxima. Early force and heel speed improved, but later force
+rose slightly and air time shortened. Standing-contact cost magnitude fell 10.6%; no-jump cost magnitude rose 21.4%.
+Keep these trade-offs visible when evaluating recovery and rare impacts. Earlier validated references are preserved
+in the table; this commit does not move or merge another branch.
+
+### Previous Experiment: Touchdown Pitch (2026-09-16)
+
+Added `feet_touchdown_pitch_l2 = FeetTouchdownPitchL2` at weight `-1.0`, alongside the unchanged
+`feet_swing_pitch_l2=-0.1`. This is a fresh-training experiment, not a new validated baseline.
+The new term evaluates the same squared X component of the yaw-removed sole normal, but only once when a foot
+transitions from an observed airborne sample to first contact. It takes `max(previous_error, current_error)`
+per foot and sums the feet. The previous/current samples are separated by the 10 ms policy interval; they do
+not identify the exact 2 ms physics contact instant. Reward Manager applies weight and dt once.
+
+The term returns zero during ordinary swing, continued stance, and toe-off, and excludes initial contacts after
+reset. It has no command/recovery gate, angle deadband, or 100 ms posture window. Both toe-up and toe-down tilt
+are penalized, so a small heel-first landing incurs a small cost too; heel-first landing and soft impact are not
+guaranteed. The existing edge-velocity cost still runs for its separate 100 ms window.
+
+COM touchdown `-10.0`, edge velocity `-0.1`, metric-only GRF, standing contact, clearance, air time, gains,
+DR, commands/pushes, and Actor/Critic/ONNX interfaces are unchanged. TensorBoard automatically records
+`Episode_Reward/feet_touchdown_pitch_l2`; no additional physical-unit metric or per-step CPU logging is added.
+Training and log review completed through iteration 24999; user-reported Isaac Sim Teleop results are recorded
+above. MuJoCo Sim2Sim and hardware Sim2Real validation remain unreported. The committed baseline table is
+unchanged, and changing the reward configuration does not modify an existing checkpoint's actions.
+
+### Prior Step: Swing-Pitch Restored (2026-09-16)
+
+Restored only `feet_swing_pitch_l2.weight` from `-0.2` to `-0.1`. The September 15 trial completed training and
+log review, but the user reported worse airborne toe-down rotation and a newly raised/tilted foot during standing
+in Isaac Sim Teleop. Lower averaged, swing-masked pitch cost did not establish better touchdown posture.
+The other rewards, edge window, gains, DR, commands/pushes, and deployment interfaces are unchanged.
+
+This restores the reward setting of
+`2026-09-14_16-41-13_concurrent_estimator_edgevel01_window100_fresh25k/model_24999.pt`, not a new validated baseline.
+Changing a reward weight does not alter the actions of an already trained September 15 checkpoint in Teleop.
+Replay the September 14 checkpoint when comparing restored-policy behavior. No new training has been started.
+
+The diagnostic-only next-step proposal was withdrawn in favor of the explicitly approved touchdown-pitch
+experiment above. No extra recorder was implemented. A body contact flag is not full-sole contact, and toe-only
+contact can switch off the swing-pitch term. Sim2Sim/Sim2Real validation of the September trials remains unreported.
+
+### Previous Swing-Pitch Experiment (2026-09-15)
+
+Changed only `feet_swing_pitch_l2.weight` from `-0.1` to `-0.2` for fresh training. The existing function
+penalizes the squared forward component of the yaw-removed sole normal while a foot is airborne; it does not
+constrain stance orientation or require heel-first contact. This doubles the pitch cost for identical states,
+not the pitch angle. Roll remains `-1.0`, COM touchdown velocity `-10.0`, and edge velocity `-0.1 / 100 ms`.
+GRF remains metric-only. Gains, clearance, air-time, standing contact, DR, commands/pushes, and Actor/ONNX are unchanged.
+
+The comparison is
+`2026-09-14_16-41-13_concurrent_estimator_edgevel01_window100_fresh25k/model_24999.pt`.
+Training and log review are complete. Against the September 10 gain run, final-500-iteration mean force peak fell
+from 3368 to 2712 N, mainly in the 20-100 ms window, while swing-pitch cost magnitude increased about 4.15 times.
+The user reported heel-down to toe-down rotation in the air followed by toe-first landing during Isaac Sim Teleop.
+Moving rotation ahead of the landing window is a hypothesis consistent with that report, not a measured causal result.
+MuJoCo Sim2Sim and hardware Sim2Real validation of this comparison policy have not been reported.
+
+The `-0.2` follow-up completed 25,000 iterations as
+`2026-09-15_10-32-59_concurrent_estimator_edgevel01_window100_swingpitch02_fresh25k/model_24999.pt`.
+Compared with the September 14 run, final-500-iteration force peak averaged 2236 vs 2712 N, but pre-touchdown
+toe downward speed increased from 0.418 to 0.464 m/s. Weight-normalized pitch cost fell about 72%; the user still
+reported worse motion and a new standing defect. The experiment was not adopted, and its weight was restored above.
+
+### Previous Landing-Edge Experiment (2026-09-14)
+
+Added `feet_touchdown_edge_velocity = FeetTouchdownEdgeVelocityL2` at weight `-0.1` with a `0.10 s` landing
+window. This is an additional reward, not a replacement for the COM touchdown term (`-10.0`). For each foot,
+take the largest squared downward world-Z speed among the four sole corners. Add the previous airborne policy
+sample once at a new landing, plus current samples for ten 10 ms policy steps beginning at first contact.
+There is no horizontal-speed or target-angle cost in this new term. Reward Manager applies weight and dt once.
+
+The per-foot window survives brief contact loss; recontact within it does not restart it or repeat the previous-sample
+cost. Ordinary swing and established stance outside the window are unpenalized. Reset clears cached speeds and
+timers, excluding initial contacts without an airborne previous sample. Nonintegral windows round up to a policy
+boundary. Sole point velocities use `body_link_lin_vel_w + omega x (R * r_link)` through the same helper as diagnostics.
+These are virtual collision-box corners, not measured contact-point velocities.
+
+Added `Metrics/feet_touchdown/mean_peak_edge_downward_speed_0_20ms` and
+`Metrics/feet_touchdown/mean_peak_edge_downward_speed_20_100ms` in m/s. They average completed-window peaks,
+exclude the previous airborne sample, and differ from existing lowest-height toe/heel pre-touchdown metrics.
+The reward has no command or push gate: it applies to normal, standing-recovery, and turning landings alike.
+`feet_standing_contact=-0.2`, clearance, air-time, gains, DR, push/freeze, and Actor/ONNX interfaces are unchanged.
+GRF remains metric-only. No recovery timer or stability/DCM gate has been introduced.
+
+Comparison checkpoint:
+`2026-09-10_19-45-38_concurrent_estimator_gain240_180_120_kd12_9_10_standcontact020_fresh25k/model_24999.pt`.
+That run completed training and log review. No new Sim2Sim/Sim2Real validation is inferred from those logs.
+The edge-reward experiment completed fresh training through iteration 24999; its log review and user-reported
+Teleop limitation are recorded above. It does not replace any committed baseline in the table above.
+Evaluate unchanged command/push sequences, both force windows,
+standing and walking, and the force trace out to 300 ms to detect a peak merely shifted beyond the reward window.
+The new cost may inhibit natural heel-to-toe rolling and is not a force bound or a guarantee of soft landing.
+
+### Previous Gain Experiment (2026-09-10)
+
+Changed the per-leg actuator-space gains from `[240, 240, 160, 160, 80, 80]` /
+`[12, 12, 8, 8, 8, 8]` to `[240, 240, 180, 180, 120, 120]` / `[12, 12, 9, 9, 10, 10]`.
+Hip yaw/roll remains `240/12` and torso yaw remains `100/5`. Hip pitch/knee uses `180/9` to retain its
+previous `20:1` actuator Kp/Kd ratio. The ankle-side pair uses `120/10`: `8 * sqrt(120/80) = 9.80`
+is a single-axis, fixed-inertia damping-ratio heuristic, rounded to 10, not a validated optimum for the coupled robot.
+
+The comparison is the completed COM-restoration run below. Its gains were still `240/12`, `160/8`, and `80/8`.
+Only the nominal gains change in this new experiment. Reward functions/weights, COM touchdown velocity,
+corrected sole-point diagnostics, observations, gain-DR status (disabled), other DR, command/freeze/push,
+and the fixed 4 ms delay remained unchanged in that gain-only run. Training through iteration 24999 and log review
+completed; separate simulator/hardware movement validation must not be inferred from convergence.
+No committed baseline or saved checkpoint has changed. Play/Teleop uses the current asset gains, so an old
+checkpoint evaluated after this edit is a changed-controller test, not an identical replay of its training setup.
+
+### Previous COM-Restoration Experiment (2026-09-09)
+
+The comparison policy is
+`2026-09-08_16-59-33_concurrent_estimator_hip020_standcontact020_fresh25k/model_24999.pt`.
+With `feet_standing_contact=-0.2`, the user reported quiet standing without in-place stepping and retained walking
+in Isaac Sim. MuJoCo Sim2Sim and hardware Sim2Real validation have not been reported for this policy. It used
+foot **COM** velocity for the touchdown reward.
+
+The link-origin trial,
+`2026-09-09_15-26-01_concurrent_estimator_hip020_standcontact020_tdlink_fresh25k`, showed severe early termination
+in its mid-training logs. This does not prove that a link-origin penalty is generally incorrect. At the user's
+request, `FeetTouchdownVelocityL2` now again stores foot **COM** world-frame velocity (`body_lin_vel_w`, an alias
+of `body_com_lin_vel_w`). Weight `-10.0`, the preceding `10 ms` policy sample, XY/downward-Z formula,
+standing-contact weight `-0.2`, all other rewards, gains, observations, commands, freeze, and pushes are unchanged.
+The fresh run was
+`2026-09-09_17-36-08_concurrent_estimator_hip020_standcontact020_tdcom_restore_fresh25k/model_24999.pt`.
+Training and log review completed on 2026-09-10. The user reported similar Isaac Sim Teleop behavior to the
+September 8 policy, including remaining post-contact impact and toe catching during forward recovery steps.
+MuJoCo Sim2Sim and hardware Sim2Real validation remain unreported; this does not replace the committed baseline table.
+The separate toe/heel diagnostic reference-point correction remains in place; it does not add a reward.
+The two touchdown planar/downward-speed TensorBoard tags again measure COM speed. The `tdlink` run measures
+link-origin speed under the same tag names and must not be treated as the same measurement.
+Code restoration does not change an already running process or rewrite any checkpoint. The earlier COM policy
+can be replayed without retraining; a fresh run is used to assess training under the restored configuration.
 
 RoK4 Lab contains lightweight Isaac Lab scripts and RoK4 asset configuration code used to validate the RoK4 whole-body robot model before building reinforcement-learning tasks.
 
@@ -110,10 +291,11 @@ five-frame history.
 
 ## Documentation
 
-Project notes are kept in `docs/` as editable RST/HTML files and generated PDFs:
+Project notes are kept in `docs/` as editable RST/HTML files, generated PDFs, and Draw.io source diagrams:
 
 | Document | Purpose |
 | --- | --- |
+| `docs/rok4_training_framework.drawio` | Local editable Draw.io working diagram; not included in this baseline snapshot. |
 | `docs/_build/pdf/rok4_flat_task_structure_ko.pdf` | RoK4 flat task structure, task registration, DR, and actor/critic/action symmetry augmentation. |
 | `docs/_build/pdf/rok4_reward_structure_ko.pdf` | RoK4 reward terms, inherited reward settings, reward/DR separation, and reward function meanings. |
 | `docs/_build/pdf/rok4_adapt_control_structure_ko.pdf` | ADAPT matrices, action/actuator object relationships, target/state origins, explicit PD call flow, and torque limits. |
@@ -324,8 +506,8 @@ position-action task leaves those two command tensors at zero, so their delayed 
 behavior are inherited, while ADAPT conversion, actuator-space PD, actuator torque clipping, and joint-effort mapping
 remain RoK4-specific.
 
-The current compliance experiment uses `Kp/Kd=240/12` for hip yaw/roll,
-`160/8` for the first ADAPT-coupled pair associated with hip pitch/knee, and `80/8` for the final ankle-side pair.
+The current gain experiment uses `Kp/Kd=240/12` for hip yaw/roll,
+`180/9` for the first ADAPT-coupled pair associated with hip pitch/knee, and `120/10` for the final ankle-side pair.
 The torso-yaw gain remains `100/5`. These are diagonal actuator-space gains applied to `psi`, not direct joint-space
 gains. The resulting joint-space gain is `K_q=J^-T K_psi J^-1`, so knee and ankle-pitch errors remain coupled while
 the sagittal chain and ankle stiffness retain the experimentally stable real-robot range. The per-leg actuator-space
@@ -470,12 +652,14 @@ ONNX/TorchScript policy is called outside Isaac Lab train/play, clamp the policy
 `ROK4_ACTUATOR_ACTION_SCALE` and before saving it as the next `last_action`.
 
 The action smoothness rewards use clipped raw policy-action differences, matching the G1 first-order convention.
-`action_rate_l2` and `second_action_rate_l2` use weights `-0.01` and `-0.005`, retaining the previous Gym first-to-second
-order ratio. The command-role ratios use the validated `mixed=0.35` and `standing=0.05` split. The current experiment
-uses an exact-zero standing default-pose weight of `-0.1`, between the validated mixed-push value `-0.05` and the
-stronger `-0.2` setting. A controlled `-0.01` ablation produced standing stepping, larger action/torque costs, and
-higher peak contact force, so it was rejected. Action scaling remains part of actuator-target generation but is not
-applied by either smoothness reward. Hip-pitch and knee action indices
+The current no-standing-pose ablation strengthens `action_rate_l2` and `second_action_rate_l2` from
+`-0.01`/`-0.005` to `-0.05`/`-0.01`. The first-order term suppresses action changes, while the retained second-order
+term specifically suppresses alternating high-frequency action curvature at RoK4's 100 Hz policy rate. The command-role
+ratios remain at the validated `mixed=0.35` and `standing=0.05` split. `stand_still_joint_deviation_l1=None` still
+removes the command-gated full-body default-pose bias; the current follow-up adds a separate zero-command bilateral
+contact cost after generic costs alone left persistent stepping. Action scaling remains part of actuator-target
+generation but is not applied by either smoothness
+reward. Hip-pitch and knee action indices
 `[2, 3, 8, 9]` retain the RoK4-specific `0.5` squared-error multiplier.
 
 The reward functions do not clamp actions internally. In the standard RoK4 RSL-RL train/play path,
@@ -564,9 +748,10 @@ The `mixed`, `x`, `fast_forward`, `y`, `yaw`, and `x_yaw` roles use independent 
 `1.5-3.0 s` standing windows in a `10 s` cycle. Thus 90% of environments train asynchronous moving-to-standing transitions,
 while `standing` remains zero and `walking` never freezes. A normal `10 s` command resampling retains the episode
 role and samples a new command within that role; the next environment reset samples a new role. Exact-zero commands
-set the command term's standing mask and activate `stand_still_joint_deviation_l1` with weight `-0.1`. This weak
-13-joint default-pose bias targets stable two-foot standing while retaining recovery freedom. `rel_standing_envs` is
-disabled to avoid duplicate standing assignment, and the episode-role scheduler
+set the command term's standing mask. The current ablation keeps `stand_still_joint_deviation_l1` disabled and adds
+`feet_standing_contact=-0.2` based directly on an exact-zero three-component command. The rollback reference for the
+disabled pose term remains the validated `-0.1` 13-joint default-pose bias. `rel_standing_envs` is disabled to avoid duplicate standing assignment,
+and the episode-role scheduler
 is disabled in Play and Teleop configurations.
 
 ### Episode, Freeze, and Push Timers
@@ -611,7 +796,8 @@ available when aggregation is unnecessary. The Reward Manager's standard `Episod
 the weighted reward contribution, not a time measurement.
 
 This branch adds two height terms without enabling a height scanner. `base_height_l2` uses target `0.907 m` and
-weight `-1.0`, measuring root world Z relative to each flat environment origin. `feet_clearance` uses weight `+0.2`
+weight `-5.0`, measuring root world Z relative to each flat environment origin. This intermediate value is half the
+K1 weight and tests stronger posture retention without immediately adopting K1's full `-10.0`. `feet_clearance` uses weight `+0.2`
 and rewards valid swing feet with
 `tanh(v_progress / 0.50) * exp(-(h - 0.054)^2 / 0.04^2)`, where `v_progress` is the non-negative swing-foot speed
 along the commanded planar direction in the robot yaw frame. For pure-yaw commands, `yaw_lift_fraction=0.5` gives
@@ -635,8 +821,8 @@ impact remained visibly hard. `compute_first_contact(step_dt)` spans the full `1
 `2 ms` contact peak can be missed. A future soft-landing experiment should use a temporally aligned pre-touchdown
 vertical-velocity or contact-force-history signal instead.
 
-The current development experiment extends the stateful, event-only `feet_touchdown_velocity` term while retaining
-weight `-10.0`. It stores each Foot body's world-frame XYZ velocity from the preceding policy step. At first contact,
+The existing stateful, event-only `feet_touchdown_velocity` term retains
+weight `-10.0`. It stores each Foot link's COM world-frame XYZ velocity from the preceding policy step. At first contact,
 when the previous sample was airborne, it applies
 `v_x_prev^2 + v_y_prev^2 + relu(-v_z_prev)^2`. This targets pre-touchdown planar scuffing as well as downward impact
 without shaping the entire approach or established stance. `feet_contact_force` remains `None`: GRF stays available
@@ -650,32 +836,96 @@ showed a mean pre-touchdown downward speed near `0.044 m/s` while preserving vel
 completed air time. The XYZ experiment is not yet a validated replacement. Checkpoints remain under the external
 Isaac Lab log directory and are not committed to this repository.
 
-The two active stateful touchdown terms retain GPU episode sums and event counts. At environment reset they publish
+The air-time and COM-velocity terms retain GPU episode sums and event counts. At environment reset they publish
 `Metrics/feet_touchdown/mean_pre_touchdown_planar_speed` [m/s],
 `Metrics/feet_touchdown/mean_pre_touchdown_vertical_speed` [m/s], and
 `Metrics/feet_touchdown/mean_air_time` [s]. These are direct physical measurements over detected touchdowns, unlike
 `Episode_Reward/*`, and add no per-step GPU-to-CPU logging synchronization. These choices affect training rewards and
 diagnostics only; they do not change observations, Actor/Critic dimensions, checkpoints, or ONNX interfaces.
 
+**2026-09-09 point-velocity correction:** `body_lin_vel_w` is the foot body's COM velocity, not the link-origin
+velocity. COM does not mean whole-robot COM. The diagnostic correction initially retained the COM reward.
+`FeetTouchdownDiagnostics` now uses `body_link_lin_vel_w` for the link-origin-relative lever arms:
+`v_point = v_link_origin + omega x (p_point - p_link_origin)`.
+Equivalently, `v_point = v_com + omega x (p_point - p_com)`. All quantities in these expressions are world-frame.
+The earlier diagnostic mixed COM velocity with a link-origin-relative lever arm, so its historical toe/heel/lowest-edge
+speed logs are not verified physical point speeds. Their aggregate values cannot be corrected offline without the
+per-sample angular velocities, poses, and COM offsets. That diagnostic-only correction left force windows, COM
+touchdown-speed logs, rewards, Actor/ONNX, and checkpoints unaffected. Existing checkpoints can be re-evaluated without retraining; do not combine corrected
+and old point-speed curves as if they used the same definition.
+
+**Link-origin trial and COM restoration (2026-09-09):** the separate trial used
+`v_origin = v_com + omega x (p_origin - p_com)` through `body_link_lin_vel_w`. Following poor mid-training
+results, the active touchdown reward was restored to `body_lin_vel_w` (foot COM speed). The preceding policy
+sample, event mask, penalty formula, weight, and metric tag names remain unchanged. New touchdown-speed logs
+are again COM-based, while the trial's logs remain origin-based. Keep the corrected toe/heel point diagnostics
+on link-origin velocity with matching lever arms. Reward restoration is not a reversal of that diagnostic fix.
+The old COM checkpoint remains usable; fresh training is recommended for a controlled comparison, not because
+the actor input or ONNX interface changed. No checkpoint or running training process is modified by this edit.
+
 The root `flat_orientation_l2` penalty uses weight `-5.0`. This intentionally large step from the previous `-2.0`
 experiment tests whether excessive body roll is the cause of one-foot lateral hopping and also exposes any loss of
 natural weight transfer, velocity tracking, or step length. Feet-air-time, actuator gains, and command-role ratios
 remain unchanged for an isolated comparison.
 
-The combined hip-yaw/hip-roll deviation penalty is relaxed from `-0.1` to `-0.05`. RoK4's rotated hip joint frames
-make lateral foot placement depend on both named axes, so this paired experiment keeps the torso more upright while
-allowing the legs to generate lateral steps. The signed anti-cross reward remains active, but it does not impose a
-maximum stance width; excessive widening must therefore be checked during playback.
+The combined hip-yaw/hip-roll deviation penalty uses `-0.2`. RoK4's rotated hip joint frames make lateral foot
+placement depend on both named axes; this doubles the preceding no-standing-pose experiment's `-0.1` weight.
+The signed anti-cross reward remains active, but it does not impose a maximum stance width; excessive widening and
+loss of lateral stepping freedom must therefore both be checked during playback.
 
-A separate hip-pitch deviation term uses weight `-0.005`. Its weaker, independently logged penalty mildly limits
-excessive whole-leg sagittal swing without applying the `-0.05` hip-yaw/hip-roll constraint to the primary fore-aft
+A separate hip-pitch deviation term uses weight `-0.01`. Its weaker, independently logged penalty mildly limits
+excessive whole-leg sagittal swing without applying the `-0.2` hip-yaw/hip-roll constraint to the primary fore-aft
 gait joint. This is a global default-pose deviation penalty, not a swing-phase knee-flexion target.
+
+The 2026-09-07 follow-up changed only hip yaw/roll deviation relative to
+`2026-09-04_14-27-20_concurrent_estimator_k1style_nostand_bh5_hip010_hippitch001_ar05_ar2_01_fresh25k`.
+Teleop of that run showed outward-turned feet and in-place stepping at zero command. The new `-0.2` test targets
+the excessive hip posture deviation first; it does not assume that reducing this deviation also eliminates stepping.
+The standing-pose term stays `None`, and hip pitch, action smoothness, base height, gains, commands, freeze, and
+disturbances stay unchanged. This remains a fresh-training experiment, not a new validated baseline. Check quiet
+standing, lateral walking, turning, abrupt stops, and push-recovery steps before adopting it. Hip deviation applies
+during both standing and moving, so stronger weighting may also restrict needed recovery motion.
+
+The 2026-09-08 follow-up retains those settings and uses the stateless `mdp.feet_standing_contact` function as a
+separate `RewTerm`. Its current weight is `-0.2`, increased from the initial `-0.1` after the model-5000 Teleop and
+mid-run log check. The function is unchanged and reads current contact timers for `L_Foot_Link` and `R_Foot_Link`:
+
+```text
+contact_i = current_contact_time_i > 0
+standing = (vx == 0) and (vy == 0) and (wz == 0)
+raw_cost = standing * ((1 - contact_left) + (1 - contact_right))
+step_reward = -0.2 * raw_cost * policy_dt
+```
+
+At `policy_dt=0.01 s`, double contact contributes `0`, single contact `-0.002`, and no contact `-0.004` per step.
+Any nonzero command, including tiny commands or pure yaw, disables this term. It neither changes the air-time
+reward nor adds a command deadzone, force threshold, or history buffer. Contact classification comes from the
+existing sensor with `track_air_time=True`; it is not a new GRF-magnitude penalty or a force-history maximum.
+
+The term is applied throughout zero-command intervals, not only at touchdown. Replanting both feet removes its cost
+even after a recovery step changes foot positions. It does not impose default joint angles, symmetric loading,
+full-sole contact, or zero foot velocity. A toe-only light contact can qualify, and sliding with both feet down is
+not penalized by this term. During a zero-command push, protective steps are penalized too; evaluate recovery,
+foot dragging, and abrupt stops before adopting it. `no_jumps` remains active, so both terms may charge flight
+during zero command. No stable/recovery gate is added.
+
+TensorBoard automatically records `Episode_Reward/feet_standing_contact`; there is no new custom metric collector.
+This is a weighted episode sum divided by the maximum episode duration, not a conditional double-support ratio.
+For a full 20 s episode spent entirely at zero command, continuous single support would log about `-0.2`, flight
+about `-0.4`, and continuous double contact `0`. Moving exposure and short episodes also move this tag toward zero,
+so a value near zero alone does not demonstrate stable standing. To disable only this experiment, set
+`feet_standing_contact=None`.
+
+When comparing the `-0.1` and `-0.2` experiments, divide this log by the corresponding signed weight to remove the
+weight change. For identical contact exposure, `-0.02` at weight `-0.1` becomes `-0.04` at weight `-0.2`; the
+weight-normalized cost is `0.2` in both cases. It still is not a standing-only support fraction. The change does not
+alter a training process already running; start a fresh run for the new weight.
 
 The contact-gated `feet_flat_orientation_l2` function remains available for diagnostics, but its reward term is
 currently `None`. It measures foot tilt against world up, which is useful for a flat-ground experiment but can oppose
-toe-off and terrain-normal alignment. The current experiment instead relies on the reduced ankle-side actuator gains
-for passive contact adaptation and a weak `stand_still_joint_deviation_l1=-0.1` term for exact-zero-command posture
-stability.
+toe-off and terrain-normal alignment. The current experiment tests stronger ankle-side gains without adding a
+stance-orientation penalty. The standing-specific joint-deviation term is disabled for the present ablation;
+`-0.1` remains the rollback reference if generic motion costs do not produce stable two-foot standing.
 
 The active `feet_swing_roll_l2` term uses weight `-1.0` to discourage inward or outward sole roll only while a foot
 is airborne. The companion `feet_swing_pitch_l2` term applies the same yaw-removed sole-normal calculation to the

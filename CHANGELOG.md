@@ -38,6 +38,11 @@
 
 ### Changed
 
+- Recorded the September 17 `edgevel01_pre5_window100_tdpitch1_fresh25k` run and `model_24999.pt` as the current
+  development baseline on 2026-09-18, using post-training code snapshot `903318c`. Recorded the user's softer-landing
+  Isaac Sim keyboard Teleop observation separately from pending MuJoCo Sim2Sim and hardware Sim2Real validation.
+  Preserved previous baselines, added checkpoint identity and final-500-iteration comparisons, and synchronized
+  README plus reward/task/ADAPT RST, HTML and PDF documents. Corrected stale estimator and gain-validation descriptions.
 - Increased only the pre-touchdown part of the sole-edge speed cost by setting `pre_touchdown_scale=5.0`
   on 2026-09-17. Retained the default `1.0` for existing callers, weight `-0.1`, and the 100 ms post-contact
   window. Applied the multiplier after squaring; retained unscaled physical metrics and bounce/reset behavior.
