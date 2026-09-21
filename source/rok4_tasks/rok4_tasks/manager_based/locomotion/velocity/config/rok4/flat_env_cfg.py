@@ -241,7 +241,7 @@ class RoK4RewardsCfg(RewardsCfg):
     )
     feet_air_time = RewTerm(
         func=mdp.FeetAirTimeTouchdownBiped,
-        weight=2.0,
+        weight=3.0,
         params={
             "command_name": "base_velocity",
             "sensor_cfg": SceneEntityCfg(
@@ -249,7 +249,7 @@ class RoK4RewardsCfg(RewardsCfg):
                 body_names=["L_Foot_Link", "R_Foot_Link"],
                 preserve_order=True,
             ),
-            "target_air_time": 0.50,
+            "target_air_time": 0.65,
             "command_threshold": 0.05,
         },
     )
