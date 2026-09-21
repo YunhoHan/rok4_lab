@@ -38,6 +38,27 @@
 
 ### Changed
 
+- Preserved `2026-09-19_17-51-07_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_air065_w3_fresh50k`
+  and `model_49999.pt` as the current development / Sim2Sim baseline on 2026-09-21. Recorded matching
+  post-training runtime snapshot `a149422` separately from the `41d68ec`-based training working tree.
+  Recorded user-reported Isaac Sim Teleop and MuJoCo Sim2Sim results; kept hardware Sim2Real pending.
+  Recorded checkpoint/ONNX checksums and 64-input numerical export parity, preserved separate local artifacts,
+  and synchronized README plus task/reward/ADAPT RST, HTML and PDF. Retained all previous baseline references
+  without moving or merging other branches. Made no further reward, gain or observation changes.
+- Increased only `feet_air_time.weight` from `2.0` to `3.0` on 2026-09-19. Kept target `0.65 s`, the
+  signed uncapped linear formula and all other runtime settings unchanged. Documented the 50% increase
+  in both negative and positive event contributions, separate from the physical air-time metric.
+  Recorded the completed weight-2.0 air065 50k run and log review without promoting it to a baseline or
+  claiming unreported Teleop/Sim2Sim/Sim2Real validation. Updated README/RST/HTML/PDF for the untrained trial.
+- Increased only `feet_air_time.params.target_air_time` from `0.60` to `0.65 s` for a fresh 50,000-iteration
+  follow-up on 2026-09-18. Kept weight `2.0`, gains and all other runtime settings unchanged; retained the
+  signed uncapped formula and documented the extra `0.001` cost per valid touchdown.
+  Recorded the completed air060 run/checkpoint, log comparison and user-reported softer Isaac Sim Teleop
+  landing separately from unreported Sim2Sim/Sim2Real validation. Preserved baseline refs and checkpoints.
+- Increased only `feet_air_time.params.target_air_time` from `0.50` to `0.60 s` on 2026-09-18 for a fresh
+  30,000-iteration experiment. Kept weight `2.0`, the reward formula and all other runtime settings unchanged.
+  Documented the additional `0.002` cost per valid touchdown, unchanged slope, and possible long-stance/impact
+  trade-offs. Preserved the trained `903318c` baseline and distinguished the pending experiment in README/RST/HTML/PDF.
 - Recorded the September 17 `edgevel01_pre5_window100_tdpitch1_fresh25k` run and `model_24999.pt` as the current
   development baseline on 2026-09-18, using post-training code snapshot `903318c`. Recorded the user's softer-landing
   Isaac Sim keyboard Teleop observation separately from pending MuJoCo Sim2Sim and hardware Sim2Real validation.

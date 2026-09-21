@@ -2,7 +2,7 @@ RoK4 ADAPT Action/Actuator 제어 구조 문서
 ================================================================================
 
 :작성일: 2026-07-16
-:최종 업데이트: 2026-09-18
+:최종 업데이트: 2026-09-21
 :대상 저장소: RoK4 repository root (``${ROK4_LAB_ROOT}``)
 :기준 환경: Isaac Lab v2.3.2, Isaac Sim 5.1.0, ``env_isaaclab``
 
@@ -294,9 +294,11 @@ Hip-pitch/knee Kd ``9`` 는 기존 actuator Kp/Kd 비율을 유지한 실험값�
 단일 축의 유효 관성이 일정하다는 근사에서 ``D_new = D_old * sqrt(K_new / K_old)`` 를 적용한
 ``8 * sqrt(120/80) = 9.80`` 을 반올림했다. 이 근사는 ADAPT coupling, 접촉, delay, saturation이 있는
 실제 로봇의 감쇠비나 안정성을 보장하지 않는다. 이 gain은 9월 10일 이후 착지 실험에서도 유지했고 Kp/Kd DR은
-추가하지 않았다. 현재 ``2026-09-17_11-46-47_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_fresh25k`` 의
-``model_24999.pt`` 를 code snapshot ``903318c`` 와 함께 개발 baseline으로 보존했다. 9월 18일 사용자가
-Isaac Sim keyboard Teleop에서 착지 개선을 관찰했으며, 이 정책의 Sim2Sim/Sim2Real 검증은 대기 상태다.
+추가하지 않았다. 현재 ``2026-09-19_17-51-07_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_air065_w3_fresh50k`` 의
+``model_49999.pt`` 를 code snapshot ``a149422`` 와 함께 개발 / Sim2Sim baseline으로 보존했다.
+9월 20일 사용자가 Isaac Sim Teleop에서 양호한 보행과 정지를 보고했고 9월 21일 MuJoCo Sim2Sim 검증 완료를
+보고했다. Hardware Sim2Real은 대기 상태다. 학습은 ``41d68ec`` 기반 미커밋 설정에서 진행했고 snapshot은 이후에 만들었다.
+이전 ``903318c`` 와 비교하여 air-time target/weight만 ``0.50/2.0 -> 0.65/3.0`` 이며 gain과 ADAPT 변환은 같다.
 현재 force는 first contact 뒤 100 ms의 peak를 기록만 하고 reward에는 0을 반환한다.
 
 따라서 hip pitch와 knee/ankle pitch를 독립 gain으로 해석하면 안 된다. 예를 들어 knee torque에는 knee error의

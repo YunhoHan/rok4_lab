@@ -836,7 +836,7 @@ span.boxed, span.framebox {
 <dd><p>2026-07-16</p>
 </dd>
 <dt>최종 업데이트</dt>
-<dd><p>2026-09-18</p>
+<dd><p>2026-09-21</p>
 </dd>
 <dt>대상 저장소</dt>
 <dd><p>RoK4 repository root (<span class="docutils literal">${ROK4_LAB_ROOT}</span>)</p>
@@ -1098,9 +1098,11 @@ Hip-pitch/knee Kd <span class="docutils literal">9</span> 는 기존 actuator Kp
 단일 축의 유효 관성이 일정하다는 근사에서 <span class="docutils literal">D_new = D_old * sqrt(K_new / K_old)</span> 를 적용한
 <span class="docutils literal">8 * sqrt(120/80) = 9.80</span> 을 반올림했다. 이 근사는 ADAPT coupling, 접촉, delay, saturation이 있는
 실제 로봇의 감쇠비나 안정성을 보장하지 않는다. 이 gain은 9월 10일 이후 착지 실험에서도 유지했고 Kp/Kd DR은
-추가하지 않았다. 현재 <span class="docutils literal"><span class="pre">2026-09-17_11-46-47_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_fresh25k</span></span> 의
-<span class="docutils literal">model_24999.pt</span> 를 code snapshot <span class="docutils literal">903318c</span> 와 함께 개발 baseline으로 보존했다. 9월 18일 사용자가
-Isaac Sim keyboard Teleop에서 착지 개선을 관찰했으며, 이 정책의 Sim2Sim/Sim2Real 검증은 대기 상태다.
+추가하지 않았다. 현재 <span class="docutils literal"><span class="pre">2026-09-19_17-51-07_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_air065_w3_fresh50k</span></span> 의
+<span class="docutils literal">model_49999.pt</span> 를 code snapshot <span class="docutils literal">a149422</span> 와 함께 개발 / Sim2Sim baseline으로 보존했다.
+9월 20일 사용자가 Isaac Sim Teleop에서 양호한 보행과 정지를 보고했고 9월 21일 MuJoCo Sim2Sim 검증 완료를
+보고했다. Hardware Sim2Real은 대기 상태다. 학습은 <span class="docutils literal">41d68ec</span> 기반 미커밋 설정에서 진행했고 snapshot은 이후에 만들었다.
+이전 <span class="docutils literal">903318c</span> 와 비교하여 air-time target/weight만 <span class="docutils literal">0.50/2.0 <span class="pre">-&gt;</span> 0.65/3.0</span> 이며 gain과 ADAPT 변환은 같다.
 현재 force는 first contact 뒤 100 ms의 peak를 기록만 하고 reward에는 0을 반환한다.</p>
 <p>따라서 hip pitch와 knee/ankle pitch를 독립 gain으로 해석하면 안 된다. 예를 들어 knee torque에는 knee error의
 대각항 <span class="docutils literal">600</span> 뿐 아니라 ankle-pitch error의 교차항 <span class="docutils literal">240</span> 이 함께 들어간다. Equal actuator pair를 사용하는

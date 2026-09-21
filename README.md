@@ -9,10 +9,11 @@ that were actually completed; they are not inferred from branch ancestry or a su
 
 | Status | Run and checkpoint | Code commit | Verified status |
 |---|---|---|---|
-| **Current development baseline** | `2026-09-17_11-46-47_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_fresh25k` / `model_24999.pt` | `903318c` on `yunho/mixed-push-disturbance` | Training/log review complete; user-reported softer landing in Isaac Sim keyboard Teleop; MuJoCo Sim2Sim and hardware Sim2Real pending |
+| **Current development / Sim2Sim baseline** | `2026-09-19_17-51-07_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_air065_w3_fresh50k` / `model_49999.pt` | `a149422` on `yunho/mixed-push-disturbance` | Training/log review complete; user-reported good Isaac Sim Teleop and MuJoCo Sim2Sim; preservation approved 2026-09-21; hardware Sim2Real pending |
+| **Previous pre-touchdown baseline** | `2026-09-17_11-46-47_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_fresh25k` / `model_24999.pt` | `903318c` on `yunho/mixed-push-disturbance` | Training/log review complete; user-reported softer landing in Isaac Sim keyboard Teleop; MuJoCo Sim2Sim and hardware Sim2Real pending |
 | **Previous lateral-clearance baseline** | `2026-09-02_15-48-05_concurrent_estimator_tdmetrics_minwidth0165_fresh25k` / `model_24999.pt` | `ce08e9c` on `yunho/mixed-push-disturbance` | Training and log review complete; Isaac Sim Teleop, MuJoCo Sim2Sim, and hardware Sim2Real pending |
 | **Previous mixed-push baseline** | `2026-08-24_17-10-31_concurrent_estimator_mixedpush_baseyaw_fresh25k` / `model_24999.pt` | `ccdd543` on `yunho/mixed-push-disturbance` | Isaac Sim Teleop and training-log review complete; MuJoCo Sim2Sim and hardware Sim2Real pending |
-| **Concurrent-estimator Sim2Sim baseline** | `2026-08-21_02-28-25_concurrent_estimator_stand005_fresh25k` / `model_24999.pt` | `df37f44` on `yunho/concurrent-state-estimator` (`785a83c` documents validation) | Isaac Sim Teleop and MuJoCo Sim2Sim complete; estimator Sim2Real pending |
+| **Previous estimator Sim2Sim baseline** | `2026-08-21_02-28-25_concurrent_estimator_stand005_fresh25k` / `model_24999.pt` | `df37f44` on `yunho/concurrent-state-estimator` (`785a83c` documents validation) | Isaac Sim Teleop and MuJoCo Sim2Sim complete; estimator Sim2Real pending |
 | **Pre-estimator Sim2Real baseline** | `2026-08-12_23-45-39_privileged250_gain240_160_80_air050_w2_tdvel10_ar01_ar2_005_noforce_delay4ms_fresh20k` / `model_19999.pt` | `2712787` on `yunho/privileged-observation` | Hardware Sim2Real complete |
 | **Previous directional-gait baseline** | `2026-08-03_14-58-46_touchdown_air_symmetric_x_fastforward_fresh20k` / `model_19999.pt` | `1d52838` on `yunho/directional-gait-rework` (`746e5d0` documents validation) | Isaac Sim Teleop complete |
 | **Previous joint-space reference** | `2026-07-15_17-28-41` / `model_4999.pt` | `034a754` on `main` at the time | Superseded by the actuator-space interface |
@@ -33,9 +34,89 @@ Before recording or pushing a new baseline:
 6. Inspect the branch graph and upstream refs. Do not merge, fast-forward, or move another branch without explicit
    approval.
 
-### Current Baseline: Pre-Touchdown Edge Weight (2026-09-18)
+### Current Baseline: Air-Time Weight 3.0 (2026-09-21)
 
-The run in the first table row completed fresh training through iteration 24999 with 4096 environments and seed 42.
+Run: `2026-09-19_17-51-07_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_air065_w3_fresh50k`,
+checkpoint: `model_49999.pt`. Completed fresh 50,000-iteration training with 4096 environments and seed 42.
+Training used the uncommitted weight-3.0 configuration based on `41d68ec`. `a149422` is the post-training
+matching runtime snapshot; this later documentation commit records its validation and artifact identity.
+
+On September 20, the user reported slower low-speed walking, good standing and foot pitch, and acceptable
+backward/lateral walking and turning in Isaac Sim Teleop. The perceived low-speed air time near 0.6 s was
+not separately measured. On September 21, the user reported satisfactory MuJoCo Sim2Sim validation and
+approved preserving the policy. Hardware Sim2Real validation for this checkpoint remains pending.
+
+Changed only `feet_air_time.weight` from `2.0` to `3.0` relative to the completed air065 comparison below.
+Kept `target_air_time=0.65 s`, the signed linear formula, touchdown/edge/pitch costs, gains, clearance,
+standing contact, commands, disturbances, observations, and the estimator unchanged. The previous
+`903318c` baseline uses target `0.50 s` and weight `2.0`; it and all earlier checkpoints remain available.
+
+The event contribution remains `weight * (T_air - 0.65) * 0.01`, once per qualifying touchdown.
+Both short-swing penalties and long-swing rewards increase by 50%; the event slope increases from
+`0.02` to `0.03`. At `T=0.45/0.65/0.75/0.85 s`, the new contributions are
+`-0.006/0/+0.003/+0.006`. This is not squared-error tracking or continuous reward while airborne.
+There is no upper cap and no guarantee of reaching 0.65 s. Check longer single stance, backward/lateral
+tracking, recovery and landing impacts alongside the physical mean-air-time metric.
+
+The final-500-iteration comparison at matched 50k budgets is:
+
+| Metric | Target 0.65, weight 2 | Preserved weight 3 |
+|---|---:|---:|
+| Rewarded-touchdown mean air time | 0.386 s | 0.422 s |
+| Landing-window normal-force magnitude peak | 1993 N | 1993 N |
+| Early 0-20 ms Fz peak | 1683 N | 1749 N |
+| Late 20-100 ms Fz peak | 1588 N | 1441 N |
+| XY / yaw tracking error metrics | 0.1339 / 0.1405 | 0.1365 / 0.1446 |
+| Normal episode timeout rate | 99.44% | 99.20% |
+
+These are mixed-command training aggregates, not maximum impacts, measured low-speed swing times or
+hardware safety guarantees. Air time increased by 9.2%; total mean peak force did not decrease. Some
+posture/contact costs increased even though the user's simulator observations were satisfactory.
+
+Checkpoint SHA-256: `e2f82a2e42671710dd19d0f39c0778b5ec8d3d62a7e7318ee27559a8ff4c15f1`.
+ONNX SHA-256: `67f19ce3907978fb362101fcf03d3c3387d23ecdd8a39ca90b5ebbfb1dcb4acf`.
+The ONNX export was compared against the checkpoint including its empirical normalizer on 64 synthetic
+inputs: maximum absolute action/estimated-velocity differences were `6.26e-7 / 2.39e-6`.
+Input remains `[1,240]`; outputs remain `actions [1,13]` and `estimated_base_lin_vel_b [1,3]`.
+This numerical check is separate from the user's simulator validation.
+
+A separate local preservation copy uses
+`${ROK4_LAB_ROOT}/logs/policy_baselines/2026-09-19_17-51-07_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_air065_w3_fresh50k/`:
+`model_49999.pt`, `policy_49999.onnx`, saved `params/env.yaml` and `params/agent.yaml`, and `manifest.json`.
+The manifest records checksums, code snapshot and validation status. These names are separate from the
+normal `exported/policy.onnx` output, which subsequent Play/Teleop exports can overwrite.
+
+### Completed Comparison: Air-Time Target 0.65 s, Weight 2.0 (2026-09-19)
+
+Run: `2026-09-18_15-26-24_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_air065_fresh50k`,
+checkpoint: `model_49999.pt`. It used the target-0.65, weight-2.0 uncommitted configuration based on
+`41d68ec`, with 4096 environments, seed 42 and a 50k CLI budget. Training and log review are complete;
+Isaac Sim Teleop results, MuJoCo Sim2Sim and hardware Sim2Real validation have not been reported.
+The final-500-iteration means were air time `0.386 s`, peak normal force `1993 N`, pre-touchdown COM
+planar/downward speed `0.133/0.071 m/s`, and normal episode timeout rate `99.44%`.
+Near 40k, mean air time was `0.392 s` and peak force `1921 N`. These are aggregate training metrics,
+not direction-specific measurements or worst-case impacts. Keep this comparison separate from the
+current weight-3.0 baseline.
+
+### Completed Comparison: Air-Time Target 0.60 s (2026-09-18)
+
+Run: `2026-09-18_00-43-02_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_air060_fresh30k`,
+checkpoint: `model_29999.pt`. Training used the uncommitted target-0.60 configuration based on `41d68ec`;
+the runtime change from code snapshot `903318c` was only the air-time target, with a 30k CLI budget.
+Checkpoint SHA-256: `2be260ded8890a5d86e0d3ef9f9c138668f4a8c98aac07bab46fe50d30804228`.
+The user reported more relaxed walking and soft toe-first load acceptance in Isaac Sim Teleop, supported
+by their joint-torque observation. This is user-reported, not a newly recorded hardware or Sim2Sim validation.
+
+The final-500-iteration logged mean air time increased from the air050 baseline's `0.355` to `0.373 s`.
+Mean landing peak force was `1966 -> 1996 N`, early/late Fz peaks `1693/1494 -> 1714/1529 N`, and normal
+episode timeout rate `99.10 -> 99.06%`. At 25k the new air time was already `0.3729 s`; at 30k it was `0.3731 s`.
+These are aggregate training statistics, not worst-case impacts or direction-specific gait measurements.
+Swing pitch and base-height cost magnitudes increased, so preserve this policy for matched-condition comparisons
+without inferring that all landing, posture, or recovery behavior improved. Sim2Sim and Sim2Real remain unreported.
+
+### Previous Baseline: Pre-Touchdown Edge Weight (2026-09-18)
+
+The September 17 pre-touchdown run completed fresh training through iteration 24999 with 4096 environments and seed 42.
 On September 18, the user reported softer landing in Isaac Sim keyboard Teleop and approved preserving this policy.
 This is not a new Sim2Sim/Sim2Real validation or a guarantee that every impact is small.
 `903318c` is the post-training code snapshot matching the saved reward/gain settings; training itself used the
@@ -67,7 +148,7 @@ instead of toe landings in Isaac Sim Teleop, but the first impact remained large
 Final-500-iteration average early/late Fz peaks were approximately `1922 / 1446 N`, versus `766 / 2508 N`
 in the September 14 edge-only comparison. These are averaged window peaks, not global maxima.
 The factor 5 is an experimental choice targeting the first impact, not a force bound or proven optimum.
-The new baseline's final-500-iteration means, compared with September 16, are:
+That baseline's final-500-iteration means, compared with September 16, were:
 
 | Metric | Previous pre1 | Current pre5 |
 |---|---:|---:|
@@ -778,17 +859,17 @@ receive none. Push and freeze phases are independent. Play and Teleop disable au
 the manual base-yaw instantaneous `RoK4 Push Test` UI. See `rok4_disturbance_and_recovery_ko.pdf` for equations,
 force magnitudes, and validation boundaries.
 
-The RoK4-local touchdown feet-air-time reward uses `target_air_time=0.50 s` and `weight=2.0`. It reads each foot's
-completed `last_air_time` only when exactly one foot reports first contact and pays `T - 0.50` once on that touchdown
+The current baseline uses `target_air_time=0.65 s` and `weight=3.0` (the previous September 17 baseline uses `0.50 s`, weight `2.0`). It reads each foot's
+completed `last_air_time` only when exactly one foot reports first contact and pays `T - 0.65` once on that touchdown
 step. It returns zero during swing, continued support, simultaneous two-foot touchdown, and planar commands at or below
-`0.05 m/s`. Touchdowns shorter than `0.50 s` are penalized and longer ones are rewarded. There is no maximum-reward
+`0.05 m/s`. Touchdowns shorter than `0.65 s` are penalized and longer ones are rewarded. There is no maximum-reward
 air-time cap; velocity tracking, `no_jumps`, and the other gait terms must therefore balance excessively long single
 support. Because this reward is event-based, its TensorBoard magnitude is not directly comparable with the previous
 dense, squared, or capped touchdown feet-air-time terms.
 
-With the `0.01 s` RoK4 policy interval, the signed event slope is `2.0 * 0.01 = 0.02`. This matches K1's
-`1.0 * 0.02 = 0.02` event slope while retaining RoK4's longer `0.50 s` zero crossing, simultaneous-touchdown mask,
-and separate `no_jumps` penalty.
+With the `0.01 s` RoK4 policy interval, the signed event slope is `3.0 * 0.01 = 0.03`, 1.5 times the previous
+weight-2.0 slope and K1's `1.0 * 0.02 = 0.02` event slope. The zero crossing remains `0.65 s`;
+the simultaneous-touchdown mask and separate `no_jumps` penalty are unchanged.
 
 The active term uses the stateful `FeetAirTimeTouchdownBiped` class so the same valid touchdown mask owns both the
 reward and its physical-unit mean-air-time statistic. The stateless `feet_air_time_touchdown_biped` function remains
@@ -923,9 +1004,10 @@ alter a training process already running; start a fresh run for the new weight.
 
 The contact-gated `feet_flat_orientation_l2` function remains available for diagnostics, but its reward term is
 currently `None`. It measures foot tilt against world up, which is useful for a flat-ground experiment but can oppose
-toe-off and terrain-normal alignment. The current experiment tests stronger ankle-side gains without adding a
-stance-orientation penalty. The standing-specific joint-deviation term is disabled for the present ablation;
-`-0.1` remains the rollback reference if generic motion costs do not produce stable two-foot standing.
+toe-off and terrain-normal alignment. The current baseline retains the stronger ankle-side gains without a
+stance-orientation penalty. Standing-specific joint-deviation shaping remains disabled; the active exact-zero
+command contact term uses weight `-0.2`. Earlier `stand_still_joint_deviation_l1=-0.1` policies remain separate
+rollback references, not the current standing formulation.
 
 The active `feet_swing_roll_l2` term uses weight `-1.0` to discourage inward or outward sole roll only while a foot
 is airborne. The companion `feet_swing_pitch_l2` term applies the same yaw-removed sole-normal calculation to the

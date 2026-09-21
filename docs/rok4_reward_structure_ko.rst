@@ -2,7 +2,7 @@ RoK4 Reward Structure
 =============================================================
 
 작성일: 2026-07-15
-최종 업데이트: 2026-09-18
+최종 업데이트: 2026-09-21
 
 .. raw:: html
 
@@ -45,12 +45,36 @@ RoK4 Reward Structure
 
 이 문서는 ``RoK4-Isaac-Velocity-Flat-v0`` task의 현재 reward 구조와 reward function 설정을 정리한다.
 현재 reward는 Isaac Lab G1 velocity task 구조를 출발점으로 RoK4 ADAPT actuator 좌표, direct velocity
-command, standing transition에 맞게 조정한 flat walking 실험이다. 현재 개발 baseline은 아래의
-``2026-09-17 착지 직전 모서리 비용 강화`` 설정으로 학습한 다음 정책이다.
-Run: ``2026-09-17_11-46-47_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_fresh25k``,
-checkpoint: ``model_24999.pt``, post-training code snapshot: ``903318c``.
-9월 18일 사용자가 Isaac Sim keyboard Teleop에서 착지가 부드러워졌다고 관찰했다.
-Sim2Sim/Sim2Real 검증은 대기 상태이며 전체 baseline 목록은 README 상단 표를 기준으로 한다.
+command, standing transition에 맞게 조정한 flat walking 실험이다. 현재 개발 / Sim2Sim baseline은 다음과 같다.
+Run: ``2026-09-19_17-51-07_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_air065_w3_fresh50k``,
+checkpoint: ``model_49999.pt``, post-training code snapshot: ``a149422``.
+학습은 ``41d68ec`` 기반 미커밋 작업본에서 4096 환경, seed 42, fresh 50,000 iteration으로 진행했다.
+9월 20일 사용자가 Isaac Sim Teleop에서 저속의 느린 보행과 양호한 정지/발 pitch/후진/횡보/회전을 보고했다.
+9월 21일 사용자 MuJoCo Sim2Sim 검증 완료 및 보존 승인을 기록한다. Hardware Sim2Real은 대기 상태다.
+전체 baseline과 artifact checksum 및 보존 경로는 README 상단 표와 설명을 기준으로 한다.
+
+직전 air065 실험 대비 ``feet_air_time.weight`` 만 ``2.0 -> 3.0`` 으로 변경했다.
+``target_air_time=0.65 s``, 선형 reward 함수, gain과 다른 설정은 유지한다.
+유효 착지마다 짧은 swing 벌점과 긴 swing 보상을 모두 1.5배 적용하며 제곱식으로 바꾸지 않는다.
+마지막 500 iteration 평균에서 실제 air-time은 ``0.386 -> 0.422 s``, 착지 peak는 약 ``1993 -> 1993 N`` 이다.
+초기/후기 Fz peak는 ``1683/1588 -> 1749/1441 N``, 정상 timeout은 ``99.44 -> 99.20%`` 였다.
+이는 여러 명령과 외란을 합친 집계다. 사용자의 저속 약 0.6초 체감이나 최대 충격을 실측한 값은 아니다.
+Swing/착지 pitch와 standing contact 비용은 증가했지만 사용자 simulator 관찰은 양호했다.
+보행 개선을 충격 감소나 실기 검증 완료로 해석하지 않는다. 이전 ``903318c`` baseline도 보존한다.
+
+직전 ``2026-09-18_15-26-24_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_air065_fresh50k/model_49999.pt`` 는
+학습과 로그 검토를 완료했다. ``41d68ec`` 기반 target-0.65, weight-2.0 미커밋 작업본이며 50k까지 학습했다.
+마지막 500 iteration 평균 air-time은 ``0.386 s``, 평균 landing peak force는 ``1993 N`` 이다.
+40k 부근에서는 ``0.392 s / 1921 N`` 였으므로 최종 checkpoint가 모든 지표에서 최선은 아니다.
+집계 force는 최대 충격이 아니다. Teleop 결과 및 Sim2Sim/Sim2Real 검증은 미보고 상태다.
+
+직전 ``2026-09-18_00-43-02_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_air060_fresh30k/model_29999.pt`` 는
+학습과 로그 분석이 완료됐다. ``41d68ec`` 기반 target-0.60 미커밋 작업본이며, 사용자는 Isaac Sim Teleop에서
+여유로운 보행, 부드러운 toe 착지와 관절 토크를 관찰했다. Sim2Sim/Sim2Real은 미보고 상태다.
+마지막 500 iteration 평균 air-time은 0.50 baseline 대비 ``0.355 -> 0.373 s``, 착지 peak force는
+``1966 -> 1996 N`` 이다. 25k에서 이미 ``0.3729 s``, 30k에서 ``0.3731 s`` 로 air-time은 정체됐지만
+추종과 일부 착지 속도 항은 개선됐다. 평균 force 감소나 모든 방향의 개선을 입증한 것은 아니다.
+
 다음 reference는 과거 symmetry 비교용으로 보존한 정책이다:
 ``2026-07-24_19-34-26_symmetry_aug_nojumps2_swing_roll100_fresh/model_9999.pt`` 이며 experimental
 ``Yunho Symmetry ADAPT v1`` 으로 기록한다. 이 checkpoint는 domain randomization과 policy observation
@@ -473,9 +497,9 @@ RoK4 전용 Reward Terms
      - root world Z에서 각 environment origin Z를 뺀 base height가 gait-ready IK 기준 높이와 달라지는 정도를 제곱 penalty로 만든다. K1의 ``-10.0`` 을 그대로 복제하지 않고 절반 강도로 자세 유지 효과와 보행 경직을 함께 확인한다.
    * - ``feet_air_time``
      - ``mdp.FeetAirTimeTouchdownBiped``
-     - ``2.0``
-     - feet: ``L_Foot_Link``, ``R_Foot_Link``; ``target_air_time=0.50 s``, ``command_threshold=0.05 m/s``
-     - 정확히 한 발이 first contact가 된 step에 완료된 air-time의 ``T - 0.50`` 을 한 번 지급하고 같은 유효 touchdown의 실제 ``T`` 를 metric으로 누적한다. 최대 보상 cap은 없으며 stateless 함수 버전도 비교용으로 남아 있다.
+     - ``3.0``
+     - feet: ``L_Foot_Link``, ``R_Foot_Link``; ``target_air_time=0.65 s``, ``command_threshold=0.05 m/s``
+     - 정확히 한 발이 first contact가 된 step에 완료된 air-time의 ``T - 0.65`` 을 한 번 지급하고 같은 유효 touchdown의 실제 ``T`` 를 metric으로 누적한다. 최대 보상 cap은 없으며 stateless 함수 버전도 비교용으로 남아 있다.
    * - ``feet_clearance``
      - ``mdp.feet_swing_clearance_exp``
      - ``0.2``
@@ -916,12 +940,26 @@ RoK4는 부모 G1-style heading mode를 사용하지 않는다. ``heading_comman
 yaw angular velocity다. Navigation에서 목표 world heading이 필요하면 policy 외부의 상위 controller가
 heading error를 ``wz`` 로 변환해 이 동일한 velocity interface에 전달한다.
 
-현재 ``feet_air_time`` 은 느리고 긴 step을 유도하기 위해 ``target_air_time=0.50 s``, ``weight=2.0`` 을
+현재 ``feet_air_time`` 은 느리고 긴 step을 유도하는 baseline 설정으로 ``target_air_time=0.65 s``, ``weight=3.0`` 을
 사용한다. 정확히 한 발이 first contact가 된 policy step에 그 발의 완료된 ``last_air_time`` 을 읽고
-``last_air_time - 0.50`` 을 한 번 반환한다. 양발이 같은 step에 first contact가 되거나 planar command norm이
-``0.05 m/s`` 이하이면 0이다. 따라서 ``T=0.30 s`` 는 raw ``-0.20``, ``T=0.50 s`` 는 ``0``, ``T=0.75 s`` 는
-raw ``+0.25`` 이다. Reward Manager가 적용하는 pre-``dt`` weighted event는 각각 raw 값에 ``2.0`` 을 곱한다.
-Policy interval ``0.01 s`` 까지 포함한 touchdown-error 기울기는 ``0.02`` 로, K1의 ``1.0 * 0.02`` 와 같다.
+``last_air_time - 0.65`` 을 한 번 반환한다. 양발이 같은 step에 first contact가 되거나 planar command norm이
+``0.05 m/s`` 이하이면 0이다. 따라서 ``T=0.30 s`` 는 raw ``-0.35``, ``T=0.65 s`` 는 ``0``, ``T=0.75 s`` 는
+raw ``+0.10`` 이다. Reward Manager가 적용하는 pre-``dt`` weighted event는 각각 raw 값에 ``3.0`` 을 곱한다.
+Policy interval ``0.01 s`` 까지 포함한 touchdown-error 기울기는 ``0.03`` 으로,
+직전 weight ``2.0`` 및 K1의 ``1.0 * 0.02 = 0.02`` event 기울기의 1.5배다.
+
+이전 9월 17일 baseline의 target은 ``0.50 s``, 그 뒤 비교 실험은 ``0.60 s`` 와 ``0.65 s`` 이며 모두 weight ``2.0`` 이다.
+현재 baseline은 target ``0.65 s`` 를 유지하고 weight만 ``3.0`` 으로 높였다. 실제 유효 착지 event 식은 다음과 같다.
+
+.. math::
+
+   r_{air} = 3.0\,(T_{air}-0.65)\,0.01
+
+``T=0.45/0.65/0.75/0.85 s`` 에서 각각 ``-0.006/0/+0.003/+0.006`` 을 받는다.
+추가 0.1초의 점수 차이는 ``0.002 -> 0.003`` 이며 짧은 swing의 벌점도 1.5배가 된다.
+시간에 선형이지 제곱식이 아니며, 공중에서 계속 지급하거나 0.65초 달성을 강제하지 않는다.
+한 발로 오래 버티거나 착지 충격이 다시 커질 수 있으므로 실제 air-time, 전후진/횡보, 정지/외란,
+초기/후기 force peak를 함께 비교한다. 학습 예산이 다른 run은 같은 iteration 비교도 필요하다.
 
 이 signed touchdown shaping은 짧은 잔걸음을 단순히 적게 보상하는 대신 직접 penalty화한다. 반면
 최대 보상 air-time cap이 없으므로 ``0.75 s`` 를 초과한 완료 swing도 더 큰 양수를 받는다. 한 발을 오래 드는
@@ -1283,7 +1321,7 @@ world-Z 하강 성분의 최댓값만 사용한다. 좌우 발 비용은 합산�
 9월 14일 모서리-only run의 같은 값은 약 ``766 / 2508 N`` 이었다. 이는 전역 최대 force가 아니라
 window별 peak 평균이다. 개선된 후기 구간까지 일괄 강화하지 않고 직전 비용만 조절하는 이유다.
 계수 5는 실험값이며 충격 감소를 보장하지 않는다. 이 설정으로 fresh 25,000 iteration 학습을 마쳤고
-9월 18일 사용자 Teleop 관찰을 바탕으로 현재 개발 baseline으로 보존했다. 코드 snapshot은 ``903318c`` 다.
+9월 18일 사용자 Teleop 관찰을 바탕으로 당시 개발 baseline으로 보존했다. 코드 snapshot은 ``903318c`` 다.
 학습 당시에는 ``2c6fe26`` 기반 미커밋 코드를 사용했고, snapshot은 학습 완료 후 저장 설정과 대조하여 만들었다.
 이 기록은 새 Sim2Sim/Sim2Real 검증을 의미하지 않는다.
 
@@ -1450,7 +1488,7 @@ Directional-gait 기준 run
    * - 마지막 500 iteration 평균
      - ``0.00272``
 
-이 scalar는 발의 평균 air-time 초 단위 값이 아니다. Reward Manager가 기록하는 episode-normalized 값에는
+위 과거 실험의 scalar는 발의 평균 air-time 초 단위 값이 아니다. 당시 episode-normalized 값에는
 policy ``dt=0.01 s``, reward ``weight=2.0``, 유효 touchdown 빈도, 완료된 air-time, planar moving-command
 mask가 함께 들어간다. 개념적으로 다음 곱에 가깝다.
 

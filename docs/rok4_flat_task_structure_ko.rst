@@ -2,7 +2,7 @@ RoK4 Flat RSL-RL Task 구조 문서
 ========================================================================
 
 :작성일: 2026-07-15
-:최종 업데이트: 2026-09-18
+:최종 업데이트: 2026-09-21
 :대상 저장소: RoK4 repository root (``${ROK4_LAB_ROOT}``)
 :기준 환경: Isaac Lab v2.3.2, Isaac Sim 5.1.0, ``env_isaaclab``
 
@@ -72,7 +72,45 @@ checkpoint와 fused 240D ONNX export는 ``docs/rok4_concurrent_state_estimator_k
 아래 commit은 각 checkpoint의 학습 설정을 재현하는 code snapshot이다. Branch ancestry나 학습 완료만으로
 검증 상태를 추정하지 않고 실제 수행한 단계만 기록한다.
 
-**현재 개발 baseline**
+**현재 개발 / Sim2Sim baseline**
+
+* Run: ``2026-09-19_17-51-07_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_air065_w3_fresh50k``
+* Checkpoint: ``model_49999.pt``
+* Code snapshot: ``a149422`` on ``yunho/mixed-push-disturbance``
+* 4096 환경, seed 42, fresh 50,000 iteration 학습과 로그 분석 완료.
+* 9월 20일 사용자가 Isaac Sim Teleop에서 저속의 느린 보행, 안정적 정지, 양호한 발 pitch와
+  후진/횡보/회전을 보고했다. 저속에서 약 0.6초라는 체감은 별도 실측값이 아니다.
+* 9월 21일 사용자가 MuJoCo Sim2Sim 검증 완료와 보존을 승인했다. Hardware Sim2Real은 대기 상태다.
+* 학습은 ``41d68ec`` 기반 미커밋 설정으로 진행했다. ``a149422`` 는 학습 후 일치하는 실행 설정을
+  보존한 snapshot이며, 이 문서는 이후의 검증 기록이다.
+* Checkpoint SHA-256:
+  ``e2f82a2e42671710dd19d0f39c0778b5ec8d3d62a7e7318ee27559a8ff4c15f1``
+* ONNX SHA-256:
+  ``67f19ce3907978fb362101fcf03d3c3387d23ecdd8a39ca90b5ebbfb1dcb4acf``
+
+현재 설정은 ``target_air_time=0.65 s``, weight ``3.0`` 이다. 직전 weight-2 실험에서 가중치만 변경했다.
+유효 착지마다 ``3.0 * (T - 0.65) * 0.01`` 을 적용하며 선형 함수, 다른 reward, gain, 관측과 외란은 같다.
+상한 cap이나 공중 연속 보상이 아니며 0.65초 달성을 강제하지 않는다.
+마지막 500 iteration 평균 air-time은 ``0.386 -> 0.422 s`` 였지만 착지 peak 평균은 약 ``1993 N`` 으로 같다.
+초기/후기 Fz peak는 ``1683/1588 -> 1749/1441 N`` 이며 최대 충격을 나타내지는 않는다.
+
+로컬 보존 경로는 다음과 같다. 일반 ``exported/policy.onnx`` 재생성 경로와 분리했다.
+
+.. code-block:: text
+
+   ${ROK4_LAB_ROOT}/logs/policy_baselines/
+     2026-09-19_17-51-07_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_air065_w3_fresh50k/
+       model_49999.pt
+       policy_49999.onnx
+       params/env.yaml
+       params/agent.yaml
+       manifest.json
+
+ONNX는 checkpoint의 empirical normalizer까지 포함하여 64개 시험 입력에서 수치 비교를 통과했다.
+Action/추정 속도의 최대 절대 차이는 각각 ``6.26e-7 / 2.39e-6`` 이며 입력은 240D, 출력은 13D/3D다.
+이는 사용자 Sim2Sim 보고와 별개의 export 수치 검증이며 실기 안정성을 보장하지 않는다.
+
+**이전 pre-touchdown baseline**
 
 * Run: ``2026-09-17_11-46-47_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_fresh25k``
 * Checkpoint: ``model_24999.pt``
@@ -83,6 +121,21 @@ checkpoint와 fused 240D ONNX export는 ``docs/rok4_concurrent_state_estimator_k
   reward/gain 설정을 확인하고 보존한 code snapshot이며, 이 문서는 그 뒤의 검증 기록이다.
 * Checkpoint SHA-256:
   ``8c9a006bf91a5674b1a7aca8b7082d2d6365c1c718b4b174c267a08d292f7a09``
+
+완료된 air065 비교 정책은
+``2026-09-18_15-26-24_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_air065_fresh50k/model_49999.pt`` 다.
+``41d68ec`` 기반 target ``0.65 s``, weight ``2.0`` 미커밋 작업본으로 4096 환경, seed 42, 50k 학습을 완료했다.
+로그 검토는 완료했고 Teleop 결과 및 Sim2Sim/Sim2Real 검증은 미보고 상태다.
+마지막 500 iteration 평균 air-time은 ``0.386 s``, 평균 landing peak force는 ``1993 N``,
+착지 직전 COM 수평/하강 속도는 ``0.133/0.071 m/s`` 다. 40k 부근의 평균은 ``0.392 s / 1921 N`` 였다.
+이는 여러 학습 상황의 집계이며 최대 충격이나 방향별 gait를 뜻하지 않는다. 현재 weight-3 baseline과 구분한다.
+
+완료된 비교 정책은
+``2026-09-18_00-43-02_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_air060_fresh30k/model_29999.pt`` 다.
+``41d68ec`` 기반 미커밋 작업본으로 학습했으며 code snapshot ``903318c`` 와의 runtime 차이는 target ``0.60 s`` 다.
+사용자가 Isaac Sim Teleop에서 여유로운 보행과 부드러운 toe 착지 및 관절 토크를 관찰했다.
+Sim2Sim/Sim2Real 검증은 미보고 상태다. 마지막 500 iteration의 유효 air-time은 ``0.373 s``,
+평균 착지 peak force는 ``1996 N`` 이며, force 감소를 입증한 결과나 최대 충격 제한은 아니다.
 
 **이전 lateral-clearance baseline**
 
@@ -1083,10 +1136,11 @@ Freeze phase와 push time-left는 서로 독립적으로 표본화된다. 따라
    global t=20 s : 생존한 env B timeout/reset
    global t=23 s : env A가 3 s 이후 20 s 생존했다면 timeout/reset
 
-RoK4-local ``feet_air_time_touchdown_biped`` 함수는 ``target_air_time=0.50 s``, ``weight=2.0`` 을 사용한다.
+현재 baseline의 RoK4-local ``feet_air_time_touchdown_biped`` 함수는 ``target_air_time=0.65 s``, ``weight=3.0`` 을 사용한다.
+이전 9월 17일 baseline의 target은 ``0.50 s`` 다.
 Contact sensor의 ``last_air_time`` 을 읽어 정확히 한 발이 first contact가 된 step에만
-``last_air_time - 0.50`` 을 한 번 지급한다. Swing 중, 계속된 지지, 양발 동시 first contact, planar command
-norm ``0.05 m/s`` 이하에서는 0이다. ``0.50 s`` 보다 짧은 완료 swing에는 음수, 그보다 긴 완료 swing에는
+``last_air_time - 0.65`` 을 한 번 지급한다. Swing 중, 계속된 지지, 양발 동시 first contact, planar command
+norm ``0.05 m/s`` 이하에서는 0이다. ``0.65 s`` 보다 짧은 완료 swing에는 음수, 그보다 긴 완료 swing에는
 양수를 반환한다. 최대 보상 air-time cap은 없으므로 긴 single support는 velocity tracking과 ``no_jumps`` 등
 다른 gait term이 함께 제한한다. Event 기반 값이므로 이전 dense, squared 또는 capped touchdown air-time의
 TensorBoard 크기와 직접 비교하지 않는다.
@@ -1096,9 +1150,9 @@ moving-command mask로 완료된 ``last_air_time`` 을 누적하여 아래 물�
 필요 없는 비교 실험을 위해 stateless ``feet_air_time_touchdown_biped`` 함수도 남긴다. Reward Manager의
 ``Episode_Reward/feet_air_time`` 은 weighted reward sum이므로 실제 평균 air time과 같지 않다.
 
-Policy interval이 ``0.01 s`` 이므로 touchdown error의 event 기울기는 ``2.0 * 0.01 = 0.02`` 다. 이는
-K1의 ``weight=1.0``, policy interval ``0.02 s`` 와 같은 기울기지만, RoK4는 더 긴 ``0.50 s`` zero crossing,
-양발 동시 touchdown 제외, 별도 ``no_jumps`` penalty를 유지한다.
+Policy interval이 ``0.01 s`` 이므로 touchdown error의 event 기울기는 ``3.0 * 0.01 = 0.03`` 다.
+직전 weight ``2.0`` 및 K1의 ``weight=1.0``, policy interval ``0.02 s`` 에 의한 기울기 ``0.02`` 의
+1.5배다. ``0.65 s`` zero crossing, 양발 동시 touchdown 제외, 별도 ``no_jumps`` penalty는 유지한다.
 
 ``no_jumps`` 는 Isaac Lab 공통 ``mdp.desired_contacts`` 를 ``weight=-2.0`` 과 force ``threshold=1.0 N`` 으로
 사용한다. 좌우 Foot의 최근 5개 contact-force sample 중 어느 쪽에도 threshold를 넘는 접촉이 없을 때만 raw
@@ -1188,7 +1242,7 @@ Isaac Sim Teleop에서 공중 toe-down 악화와 정지 중 새 발 세움 현�
 9월 16일 run의 마지막 500 iteration에서 초기/후기 Fz peak 평균은 약 ``1922 / 1446 N`` 으로,
 9월 14일 ``766 / 2508 N`` 에 비해 첫 충격으로 비중이 옮겨갔다. 이는 평균이며 최대 충격값이 아니다.
 직전 비용 강화는 이 첫 충격을 줄이려는 실험이지 force 한계 보장이 아니다. 수식/샘플 계산은 reward 구조
-문서의 9월 17일 절을 참고한다. 이 설정의 9월 17일 run을 9월 18일 현재 개발 baseline으로 보존했다.
+문서의 9월 17일 절을 참고한다. 9월 17일 run은 당시 개발 baseline이었으며 현재는 이전 reference로 보존한다.
 Run/checkpoint/code snapshot과 검증 상태는 문서 상단에 명시했다.
 
 새 run의 마지막 500 iteration 평균은 착지창 접촉 합력 peak 약 ``1966 N``, 초기/후기 Fz peak 약
@@ -1493,7 +1547,7 @@ RSL-RL PPO runner 설정 파일이다.
    * - experiment name
      - ``rok4_flat``
    * - max iterations
-     - config 기본값 ``5000``; 현재 baseline CLI override는 ``25000``
+     - config 기본값 ``5000``; 현재 air065 weight-3 baseline은 CLI로 ``50000``. 이전 pre5는 ``25000``, air060은 ``30000``, air065 weight-2는 ``50000``.
    * - steps per env
      - ``24``
    * - actor hidden dims

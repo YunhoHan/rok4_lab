@@ -833,7 +833,7 @@ span.boxed, span.framebox {
 <h1 class="title">RoK4 Reward Structure</h1>
 
 <p>작성일: 2026-07-15
-최종 업데이트: 2026-09-18</p>
+최종 업데이트: 2026-09-21</p>
 <style>
 @media print {
   @page {
@@ -871,13 +871,33 @@ span.boxed, span.framebox {
 }
 </style><p>이 문서는 <span class="docutils literal"><span class="pre">RoK4-Isaac-Velocity-Flat-v0</span></span> task의 현재 reward 구조와 reward function 설정을 정리한다.
 현재 reward는 Isaac Lab G1 velocity task 구조를 출발점으로 RoK4 ADAPT actuator 좌표, direct velocity
-command, standing transition에 맞게 조정한 flat walking 실험이다. 현재 개발 baseline은 아래의
-<span class="docutils literal"><span class="pre">2026-09-17</span> 착지 직전 모서리 비용 강화</span> 설정으로 학습한 다음 정책이다.
-Run: <span class="docutils literal"><span class="pre">2026-09-17_11-46-47_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_fresh25k</span></span>,
-checkpoint: <span class="docutils literal">model_24999.pt</span>, post-training code snapshot: <span class="docutils literal">903318c</span>.
-9월 18일 사용자가 Isaac Sim keyboard Teleop에서 착지가 부드러워졌다고 관찰했다.
-Sim2Sim/Sim2Real 검증은 대기 상태이며 전체 baseline 목록은 README 상단 표를 기준으로 한다.
-다음 reference는 과거 symmetry 비교용으로 보존한 정책이다:
+command, standing transition에 맞게 조정한 flat walking 실험이다. 현재 개발 / Sim2Sim baseline은 다음과 같다.
+Run: <span class="docutils literal"><span class="pre">2026-09-19_17-51-07_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_air065_w3_fresh50k</span></span>,
+checkpoint: <span class="docutils literal">model_49999.pt</span>, post-training code snapshot: <span class="docutils literal">a149422</span>.
+학습은 <span class="docutils literal">41d68ec</span> 기반 미커밋 작업본에서 4096 환경, seed 42, fresh 50,000 iteration으로 진행했다.
+9월 20일 사용자가 Isaac Sim Teleop에서 저속의 느린 보행과 양호한 정지/발 pitch/후진/횡보/회전을 보고했다.
+9월 21일 사용자 MuJoCo Sim2Sim 검증 완료 및 보존 승인을 기록한다. Hardware Sim2Real은 대기 상태다.
+전체 baseline과 artifact checksum 및 보존 경로는 README 상단 표와 설명을 기준으로 한다.</p>
+<p>직전 air065 실험 대비 <span class="docutils literal">feet_air_time.weight</span> 만 <span class="docutils literal">2.0 <span class="pre">-&gt;</span> 3.0</span> 으로 변경했다.
+<span class="docutils literal">target_air_time=0.65 s</span>, 선형 reward 함수, gain과 다른 설정은 유지한다.
+유효 착지마다 짧은 swing 벌점과 긴 swing 보상을 모두 1.5배 적용하며 제곱식으로 바꾸지 않는다.
+마지막 500 iteration 평균에서 실제 air-time은 <span class="docutils literal">0.386 <span class="pre">-&gt;</span> 0.422 s</span>, 착지 peak는 약 <span class="docutils literal">1993 <span class="pre">-&gt;</span> 1993 N</span> 이다.
+초기/후기 Fz peak는 <span class="docutils literal">1683/1588 <span class="pre">-&gt;</span> 1749/1441 N</span>, 정상 timeout은 <span class="docutils literal">99.44 <span class="pre">-&gt;</span> 99.20%</span> 였다.
+이는 여러 명령과 외란을 합친 집계다. 사용자의 저속 약 0.6초 체감이나 최대 충격을 실측한 값은 아니다.
+Swing/착지 pitch와 standing contact 비용은 증가했지만 사용자 simulator 관찰은 양호했다.
+보행 개선을 충격 감소나 실기 검증 완료로 해석하지 않는다. 이전 <span class="docutils literal">903318c</span> baseline도 보존한다.</p>
+<p>직전 <span class="docutils literal"><span class="pre">2026-09-18_15-26-24_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_air065_fresh50k/model_49999.pt</span></span> 는
+학습과 로그 검토를 완료했다. <span class="docutils literal">41d68ec</span> 기반 target-0.65, weight-2.0 미커밋 작업본이며 50k까지 학습했다.
+마지막 500 iteration 평균 air-time은 <span class="docutils literal">0.386 s</span>, 평균 landing peak force는 <span class="docutils literal">1993 N</span> 이다.
+40k 부근에서는 <span class="docutils literal">0.392 s / 1921 N</span> 였으므로 최종 checkpoint가 모든 지표에서 최선은 아니다.
+집계 force는 최대 충격이 아니다. Teleop 결과 및 Sim2Sim/Sim2Real 검증은 미보고 상태다.</p>
+<p>직전 <span class="docutils literal"><span class="pre">2026-09-18_00-43-02_concurrent_estimator_edgevel01_pre5_window100_tdpitch1_air060_fresh30k/model_29999.pt</span></span> 는
+학습과 로그 분석이 완료됐다. <span class="docutils literal">41d68ec</span> 기반 target-0.60 미커밋 작업본이며, 사용자는 Isaac Sim Teleop에서
+여유로운 보행, 부드러운 toe 착지와 관절 토크를 관찰했다. Sim2Sim/Sim2Real은 미보고 상태다.
+마지막 500 iteration 평균 air-time은 0.50 baseline 대비 <span class="docutils literal">0.355 <span class="pre">-&gt;</span> 0.373 s</span>, 착지 peak force는
+<span class="docutils literal">1966 <span class="pre">-&gt;</span> 1996 N</span> 이다. 25k에서 이미 <span class="docutils literal">0.3729 s</span>, 30k에서 <span class="docutils literal">0.3731 s</span> 로 air-time은 정체됐지만
+추종과 일부 착지 속도 항은 개선됐다. 평균 force 감소나 모든 방향의 개선을 입증한 것은 아니다.</p>
+<p>다음 reference는 과거 symmetry 비교용으로 보존한 정책이다:
 <span class="docutils literal"><span class="pre">2026-07-24_19-34-26_symmetry_aug_nojumps2_swing_roll100_fresh/model_9999.pt</span></span> 이며 experimental
 <span class="docutils literal">Yunho Symmetry ADAPT v1</span> 으로 기록한다. 이 checkpoint는 domain randomization과 policy observation
 noise를 조정하기 전의 비교 기준이며, 이후 실험에서도 보존한다.</p>
@@ -1306,9 +1326,9 @@ TensorBoard의 <span class="docutils literal"><span class="pre">Loss/kl``(iterat
 </tr>
 <tr><td><p><span class="docutils literal">feet_air_time</span></p></td>
 <td><p><span class="docutils literal">mdp.FeetAirTimeTouchdownBiped</span></p></td>
-<td><p><span class="docutils literal">2.0</span></p></td>
-<td><p>feet: <span class="docutils literal">L_Foot_Link</span>, <span class="docutils literal">R_Foot_Link</span>; <span class="docutils literal">target_air_time=0.50 s</span>, <span class="docutils literal">command_threshold=0.05 m/s</span></p></td>
-<td><p>정확히 한 발이 first contact가 된 step에 완료된 air-time의 <span class="docutils literal">T - 0.50</span> 을 한 번 지급하고 같은 유효 touchdown의 실제 <span class="docutils literal">T</span> 를 metric으로 누적한다. 최대 보상 cap은 없으며 stateless 함수 버전도 비교용으로 남아 있다.</p></td>
+<td><p><span class="docutils literal">3.0</span></p></td>
+<td><p>feet: <span class="docutils literal">L_Foot_Link</span>, <span class="docutils literal">R_Foot_Link</span>; <span class="docutils literal">target_air_time=0.65 s</span>, <span class="docutils literal">command_threshold=0.05 m/s</span></p></td>
+<td><p>정확히 한 발이 first contact가 된 step에 완료된 air-time의 <span class="docutils literal">T - 0.65</span> 을 한 번 지급하고 같은 유효 touchdown의 실제 <span class="docutils literal">T</span> 를 metric으로 누적한다. 최대 보상 cap은 없으며 stateless 함수 버전도 비교용으로 남아 있다.</p></td>
 </tr>
 <tr><td><p><span class="docutils literal">feet_clearance</span></p></td>
 <td><p><span class="docutils literal">mdp.feet_swing_clearance_exp</span></p></td>
@@ -1811,12 +1831,23 @@ roll/pitch를 제외한 yaw 회전만 역변환한 gravity-aligned yaw frame 속
 학습, Gym, Teleop, ROS <span class="docutils literal">cmd_vel</span> 과 실물 적용에서 policy가 받는 세 번째 command는 모두 같은 의미의 목표
 yaw angular velocity다. Navigation에서 목표 world heading이 필요하면 policy 외부의 상위 controller가
 heading error를 <span class="docutils literal">wz</span> 로 변환해 이 동일한 velocity interface에 전달한다.</p>
-<p>현재 <span class="docutils literal">feet_air_time</span> 은 느리고 긴 step을 유도하기 위해 <span class="docutils literal">target_air_time=0.50 s</span>, <span class="docutils literal">weight=2.0</span> 을
+<p>현재 <span class="docutils literal">feet_air_time</span> 은 느리고 긴 step을 유도하는 baseline 설정으로 <span class="docutils literal">target_air_time=0.65 s</span>, <span class="docutils literal">weight=3.0</span> 을
 사용한다. 정확히 한 발이 first contact가 된 policy step에 그 발의 완료된 <span class="docutils literal">last_air_time</span> 을 읽고
-<span class="docutils literal">last_air_time - 0.50</span> 을 한 번 반환한다. 양발이 같은 step에 first contact가 되거나 planar command norm이
-<span class="docutils literal">0.05 m/s</span> 이하이면 0이다. 따라서 <span class="docutils literal">T=0.30 s</span> 는 raw <span class="docutils literal"><span class="pre">-0.20</span></span>, <span class="docutils literal">T=0.50 s</span> 는 <span class="docutils literal">0</span>, <span class="docutils literal">T=0.75 s</span> 는
-raw <span class="docutils literal">+0.25</span> 이다. Reward Manager가 적용하는 pre-<span class="docutils literal">dt</span> weighted event는 각각 raw 값에 <span class="docutils literal">2.0</span> 을 곱한다.
-Policy interval <span class="docutils literal">0.01 s</span> 까지 포함한 touchdown-error 기울기는 <span class="docutils literal">0.02</span> 로, K1의 <span class="docutils literal">1.0 * 0.02</span> 와 같다.</p>
+<span class="docutils literal">last_air_time - 0.65</span> 을 한 번 반환한다. 양발이 같은 step에 first contact가 되거나 planar command norm이
+<span class="docutils literal">0.05 m/s</span> 이하이면 0이다. 따라서 <span class="docutils literal">T=0.30 s</span> 는 raw <span class="docutils literal"><span class="pre">-0.35</span></span>, <span class="docutils literal">T=0.65 s</span> 는 <span class="docutils literal">0</span>, <span class="docutils literal">T=0.75 s</span> 는
+raw <span class="docutils literal">+0.10</span> 이다. Reward Manager가 적용하는 pre-<span class="docutils literal">dt</span> weighted event는 각각 raw 값에 <span class="docutils literal">3.0</span> 을 곱한다.
+Policy interval <span class="docutils literal">0.01 s</span> 까지 포함한 touchdown-error 기울기는 <span class="docutils literal">0.03</span> 으로,
+직전 weight <span class="docutils literal">2.0</span> 및 K1의 <span class="docutils literal">1.0 * 0.02 = 0.02</span> event 기울기의 1.5배다.</p>
+<p>이전 9월 17일 baseline의 target은 <span class="docutils literal">0.50 s</span>, 그 뒤 비교 실험은 <span class="docutils literal">0.60 s</span> 와 <span class="docutils literal">0.65 s</span> 이며 모두 weight <span class="docutils literal">2.0</span> 이다.
+현재 baseline은 target <span class="docutils literal">0.65 s</span> 를 유지하고 weight만 <span class="docutils literal">3.0</span> 으로 높였다. 실제 유효 착지 event 식은 다음과 같다.</p>
+<div class="formula">
+<i>r</i><sub><i>air</i></sub> = 3.0 (<i>T</i><sub><i>air</i></sub> − 0.65) 0.01
+</div>
+<p><span class="docutils literal">T=0.45/0.65/0.75/0.85 s</span> 에서 각각 <span class="docutils literal"><span class="pre">-0.006/0/+0.003/+0.006</span></span> 을 받는다.
+추가 0.1초의 점수 차이는 <span class="docutils literal">0.002 <span class="pre">-&gt;</span> 0.003</span> 이며 짧은 swing의 벌점도 1.5배가 된다.
+시간에 선형이지 제곱식이 아니며, 공중에서 계속 지급하거나 0.65초 달성을 강제하지 않는다.
+한 발로 오래 버티거나 착지 충격이 다시 커질 수 있으므로 실제 air-time, 전후진/횡보, 정지/외란,
+초기/후기 force peak를 함께 비교한다. 학습 예산이 다른 run은 같은 iteration 비교도 필요하다.</p>
 <p>이 signed touchdown shaping은 짧은 잔걸음을 단순히 적게 보상하는 대신 직접 penalty화한다. 반면
 최대 보상 air-time cap이 없으므로 <span class="docutils literal">0.75 s</span> 를 초과한 완료 swing도 더 큰 양수를 받는다. 한 발을 오래 드는
 전략은 velocity tracking, <span class="docutils literal">no_jumps</span> 와 기타 gait term이 함께 제한해야 한다.
@@ -2100,7 +2131,7 @@ world-Z 하강 성분의 최댓값만 사용한다. 좌우 발 비용은 합산�
 9월 14일 모서리-only run의 같은 값은 약 <span class="docutils literal">766 / 2508 N</span> 이었다. 이는 전역 최대 force가 아니라
 window별 peak 평균이다. 개선된 후기 구간까지 일괄 강화하지 않고 직전 비용만 조절하는 이유다.
 계수 5는 실험값이며 충격 감소를 보장하지 않는다. 이 설정으로 fresh 25,000 iteration 학습을 마쳤고
-9월 18일 사용자 Teleop 관찰을 바탕으로 현재 개발 baseline으로 보존했다. 코드 snapshot은 <span class="docutils literal">903318c</span> 다.
+9월 18일 사용자 Teleop 관찰을 바탕으로 당시 개발 baseline으로 보존했다. 코드 snapshot은 <span class="docutils literal">903318c</span> 다.
 학습 당시에는 <span class="docutils literal">2c6fe26</span> 기반 미커밋 코드를 사용했고, snapshot은 학습 완료 후 저장 설정과 대조하여 만들었다.
 이 기록은 새 Sim2Sim/Sim2Real 검증을 의미하지 않는다.</p>
 <table class="colwidths-given edge-velocity-table">
@@ -2270,7 +2301,7 @@ freeze를 비활성화한다.</p>
 </tr>
 </tbody>
 </table>
-<p>이 scalar는 발의 평균 air-time 초 단위 값이 아니다. Reward Manager가 기록하는 episode-normalized 값에는
+<p>위 과거 실험의 scalar는 발의 평균 air-time 초 단위 값이 아니다. 당시 episode-normalized 값에는
 policy <span class="docutils literal">dt=0.01 s</span>, reward <span class="docutils literal">weight=2.0</span>, 유효 touchdown 빈도, 완료된 air-time, planar moving-command
 mask가 함께 들어간다. 개념적으로 다음 곱에 가깝다.</p>
 <div class="formula">
